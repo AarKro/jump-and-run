@@ -51,6 +51,7 @@ public static class CityPropsSetup
         }
         BuildPizzeria();
         BuildCoffeeShop();
+        BuildKiosk();
         BuildBalcony();
         BuildAwning();
         BuildBench();
@@ -436,6 +437,79 @@ public static class CityPropsSetup
         PrimitiveKit.Box("Cornice", house, new Vector3(0f, Surface + height + 0.2f, FacadeZ + 0.15f), new Vector3(width + 0.3f, 0.4f, 0.6f), white);
         PrimitiveKit.Box("Chimney", house, new Vector3(-width / 2f + 1.5f, Surface + height + 1f, FacadeZ + 3f), new Vector3(0.8f, 2f, 0.8f), brick);
         return door;
+    }
+
+    // 24/7-Kiosk mit Mikrowellen-Station (MicrowaveStation): Theke vor dem Schaufenster, darauf die Mikrowelle.
+    // Der Spieler läuft automatisch zur Theke (Z ~1.7), wärmt den Karton auf und läuft zurück auf die Laufbahn
+    private static void BuildKiosk()
+    {
+        const float width = 6f;
+        const float height = 9f;
+        Material night = PrimitiveKit.Material($"{MaterialFolder}/Kiosk.mat", PrimitiveKit.LitShader, new Color(0.22f, 0.24f, 0.42f), 0.1f);
+        Material fluorescent = PrimitiveKit.Material($"{MaterialFolder}/Fluorescent.mat", PrimitiveKit.UnlitShader, new Color(0.88f, 0.95f, 1f));
+        Material appliance = PrimitiveKit.Material($"{MaterialFolder}/Appliance.mat", PrimitiveKit.LitShader, new Color(0.85f, 0.86f, 0.87f), 0.5f);
+        Material glassOff = PrimitiveKit.Material($"{MaterialFolder}/Microwave Glass.mat", PrimitiveKit.LitShader, new Color(0.08f, 0.09f, 0.1f), 0.9f);
+        Material glassOn = PrimitiveKit.Material($"{MaterialFolder}/Microwave Glass On.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.85f, 0.45f));
+
+        var root = new GameObject("Kiosk");
+        Transform t = root.transform;
+        float top = Surface + height;
+        PrimitiveKit.Box("Body", t, new Vector3(0f, (top - 12f) / 2f, FacadeZ + 4f), new Vector3(width, top + 12f, 8f), night);
+        PrimitiveKit.Quad("Shop Window", t, new Vector3(0f, Surface + 1.7f, FacadeZ - 0.01f), new Vector2(width - 1f, 2.4f), fluorescent);
+        PrimitiveKit.Box("Sign Board", t, new Vector3(0f, Surface + 3.6f, FacadeZ - 0.1f), new Vector3(3.6f, 1f, 0.15f), iron);
+        PrimitiveKit.Text("Sign Text", t, new Vector3(0f, Surface + 3.6f, FacadeZ - 0.2f), new Vector2(3.3f, 0.85f), "24/7", new Color(1f, 0.85f, 0.2f));
+        AddWindowGrid(t, "Kiosk", width, Surface + 5.6f, top - 1.2f);
+        PrimitiveKit.Box("Cornice", t, new Vector3(0f, top + 0.2f, FacadeZ + 0.15f), new Vector3(width + 0.3f, 0.4f, 0.6f), sill);
+
+        // Theke vor dem Schaufenster
+        const float counterZ = FacadeZ - 0.4f;
+        PrimitiveKit.Box("Counter", t, new Vector3(0.3f, Surface + 0.5f, counterZ), new Vector3(2.6f, 1f, 0.7f), curb);
+        PrimitiveKit.Box("Counter Top", t, new Vector3(0.3f, Surface + 1.02f, counterZ), new Vector3(2.7f, 0.05f, 0.8f), doorWood);
+        PrimitiveKit.Text("Counter Sign", t, new Vector3(0.3f, Surface + 0.6f, counterZ - 0.36f), new Vector2(2.3f, 0.4f), "WARM-UP STATION", new Color(1f, 0.85f, 0.2f));
+
+        // Mikrowelle auf der Theke: Gehäuse, dunkler Innenraum, Tür vorne (Drehpunkt links), Bedienfeld mit Display rechts
+        const float mwX = 0.5f;
+        const float mwWidth = 0.95f;
+        const float mwHeight = 0.55f;
+        const float mwDepth = 0.6f;
+        float mwY = Surface + 1.045f + mwHeight / 2f;
+        float frontZ = counterZ - mwDepth / 2f;
+        PrimitiveKit.Box("Microwave Body", t, new Vector3(mwX, mwY, counterZ), new Vector3(mwWidth, mwHeight, mwDepth), appliance);
+        PrimitiveKit.Box("Microwave Interior", t, new Vector3(mwX - 0.12f, mwY, counterZ - 0.02f), new Vector3(0.66f, 0.45f, mwDepth - 0.02f), interior);
+        Transform cartonSpot = PrimitiveKit.Pivot("Carton Spot", t, new Vector3(mwX - 0.12f, mwY - 0.15f, counterZ));
+        PrimitiveKit.Part("Turntable", PrimitiveType.Cylinder, cartonSpot, new Vector3(0f, -0.06f, 0f), new Vector3(0.5f, 0.01f, 0.5f), glassOff);
+
+        Transform door = PrimitiveKit.Pivot("Microwave Door", t, new Vector3(mwX - mwWidth / 2f + 0.02f, mwY, frontZ - 0.02f));
+        PrimitiveKit.Box("Door Frame", door, new Vector3(0.35f, 0f, 0f), new Vector3(0.7f, 0.5f, 0.03f), appliance);
+        Renderer glass = PrimitiveKit.Box("Door Glass", door, new Vector3(0.35f, 0f, -0.01f), new Vector3(0.56f, 0.36f, 0.02f), glassOff);
+        PrimitiveKit.Box("Control Panel", t, new Vector3(mwX + mwWidth / 2f - 0.13f, mwY, frontZ - 0.01f), new Vector3(0.22f, 0.5f, 0.02f), iron);
+        TextMeshPro display = PrimitiveKit.Text("Display", t, new Vector3(mwX + mwWidth / 2f - 0.13f, mwY + 0.12f, frontZ - 0.03f), new Vector2(0.2f, 0.12f), "READY", new Color(0.4f, 1f, 0.45f));
+
+        // "DING!"-Sprechblase über der Mikrowelle (Quad + Text, beide zeigen zur Kamera)
+        Transform bubble = PrimitiveKit.Pivot("Ding Bubble", t, new Vector3(mwX, mwY + 0.85f, frontZ - 0.2f));
+        PrimitiveKit.Quad("Background", bubble, Vector3.zero, new Vector2(1f, 0.45f), white);
+        PrimitiveKit.Quad("Pointer", bubble, new Vector3(-0.1f, -0.26f, 0f), new Vector2(0.16f, 0.16f), white).transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+        PrimitiveKit.Text("Text", bubble, new Vector3(0f, 0f, -0.01f), new Vector2(0.9f, 0.38f), "DING!", new Color(0.85f, 0.15f, 0.1f));
+        bubble.gameObject.SetActive(false);
+
+        // Wege des Spielers (Kugelmitte): vor die Theke, dann zurück auf die Laufbahn
+        Transform stand = PrimitiveKit.Pivot("Stand Point", t, new Vector3(-0.5f, Surface + 0.5f, 1.7f));
+        Transform exit = PrimitiveKit.Pivot("Exit Point", t, new Vector3(0.6f, Surface + 0.5f, 0f));
+
+        PrimitiveKit.AddBoxCollider(root, new Vector3(-0.8f, Surface + 1.5f, 0f), new Vector3(1.2f, 3f, 3f), true);
+        var station = root.AddComponent<MicrowaveStation>();
+        var serialized = new SerializedObject(station);
+        serialized.FindProperty("standPoint").objectReferenceValue = stand;
+        serialized.FindProperty("exitPoint").objectReferenceValue = exit;
+        serialized.FindProperty("door").objectReferenceValue = door;
+        serialized.FindProperty("cartonSpot").objectReferenceValue = cartonSpot;
+        serialized.FindProperty("doorGlass").objectReferenceValue = glass;
+        serialized.FindProperty("glassOff").objectReferenceValue = glassOff;
+        serialized.FindProperty("glassOn").objectReferenceValue = glassOn;
+        serialized.FindProperty("display").objectReferenceValue = display;
+        serialized.FindProperty("dingBubble").objectReferenceValue = bubble.gameObject;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        PrimitiveKit.SavePrefab(root, PathFor("Kiosk"));
     }
 
     // ---------- Begehbares ----------

@@ -171,6 +171,26 @@ public static class PizzaHeatSetup
         hud.FindProperty("heatFillImage").objectReferenceValue = fill.GetComponent<Image>();
         hud.FindProperty("heatColors").gradientValue = gradient;
         hud.FindProperty("overheatFill").objectReferenceValue = overheat;
+
+        // Stoppuhr rechts neben dem Balken (Balken ist 640 breit, mittig: rechte Kante bei +320)
+        var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
+        RectTransform stopwatch = CreateRect("Stopwatch", parent);
+        stopwatch.anchorMin = stopwatch.anchorMax = new Vector2(0.5f, 1f);
+        stopwatch.pivot = new Vector2(0f, 1f);
+        stopwatch.sizeDelta = new Vector2(220f, 44f);
+        stopwatch.anchoredPosition = new Vector2(340f, -36f);
+        var stopwatchLabel = stopwatch.gameObject.AddComponent<TextMeshProUGUI>();
+        stopwatchLabel.text = "0:00.0";
+        stopwatchLabel.fontSize = 38f;
+        stopwatchLabel.color = Color.white;
+        stopwatchLabel.alignment = TextAlignmentOptions.Left;
+        stopwatchLabel.fontStyle = FontStyles.Bold;
+        stopwatchLabel.raycastTarget = false;
+        if (outline != null)
+        {
+            stopwatchLabel.fontSharedMaterial = outline;
+        }
+        hud.FindProperty("stopwatchText").objectReferenceValue = stopwatchLabel;
         hud.FindProperty("overheatImage").objectReferenceValue = overheat.GetComponent<Image>();
     }
 
@@ -211,7 +231,10 @@ public static class PizzaHeatSetup
             coins.GetArrayElementAtIndex(i).objectReferenceValue = coin.GetComponent<Image>();
         }
 
-        CreateText("Continue Hint", panel, "Press Jump to continue", 30f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, -110f), outline);
+        // Lieferzeit unter den Münzen, der Hinweis rutscht dafür etwas nach unten
+        TextMeshProUGUI time = CreateText("Delivery Time", panel, "Time  0:00.0", 34f, new Color(1f, 0.93f, 0.6f), new Vector2(0f, -85f), outline);
+        hud.FindProperty("deliveredTimeText").objectReferenceValue = time;
+        CreateText("Continue Hint", panel, "Press Jump to continue", 30f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, -140f), outline);
 
         hud.FindProperty("deliveredPanel").objectReferenceValue = panel.gameObject;
         // Im Prefab ausgeschaltet speichern, sonst verdeckt das Panel im Edit Mode die Game-Ansicht
@@ -330,7 +353,7 @@ public static class PizzaHeatSetup
         return rect;
     }
 
-    private static void CreateText(string name, Transform parent, string text, float fontSize, Color color, Vector2 position, Material fontMaterial = null)
+    private static TextMeshProUGUI CreateText(string name, Transform parent, string text, float fontSize, Color color, Vector2 position, Material fontMaterial = null)
     {
         RectTransform rect = CreateRect(name, parent);
         rect.sizeDelta = new Vector2(1400f, fontSize * 1.4f);
@@ -347,6 +370,7 @@ public static class PizzaHeatSetup
         {
             label.fontSharedMaterial = fontMaterial;
         }
+        return label;
     }
 
     // Anker auf die Ecken des Elternteils: Das Rechteck füllt es komplett aus, abzüglich Rand

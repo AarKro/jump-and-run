@@ -20,8 +20,14 @@ public class PizzaHud : MonoBehaviour
     [SerializeField] private Image overheatImage;
     [SerializeField] private float overheatPulseSpeed = 5f;
 
+    [Header("Stoppuhr")]
+    [Tooltip("Lieferzeit neben dem Wärmebalken")]
+    [SerializeField] private TextMeshProUGUI stopwatchText;
+
     [Header("Geliefert")]
     [SerializeField] private GameObject deliveredPanel;
+    [Tooltip("Lieferzeit im Ergebnis-Panel")]
+    [SerializeField] private TextMeshProUGUI deliveredTimeText;
     [SerializeField] private Image[] coins;
     [SerializeField] private Color coinEarnedColor = new Color(1f, 0.8f, 0.15f);
     [SerializeField] private Color coinMissingColor = new Color(1f, 1f, 1f, 0.2f);
@@ -66,6 +72,10 @@ public class PizzaHud : MonoBehaviour
     private void Update()
     {
         float heat = GameManager.Instance != null ? GameManager.Instance.HeatPercent : 0f;
+        if (stopwatchText != null && GameManager.Instance != null)
+        {
+            stopwatchText.text = FormatTime(GameManager.Instance.ElapsedTime);
+        }
 
         // Anker statt Breite: anchorMax.x = 0.5 heißt "bis zur Hälfte des Eltern-Rechtecks",
         // egal wie groß der Balken auf dem Bildschirm ist (CanvasScaler, andere Auflösung)
@@ -80,9 +90,20 @@ public class PizzaHud : MonoBehaviour
         overheatImage.color = glow;
     }
 
+    // 83.4 Sekunden → "1:23.4"
+    public static string FormatTime(float seconds)
+    {
+        int minutes = Mathf.FloorToInt(seconds / 60f);
+        return $"{minutes}:{(seconds - minutes * 60f).ToString("00.0", System.Globalization.CultureInfo.InvariantCulture)}";
+    }
+
     private void ShowDelivered(int earnedCoins)
     {
         deliveredPanel.SetActive(true);
+        if (deliveredTimeText != null && GameManager.Instance != null)
+        {
+            deliveredTimeText.text = "Time  " + FormatTime(GameManager.Instance.ElapsedTime);
+        }
         StartCoroutine(PopCoins(earnedCoins));
     }
 

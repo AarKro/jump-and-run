@@ -40,6 +40,10 @@ public class GameManager : MonoBehaviour
 
     // Gerade am Sterben/Wiederauftauchen: weitere Treffer in der Zeit zählen nicht
     public bool IsRespawning { get; private set; }
+    // Eine kurze Szene mit dem Spieler läuft (z.B. Mikrowelle). Respawns werden solange ignoriert
+    public bool InCutscene { get; set; }
+    // Stoppuhr: Lieferzeit seit Levelstart, bleibt beim Abliefern stehen
+    public float ElapsedTime { get; private set; }
 
     private PlayerController playerController;
     private PlayerLife playerLife;
@@ -100,6 +104,7 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        ElapsedTime += Time.deltaTime;
         RemainingTime = Mathf.Max(0f, RemainingTime - Time.deltaTime);
 
         if (RemainingTime <= 0f)
@@ -125,7 +130,7 @@ public class GameManager : MonoBehaviour
     {
         // Nach dem Abliefern (oder bei kalter Pizza) soll z.B. ein Hund den Spieler nicht mehr zurücksetzen.
         // Während der Todesanimation zählen weitere Treffer (Auto, Hund, KillZone) nicht
-        if (LevelFinished || IsRespawning)
+        if (LevelFinished || IsRespawning || InCutscene)
         {
             return;
         }
@@ -166,6 +171,12 @@ public class GameManager : MonoBehaviour
         }
 
         IsRespawning = false;
+    }
+
+    // Mikrowelle: wieder ofenfrisch (100%). Ein Puffer über 100% (Wärme-Bonus) bleibt erhalten
+    public void ReheatPizza()
+    {
+        RemainingTime = Mathf.Max(RemainingTime, levelTime);
     }
 
     // Wärme-Bonus. Bewusst nicht auf levelTime begrenzt: Die Wärme darf als Puffer über 100% gehen

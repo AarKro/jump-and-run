@@ -112,6 +112,34 @@ public class PlayerLife : MonoBehaviour
         Revive();
     }
 
+    // ---------- Für kurze Szenen (z.B. Mikrowelle): Spieler übernehmen, hinlaufen lassen, freigeben ----------
+
+    public void BeginScripted()
+    {
+        controller.Freeze();
+        body.linearVelocity = Vector3.zero;
+        body.isKinematic = true;
+    }
+
+    public IEnumerator WalkTo(Vector3 target, float duration)
+    {
+        Vector3 from = body.position;
+        for (float t = 0f; t < duration; t += Time.fixedDeltaTime)
+        {
+            float k = t / duration;
+            Vector3 position = Vector3.Lerp(from, target, Mathf.SmoothStep(0f, 1f, k));
+            position.y += Mathf.Abs(Mathf.Sin(k * Mathf.PI * 2f)) * walkBobHeight;
+            body.MovePosition(position);
+            yield return new WaitForFixedUpdate();
+        }
+        Teleport(target);
+    }
+
+    public void EndScripted()
+    {
+        Revive();
+    }
+
     private void ResetLook()
     {
         // Auch den Rigidbody zurückdrehen: Sonst schreibt die Physik beim nächsten MovePosition seine alte

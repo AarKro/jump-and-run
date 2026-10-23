@@ -12,7 +12,7 @@ using UnityEngine;
 //  -18..20   Start: Pizzeria (Tür bei x = -8), Balkon-Kletterei mit Speed-Boost oben
 //   20..23.5 Baugrube (3.5 m)
 //  23.5..80.5 Hund zwischen zwei Containern, Querstraße bei x = 50, Café-Checkpoint bei x = 61,
-//             federnde Markise bei x = 71 → hoher Balkon mit Wärme-Bonus
+//             federnde Markise bei x = 71 → hoher Balkon mit Wärme-Bonus, 24/7-Kiosk mit Mikrowelle bei x = 76
 //  80.5..96  lange Baugrube: Fensterputzer-Gondel hoch, dann über zwei Balkone
 //   96..148  zwei Hunde (Bank/Container als Wände), Balkon mit Sprung-Boost, Kunde bei x = 140
 public static class CityLevelBuilder
@@ -97,9 +97,10 @@ public static class CityLevelBuilder
     {
         GameObject pizzeria = Place("Pizzeria", -8, 0, buildingParent);       // -13 .. -3
         Place("Coffee Shop", 61, 0, buildingParent);                          // 57 .. 65
+        Place("Kiosk", 76, 0, buildingParent);                                // 73 .. 79, Mikrowelle vor der langen Grube
 
         // Pizzeria, Querstraße (Autos fahren dort von hinten durch), Café und das Kundenhaus (Teil des Goal-Prefabs, 8 m breit)
-        var reserved = new List<(float from, float to)> { (-13, -3), (45, 55), (57, 65), (136, 144) };
+        var reserved = new List<(float from, float to)> { (-13, -3), (45, 55), (57, 65), (73, 79), (136, 144) };
 
         string[] order = { "Building Brick", "Building Beige", "Building Gray", "Building Teal", "Building Yellow", "Building Pink" };
         var widths = new Dictionary<string, float>();
