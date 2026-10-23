@@ -13,6 +13,11 @@ using UnityEngine;
 public static class StreetSetup
 {
     private const string PrefabPath = "Assets/Prefabs/Street Crossing.prefab";
+    private const string AvenuePrefabPath = "Assets/Prefabs/Avenue Crossing.prefab";
+    // Avenue der Stadt (CityLayout): 12 m Fahrbahn. Straße und Gehwege liefert die Stadt-Szene, das Prefab bringt nur
+    // den erhöhten Zebrastreifen (mit Collider, darunter ist ja Fahrbahn) und die Autos. Spur-Mitten bei x = ±3
+    private const float AvenueRoadHalfWidth = 6f;
+    private const float AvenueLaneOffset = 3f;
     private const string AsphaltMaterialPath = "Assets/Materials/Asphalt.mat";
     private const string MarkingMaterialPath = "Assets/Materials/Road Marking.mat";
     private const string CarMaterialPath = "Assets/Materials/Car.mat";
@@ -67,7 +72,7 @@ public static class StreetSetup
         try
         {
             BuildRoad(root.transform, road, foundation, marking);
-            BuildCrosswalk(root.transform, asphalt, marking);
+            BuildCrosswalk(root.transform, asphalt, marking, RoadHalfWidth, false);
             BuildSidewalks(root.transform, concrete, curb, foundation);
 
             // Zwei Spuren nebeneinander in X, beide fahren von hinten nach vorne, die zweite um ein halbes Intervall versetzt
@@ -77,6 +82,33 @@ public static class StreetSetup
 
             PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
             Debug.Log($"StreetSetup: Prefab gespeichert unter {PrefabPath}.");
+        }
+        finally
+        {
+            Object.DestroyImmediate(root);
+        }
+    }
+
+    // Überweg für eine Avenue der Stadt (Level 2 und später). spawnZ setzt der Level-Aufbau pro Kreuzung,
+    // je nachdem wo die Avenue hinter der Kreuzung herkommt
+    [MenuItem("Tools/Jump and Run/Build Avenue Crossing Prefab")]
+    public static void BuildAvenue()
+    {
+        Material asphalt = GetOrCreateMaterial(AsphaltMaterialPath, "Universal Render Pipeline/Lit", new Color(0.18f, 0.18f, 0.2f));
+        Material marking = GetOrCreateMaterial(MarkingMaterialPath, "Universal Render Pipeline/Lit", new Color(0.95f, 0.95f, 0.95f));
+        Material paint = GetOrCreateMaterial(CarMaterialPath, "Universal Render Pipeline/Lit", Color.white);
+        Material wheel = GetOrCreateMaterial(WheelMaterialPath, "Universal Render Pipeline/Lit", new Color(0.08f, 0.08f, 0.08f));
+        Material headlight = GetOrCreateMaterial(HeadlightMaterialPath, "Universal Render Pipeline/Unlit", new Color(1f, 0.95f, 0.6f));
+
+        var root = new GameObject("Avenue Crossing");
+        try
+        {
+            BuildCrosswalk(root.transform, asphalt, marking, AvenueRoadHalfWidth, true);
+            AnimationCurve height = CrosswalkHeightCurve();
+            BuildLane("Lane 1", root.transform, -AvenueLaneOffset, 0f, height, paint, wheel, headlight);
+            BuildLane("Lane 2", root.transform, AvenueLaneOffset, 1.25f, height, paint, wheel, headlight);
+            PrefabUtility.SaveAsPrefabAsset(root, AvenuePrefabPath);
+            Debug.Log($"StreetSetup: Prefab gespeichert unter {AvenuePrefabPath}.");
         }
         finally
         {
@@ -115,16 +147,26 @@ public static class StreetSetup
         PrimitiveKit.Box($"Foundation {name}", parent, new Vector3(0f, -3.1f, centerZ), new Vector3(width, 6.2f, length), foundation);
     }
 
-    // Erhöhter Zebrastreifen auf dem Gehweg der Laufbahn, vorne und hinten je eine Rampe hinunter auf Straßenhöhe
-    private static void BuildCrosswalk(Transform root, Material asphalt, Material marking)
+    // Erhöhter Zebrastreifen auf dem Gehweg der Laufbahn, vorne und hinten je eine Rampe hinunter auf Straßenhöhe.
+    // solid: Die Platte reicht bis auf die Fahrbahn und ist begehbar (Collider, Layer Ground), für Kreuzungen ohne Gehweg darunter
+    private static void BuildCrosswalk(Transform root, Material asphalt, Material marking, float halfWidth, bool solid)
     {
         Transform crosswalk = new GameObject("Raised Crosswalk").transform;
         crosswalk.SetParent(root, false);
-        float width = RoadHalfWidth * 2f;
+        float width = halfWidth * 2f;
         // Knapp über dem Gehweg, sonst flackern die Flächen gegeneinander (Z-Fighting)
         float top = SurfaceHeight + 0.02f;
 
-        PrimitiveKit.Box("Table", crosswalk, new Vector3(0f, SurfaceHeight + 0.01f, (WalkFrontZ + WalkBackZ) / 2f), new Vector3(width, 0.02f, WalkBackZ - WalkFrontZ), asphalt);
+        if (solid)
+        {
+            Renderer table = PrimitiveKit.Box("Table", crosswalk, new Vector3(0f, (RoadHeight + top) / 2f, (WalkFrontZ + WalkBackZ) / 2f), new Vector3(width, top - RoadHeight, WalkBackZ - WalkFrontZ), asphalt);
+            table.gameObject.layer = 3;
+            table.gameObject.AddComponent<BoxCollider>();
+        }
+        else
+        {
+            PrimitiveKit.Box("Table", crosswalk, new Vector3(0f, SurfaceHeight + 0.01f, (WalkFrontZ + WalkBackZ) / 2f), new Vector3(width, 0.02f, WalkBackZ - WalkFrontZ), asphalt);
+        }
         Ramp("Ramp Front", crosswalk, WalkFrontZ, -1f, top, width, asphalt);
         Ramp("Ramp Back", crosswalk, WalkBackZ, 1f, top, width, asphalt);
 
