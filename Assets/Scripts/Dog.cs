@@ -2,7 +2,7 @@ using System.Collections;
 using UnityEngine;
 
 // Hund: ergänzt GroundPatrol um Bellen vor dem Losrennen und reagiert auf Draufspringen
-// (benommen mit Sternchen, dann rennt er in den Hintergrund davon). Die Bewegung selbst macht weiterhin die Patrouille.
+// (benommen mit Sternchen, dann rennt er zur Kamera hin unten aus dem Bild). Die Bewegung selbst macht weiterhin die Patrouille.
 // Aufgebaut von Tools > Jump and Run > Build Dog Prefab.
 [RequireComponent(typeof(GroundPatrol))]
 public class Dog : MonoBehaviour, IStompHandler
@@ -37,8 +37,16 @@ public class Dog : MonoBehaviour, IStompHandler
     [SerializeField] private float dizzyDuration = 1f;
     [SerializeField] private float starSpinSpeed = 360f;
     [SerializeField] private float runAwaySpeed = 6f;
-    [Tooltip("So weit läuft der Hund in den Hintergrund (+Z), bevor er verschwindet")]
-    [SerializeField] private float runAwayDistance = 12f;
+    [Tooltip("So weit läuft der Hund zur Kamera (-Z), bevor er verschwindet. Die Kamera steht 8 m vor der Laufbahn, " +
+             "nach 10 m ist er also unten aus dem Bild")]
+    [SerializeField] private float runAwayDistance = 10f;
+    [Tooltip("Abstand von der Laufbahn bis zur Bordsteinkante (Gehweg-Prefab: Vorderkante bei Z = -2)")]
+    [SerializeField] private float curbDistance = 2f;
+    [Tooltip("So viel tiefer liegt die Straße als der Gehweg")]
+    [SerializeField] private float curbDrop = 0.2f;
+    [SerializeField] private float curbHopHeight = 0.3f;
+    [Tooltip("Strecke, über die der Hüpfer vom Bordstein geht (mittig über der Kante)")]
+    [SerializeField] private float curbHopLength = 1.2f;
 
     private GroundPatrol patrol;
     private bool wasChasing;
@@ -178,23 +186,36 @@ public class Dog : MonoBehaviour, IStompHandler
         }
         dizzyStars.gameObject.SetActive(false);
 
-        // Zum Hintergrund drehen: Die Optik schaut nach lokal +X, -90° um Y dreht lokal +X nach lokal +Z.
+        // Zur Kamera drehen: Die Optik schaut nach lokal +X, +90° um Y dreht lokal +X nach lokal -Z.
         // Spiegelung aufheben, sonst würde ein nach links schauender Hund rückwärts laufen
         Vector3 scale = body.localScale;
         scale.x = Mathf.Abs(scale.x);
         body.localScale = scale;
-        body.localRotation = bodyStartRotation * Quaternion.Euler(0f, -90f, 0f);
+        body.localRotation = bodyStartRotation * Quaternion.Euler(0f, 90f, 0f);
 
+        // Nach "vorne" im eigenen Lane-Rahmen (lokal -Z), also immer zur Kamera und unten aus dem Bild, auch nach der Kurve.
+        // Position aus Startpunkt + gelaufener Strecke ausrechnen (statt jedes Frame etwas draufzuaddieren),
+        // dann kann die Höhe für den Bordstein-Hüpfer einfach aus derselben Strecke kommen
+        Vector3 start = transform.position;
+        Vector3 toCamera = -transform.forward;
         for (float run = 0f; run < runAwayDistance; run += runAwaySpeed * Time.deltaTime)
         {
-            // Nach "hinten" im eigenen Lane-Rahmen (lokal +Z), also immer weg von der Kamera, auch nach der Kurve
-            transform.position += transform.forward * (runAwaySpeed * Time.deltaTime);
+            transform.position = start + toCamera * run + Vector3.up * CurbHeight(run);
             AnimateRun(true);
             yield return null;
         }
 
         // Nur ausblenden, damit er beim Respawn des Spielers zurückkommt
         gameObject.SetActive(false);
+    }
+
+    // Höhe relativ zum Gehweg nach "run" Metern Richtung Kamera: vor dem Bordstein 0, danach -curbDrop (Straße),
+    // dazwischen ein kleiner Hüpfer. k läuft über die Hüpfstrecke von 0 bis 1 (InverseLerp begrenzt auf 0..1),
+    // daraus ein gleichmäßiges Absinken plus eine Parabel, die am Anfang und Ende 0 ist
+    private float CurbHeight(float run)
+    {
+        float k = Mathf.InverseLerp(curbDistance - curbHopLength / 2f, curbDistance + curbHopLength / 2f, run);
+        return -curbDrop * k + curbHopHeight * 4f * k * (1f - k);
     }
 
     // Position, Aktivierung und Collider setzt EnemyDamage zurück, die Spiegelung die Patrouille. Hier nur die Optik
