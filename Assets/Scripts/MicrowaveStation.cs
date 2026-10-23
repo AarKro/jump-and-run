@@ -59,6 +59,22 @@ public class MicrowaveStation : MonoBehaviour
         ShowReady();
     }
 
+    // Für ein neues Level (die Stadt mit dem Kiosk bleibt geladen). Wurde das alte Level mitten im Aufwärmen entladen
+    // (z.B. Pizza kalt), liegt noch der Karton des alten Spielers auf dem Drehteller: der kommt weg
+    public void ResetForNewLevel()
+    {
+        StopAllCoroutines();
+        running = false;
+        for (int i = cartonSpot.childCount - 1; i >= 0; i--)
+        {
+            Destroy(cartonSpot.GetChild(i).gameObject);
+        }
+        cartonSpot.localRotation = Quaternion.identity;
+        door.localRotation = Quaternion.identity;
+        SetGlass(glassOff);
+        ShowReady();
+    }
+
     private void ShowReady()
     {
         used = false;

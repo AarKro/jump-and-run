@@ -70,11 +70,12 @@ public class LevelGoal : MonoBehaviour
             return;
         }
 
-        int nextIndex = SceneManager.GetActiveScene().buildIndex + 1;
+        // Überspringt die Stadt-Szene in den Build Settings; mit Stadt wird nur die Level-Szene getauscht
+        int nextIndex = LevelFlow.NextLevelIndex();
 
-        if (nextIndex < SceneManager.sceneCountInBuildSettings)
+        if (nextIndex >= 0)
         {
-            SceneManager.LoadScene(nextIndex);
+            LevelFlow.Load(nextIndex);
         }
         else
         {

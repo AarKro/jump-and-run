@@ -65,6 +65,37 @@ public class CoffeeShopEffects : MonoBehaviour
         cupHint.Rotate(0f, spinSpeed * Time.deltaTime, 0f, Space.World);
     }
 
+    // Für ein neues Level (die Stadt bleibt geladen): Ist das Café dort der Checkpoint, startet es geschlossen mit Tasse.
+    // Sonst ist es einfach ein offenes Café, ohne Flackern und Effekte
+    public void ResetLook(bool closed)
+    {
+        StopAllCoroutines();
+        open = !closed;
+        if (cupHint != null)
+        {
+            cupHint.localPosition = cupStartPosition;
+            cupHint.localScale = cupStartScale;
+            cupHint.gameObject.SetActive(closed);
+        }
+        if (chalkboard != null)
+        {
+            chalkboard.localRotation = Quaternion.Euler(0f, closed ? 0f : 180f, 0f);
+        }
+        if (closed)
+        {
+            ShowClosed();
+            return;
+        }
+        SetWindows(windowsOpen);
+        if (signText != null)
+        {
+            signText.color = signOpenColor;
+        }
+        SetActive(closedDoorSign, false);
+        SetActive(neonOff, false);
+        SetActive(neonOn, true);
+    }
+
     private void ShowClosed()
     {
         SetWindows(windowsClosed);

@@ -46,6 +46,13 @@ public class Checkpoint : MonoBehaviour
         AnyActivated?.Invoke();
     }
 
+    // Wieder unerreicht. Nötig, weil die Stadt mit dem Café über mehrere Level (und Neustarts) geladen bleibt
+    public void ResetCheckpoint()
+    {
+        activated = false;
+        UpdateVisuals(false);
+    }
+
     private void UpdateVisuals(bool isActive)
     {
         if (inactiveVisual != null)

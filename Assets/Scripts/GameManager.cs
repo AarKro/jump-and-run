@@ -1,6 +1,5 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
@@ -69,14 +68,26 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private void Start()
+    // Levelstart läuft (Stadt geladen, falls das Level eine hat). Vorher läuft weder Wärme noch Stoppuhr
+    private bool started;
+
+    // Start als Coroutine: Unity wartet dann einfach mit dem Rest, bis die Stadt-Szene geladen und eingerichtet ist
+    private IEnumerator Start()
     {
+        if (LevelCity.Instance != null)
+        {
+            while (LevelCity.Instance != null && !LevelCity.Instance.Ready)
+            {
+                yield return null;
+            }
+        }
+        started = true;
         currentRespawnPoint = startPoint;
         currentDoor = startDoor;
 
         if (player == null)
         {
-            return;
+            yield break;
         }
 
         if (currentDoor != null && playerLife != null)
@@ -99,7 +110,7 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
-        if (LevelFinished)
+        if (!started || LevelFinished)
         {
             return;
         }
@@ -111,6 +122,13 @@ public class GameManager : MonoBehaviour
         {
             HandleTimeUp();
         }
+    }
+
+    // Start-Tür aus einer anderen Szene (Pizzeria in der Stadt). Szenen-übergreifende Verweise kann man nicht im
+    // Inspector speichern, deshalb setzt LevelCity sie zur Laufzeit, bevor das Level startet
+    public void SetStartDoor(SpawnDoor door)
+    {
+        startDoor = door;
     }
 
     public void SetCheckpoint(Transform checkpoint)
@@ -214,7 +232,8 @@ public class GameManager : MonoBehaviour
 
     public void RestartCurrentLevel()
     {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        // Mit Stadt: nur die Level-Szene neu laden, die Stadt bleibt
+        LevelFlow.Restart();
     }
 
     private void PlacePlayerAt(Transform point)
