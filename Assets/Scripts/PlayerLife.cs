@@ -71,7 +71,7 @@ public class PlayerLife : MonoBehaviour
     {
         controller.Freeze();
         body.isKinematic = true;
-        ResetLook();
+        ResetLook(door.OutsidePosition);
         Teleport(door.InsidePosition);
 
         yield return door.Open();
@@ -99,7 +99,7 @@ public class PlayerLife : MonoBehaviour
     {
         controller.Freeze();
         body.isKinematic = true;
-        ResetLook();
+        ResetLook(position);
         Teleport(position);
 
         const float popDuration = 0.25f;
@@ -140,12 +140,14 @@ public class PlayerLife : MonoBehaviour
         Revive();
     }
 
-    private void ResetLook()
+    // In den Lane-Rahmen an der Stelle drehen, an der er gleich steht (nach einer Kurve nicht mehr "geradeaus")
+    private void ResetLook(Vector3 at)
     {
         // Auch den Rigidbody zurückdrehen: Sonst schreibt die Physik beim nächsten MovePosition seine alte
         // (vom Tod verdrehte) Rotation zurück auf den Transform, und der Spieler bliebe schief
-        body.rotation = Quaternion.identity;
-        transform.rotation = Quaternion.identity;
+        Quaternion frame = Lane.Frame(Lane.Project(at));
+        body.rotation = frame;
+        transform.rotation = frame;
         transform.localScale = normalScale;
         if (poof != null && poof.transform.parent != transform)
         {

@@ -3,7 +3,8 @@ using UnityEngine;
 // Bodengegner (z.B. der Hund): läuft hin und her und dreht an Kanten und Wänden um, ganz ohne Wegpunkte.
 // Sieht den Spieler nur in Blickrichtung (Reichweite + Höhe + freie Sichtlinie) und verfolgt ihn dann,
 // bis er ihn eine Weile nicht mehr sieht. Fällt nie von einer Kante: Beim Verfolgen bleibt er dort stehen.
-// Bewegt wird ein kinematischer Rigidbody, nur in X (die Höhe bleibt, wie sie im Level gesetzt ist).
+// Bewegt wird ein kinematischer Rigidbody entlang der Laufbahn (Lane, Koordinate u). Die Höhe bleibt, wie sie im
+// Level gesetzt ist. Ohne LanePath in der Szene ist die Bahn die X-Achse (altes Verhalten).
 [RequireComponent(typeof(Rigidbody))]
 public class GroundPatrol : MonoBehaviour
 {
@@ -42,22 +43,29 @@ public class GroundPatrol : MonoBehaviour
     public float FacingDirection { get; private set; }
 
     private Rigidbody rb;
-    private Collider bodyCollider;
+    private BoxCollider bodyCollider;
     private Transform player;
     private Vector3 startPosition;
     private Vector3 flipStartScale;
     private float lostSightTimer;
+    // Position entlang der Bahn und feste Höhe
+    private float u;
+    private float startU;
+    private float height;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        bodyCollider = GetComponent<Collider>();
+        bodyCollider = GetComponent<BoxCollider>();
         if (flipTarget == null)
         {
             flipTarget = transform;
         }
         flipStartScale = flipTarget.localScale;
         startPosition = transform.position;
+        startU = Lane.Project(startPosition);
+        u = startU;
+        height = startPosition.y;
         SetFacing(startDirection >= 0f ? 1f : -1f);
         GameManager.LevelReset += ResetPatrol;
     }
@@ -80,6 +88,7 @@ public class GroundPatrol : MonoBehaviour
     {
         transform.position = startPosition;
         rb.position = startPosition;
+        u = startU;
         IsChasing = false;
         HoldPosition = false;
         lostSightTimer = 0f;
@@ -104,12 +113,12 @@ public class GroundPatrol : MonoBehaviour
         if (IsChasing)
         {
             speed = chaseSpeed;
-            float dx = player.position.x - rb.position.x;
-            if (Mathf.Abs(dx) <= stoppingDistance)
+            float du = Lane.Project(player.position) - u;
+            if (Mathf.Abs(du) <= stoppingDistance)
             {
                 return;
             }
-            direction = Mathf.Sign(dx);
+            direction = Mathf.Sign(du);
             SetFacing(direction);
         }
 
@@ -123,7 +132,10 @@ public class GroundPatrol : MonoBehaviour
             return;
         }
 
-        rb.MovePosition(rb.position + Vector3.right * (direction * speed * Time.fixedDeltaTime));
+        // Entlang der Bahn weiter, auch durch Kurven: neue Stelle u ausrechnen, Position und Drehung daraus
+        u += direction * speed * Time.fixedDeltaTime;
+        rb.MovePosition(Lane.Point(u) + Vector3.up * height);
+        rb.MoveRotation(Lane.Frame(u));
     }
 
     private void UpdateSight()
@@ -156,12 +168,14 @@ public class GroundPatrol : MonoBehaviour
 
     private bool CanSeePlayer(bool requireFacing)
     {
-        Vector3 toPlayer = player.position - rb.position;
-        if (Mathf.Abs(toPlayer.x) > sightRange || Mathf.Abs(toPlayer.y) > sightHeight)
+        // Abstand entlang der Bahn (nicht Luftlinie), Höhe wie gehabt
+        float along = Lane.Project(player.position) - u;
+        float up = player.position.y - rb.position.y;
+        if (Mathf.Abs(along) > sightRange || Mathf.Abs(up) > sightHeight)
         {
             return false;
         }
-        if (requireFacing && Mathf.Abs(toPlayer.x) > 0.1f && Mathf.Sign(toPlayer.x) != FacingDirection)
+        if (requireFacing && Mathf.Abs(along) > 0.1f && Mathf.Sign(along) != FacingDirection)
         {
             return false;
         }
@@ -171,30 +185,30 @@ public class GroundPatrol : MonoBehaviour
         return !Physics.Linecast(eye, player.position, sightBlockers, QueryTriggerInteraction.Ignore);
     }
 
+    // Halbe Körperlänge entlang der Laufrichtung (aus der Box, nicht aus den Bounds: die sind achsparallel
+    // und würden in einer Kurve falsch werden)
+    private float HalfLength => bodyCollider.size.x * 0.5f;
+    private float BottomOffset => bodyCollider.center.y - bodyCollider.size.y * 0.5f;
+
     private bool HasGroundAhead(float direction)
     {
-        Bounds bounds = bodyCollider.bounds;
         // Knapp vor der vorderen Körperkante, ein Stück über der Unterkante nach unten schauen
-        Vector3 origin = new Vector3(
-            bounds.center.x + direction * (bounds.extents.x + ledgeLookAhead),
-            bounds.min.y + 0.1f,
-            rb.position.z);
+        Vector3 origin = Lane.Point(u + direction * (HalfLength + ledgeLookAhead)) + Vector3.up * (height + BottomOffset + 0.1f);
         return Physics.Raycast(origin, Vector3.down, 0.1f + ledgeCheckDepth, groundLayer, QueryTriggerInteraction.Ignore);
     }
 
     private bool HasWallAhead(float direction)
     {
-        Bounds bounds = bodyCollider.bounds;
-        Vector3 origin = bounds.center;
-        return Physics.Raycast(origin, Vector3.right * direction, bounds.extents.x + 0.05f, groundLayer, QueryTriggerInteraction.Ignore);
+        Vector3 origin = Lane.Point(u) + Vector3.up * (height + bodyCollider.center.y);
+        return Physics.Raycast(origin, Lane.Tangent(u) * direction, HalfLength + 0.05f, groundLayer, QueryTriggerInteraction.Ignore);
     }
 
     private void FacePlayer()
     {
-        float dx = player.position.x - rb.position.x;
-        if (Mathf.Abs(dx) > 0.05f)
+        float du = Lane.Project(player.position) - u;
+        if (Mathf.Abs(du) > 0.05f)
         {
-            SetFacing(Mathf.Sign(dx));
+            SetFacing(Mathf.Sign(du));
         }
     }
 
@@ -206,24 +220,32 @@ public class GroundPatrol : MonoBehaviour
         flipTarget.localScale = scale;
     }
 
-    // Im Editor (Objekt ausgewählt) sichtbar machen, was der Gegner prüft: Sichtweite, Kanten-Strahl
+    // Im Editor (Objekt ausgewählt) sichtbar machen, was der Gegner prüft: Sichtweite entlang der Bahn, Kanten-Strahl
     private void OnDrawGizmosSelected()
     {
-        Collider gizmoCollider = GetComponent<Collider>();
-        if (gizmoCollider == null)
+        var box = GetComponent<BoxCollider>();
+        if (box == null)
         {
             return;
         }
 
         float facing = Application.isPlaying ? FacingDirection : (startDirection >= 0f ? 1f : -1f);
-        Bounds bounds = gizmoCollider.bounds;
+        float gizmoU = Application.isPlaying ? u : Lane.Project(transform.position);
+        float y = transform.position.y;
 
-        Gizmos.color = new Color(1f, 0.9f, 0.2f, 0.25f);
-        Vector3 sightCenter = transform.position + Vector3.right * (facing * sightRange / 2f);
-        Gizmos.DrawCube(sightCenter, new Vector3(sightRange, sightHeight * 2f, 0.1f));
+        Gizmos.color = new Color(1f, 0.9f, 0.2f, 0.8f);
+        Vector3 previous = Lane.Point(gizmoU) + Vector3.up * y;
+        for (float d = 0.5f; d <= sightRange; d += 0.5f)
+        {
+            Vector3 point = Lane.Point(gizmoU + facing * d) + Vector3.up * y;
+            Gizmos.DrawLine(previous, point);
+            previous = point;
+        }
 
         Gizmos.color = Color.cyan;
-        Vector3 ledgeOrigin = new Vector3(bounds.center.x + facing * (bounds.extents.x + ledgeLookAhead), bounds.min.y + 0.1f, transform.position.z);
+        float half = box.size.x * 0.5f;
+        float bottom = box.center.y - box.size.y * 0.5f;
+        Vector3 ledgeOrigin = Lane.Point(gizmoU + facing * (half + ledgeLookAhead)) + Vector3.up * (y + bottom + 0.1f);
         Gizmos.DrawLine(ledgeOrigin, ledgeOrigin + Vector3.down * (0.1f + ledgeCheckDepth));
     }
 }

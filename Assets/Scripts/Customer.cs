@@ -160,7 +160,7 @@ public class Customer : MonoBehaviour
         switch (state)
         {
             case State.Inside:
-                if (player != null && Mathf.Abs(player.position.x - transform.position.x) < comeOutDistance)
+                if (player != null && FlatDistanceToPlayer() < comeOutDistance)
                 {
                     StartCoroutine(ComeOut());
                 }
@@ -181,11 +181,19 @@ public class Customer : MonoBehaviour
         float t = Time.time;
         rig.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * swaySpeed) * swayAngle);
 
-        bool playerClose = player != null && Mathf.Abs(player.position.x - transform.position.x) < waveDistance;
+        bool playerClose = player != null && FlatDistanceToPlayer() < waveDistance;
         // Winkel um Z: 0 = Arm hängt runter, -X-Arm geht mit negativen Winkeln nach außen/oben
         float leftAngle = playerClose ? -150f + Mathf.Sin(t * waveSpeed) * 25f : -8f;
         leftArm.localRotation = Quaternion.Euler(0f, 0f, leftAngle);
         rightArm.localRotation = Quaternion.Euler(0f, 0f, 8f);
+    }
+
+    // Abstand ohne Höhe (Luftlinie am Boden). Funktioniert auf jeder Bahnrichtung, auch nach der Kurve
+    private float FlatDistanceToPlayer()
+    {
+        Vector3 delta = player.position - transform.position;
+        delta.y = 0f;
+        return delta.magnitude;
     }
 
     private void OnPizzaDelivered(int earnedCoins)

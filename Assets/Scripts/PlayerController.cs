@@ -13,7 +13,6 @@ public class PlayerController : MonoBehaviour
     [Tooltip("Anteil der Maximalgeschwindigkeit, der beim Loslaufen sofort erreicht wird (0 = normal beschleunigen, 1 = sofort volle Geschwindigkeit)")]
     [Range(0f, 1f)]
     [SerializeField] private float startSpeedFraction = 0.8f;
-    [SerializeField] private Transform cameraTransform;
 
     [Header("Sprung")]
     [Tooltip("Maximale Sprunghöhe in Metern bei gehaltener Taste")]
@@ -197,22 +196,25 @@ public class PlayerController : MonoBehaviour
         }
         Vector3 platformVelocity = currentPlatform != null ? currentPlatform.Velocity : Vector3.zero;
 
-        Vector3 forward = cameraTransform != null ? cameraTransform.forward : Vector3.forward;
-        Vector3 right = cameraTransform != null ? cameraTransform.right : Vector3.right;
+        // Auf der Laufbahn halten: Statt Z einzufrieren (geht bei einer Kurve nicht mehr) wird der Spieler jeden
+        // Physik-Schritt auf den Pfad zurückgesetzt und in den Lane-Rahmen gedreht. Ohne LanePath ist das die X-Achse
+        float u = Lane.Project(body.position);
+        Vector3 tangent = Lane.Tangent(u);
+        SnapToLane(u);
 
-        forward.y = 0f;
-        right.y = 0f;
-        forward.Normalize();
-        right.Normalize();
-
-        Vector3 desiredDirection = (forward * moveInput.y + right * moveInput.x).normalized;
-        if (Mathf.Abs(desiredDirection.x) > FacingInputThreshold)
+        // Rechts/links heißt in 2.5D immer "vorwärts/rückwärts entlang der Bahn", unabhängig davon, wohin die Kamera
+        // gerade schaut (in Kurven dreht sie nach). Hoch/runter (W/S) bewegt nicht, man kann nicht aus der Bahn laufen
+        float along = moveInput.x;
+        Vector3 desiredDirection = Mathf.Abs(along) > 0.01f ? tangent * Mathf.Sign(along) : Vector3.zero;
+        if (Mathf.Abs(along) > FacingInputThreshold)
         {
-            FacingDirection = Mathf.Sign(desiredDirection.x);
+            FacingDirection = Mathf.Sign(along);
         }
         Vector3 desiredVelocity = desiredDirection * moveSpeed * currentSpeedMultiplier;
         // Nur die eigene Bewegung steuern, der Plattform-Anteil kommt am Ende obendrauf
         Vector3 horizontalVelocity = new Vector3(body.linearVelocity.x, 0f, body.linearVelocity.z) - carryVelocity;
+        // Seitliche Anteile (quer zur Bahn) verwerfen, z.B. nach einer Kurve
+        horizontalVelocity = tangent * Vector3.Dot(horizontalVelocity, tangent);
 
         // Beim Loslaufen (oder Umdrehen) direkt auf einen Großteil der Maximalgeschwindigkeit springen
         float startSpeed = desiredVelocity.magnitude * startSpeedFraction;
@@ -240,6 +242,19 @@ public class PlayerController : MonoBehaviour
         body.linearVelocity = new Vector3(newHorizontalVelocity.x, body.linearVelocity.y, newHorizontalVelocity.z);
 
         UpdateJump(platformVelocity.y);
+    }
+
+    // Quer zur Bahn auf den Pfad zurücksetzen (kleine Korrektur pro Schritt) und in Laufrichtung drehen.
+    // Die Rotation ist für die Physik gesperrt (Constraints), direkt setzen geht trotzdem
+    private void SnapToLane(float u)
+    {
+        Vector3 back = Lane.Back(u);
+        float sideways = Vector3.Dot(body.position - Lane.Point(u), back);
+        if (Mathf.Abs(sideways) > 0.0001f)
+        {
+            body.position -= back * sideways;
+        }
+        body.rotation = Lane.Frame(u);
     }
 
     private void UpdateJump(float platformVerticalVelocity)

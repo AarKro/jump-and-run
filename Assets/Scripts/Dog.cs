@@ -45,7 +45,7 @@ public class Dog : MonoBehaviour, IStompHandler
     private bool stomped;
     private Vector3 bodyStartPosition;
     private Quaternion bodyStartRotation;
-    private float lastX;
+    private Vector3 lastPosition;
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
     private void Awake()
@@ -53,7 +53,7 @@ public class Dog : MonoBehaviour, IStompHandler
         patrol = GetComponent<GroundPatrol>();
         bodyStartPosition = body.localPosition;
         bodyStartRotation = body.localRotation;
-        lastX = transform.position.x;
+        lastPosition = transform.position;
         GameManager.LevelReset += ResetDog;
 
         woofBubble.SetActive(false);
@@ -115,8 +115,9 @@ public class Dog : MonoBehaviour, IStompHandler
         wasChasing = chasing;
 
         // Geschwindigkeit aus der Positionsänderung, weil der kinematische Rigidbody keine Geschwindigkeit meldet
-        float speed = Time.deltaTime > 0f ? Mathf.Abs(transform.position.x - lastX) / Time.deltaTime : 0f;
-        lastX = transform.position.x;
+        // (als Strecke, nicht nur in X: nach der Kurve läuft der Hund entlang Z)
+        float speed = Time.deltaTime > 0f ? Vector3.Distance(transform.position, lastPosition) / Time.deltaTime : 0f;
+        lastPosition = transform.position;
         AnimateRun(speed > 0.1f);
     }
 
@@ -177,7 +178,7 @@ public class Dog : MonoBehaviour, IStompHandler
         }
         dizzyStars.gameObject.SetActive(false);
 
-        // Zum Hintergrund drehen: Die Optik schaut nach +X, -90° um Y dreht +X nach +Z.
+        // Zum Hintergrund drehen: Die Optik schaut nach lokal +X, -90° um Y dreht lokal +X nach lokal +Z.
         // Spiegelung aufheben, sonst würde ein nach links schauender Hund rückwärts laufen
         Vector3 scale = body.localScale;
         scale.x = Mathf.Abs(scale.x);
@@ -186,7 +187,8 @@ public class Dog : MonoBehaviour, IStompHandler
 
         for (float run = 0f; run < runAwayDistance; run += runAwaySpeed * Time.deltaTime)
         {
-            transform.position += Vector3.forward * (runAwaySpeed * Time.deltaTime);
+            // Nach "hinten" im eigenen Lane-Rahmen (lokal +Z), also immer weg von der Kamera, auch nach der Kurve
+            transform.position += transform.forward * (runAwaySpeed * Time.deltaTime);
             AnimateRun(true);
             yield return null;
         }
@@ -205,6 +207,6 @@ public class Dog : MonoBehaviour, IStompHandler
         body.localRotation = bodyStartRotation;
         woofBubble.SetActive(false);
         dizzyStars.gameObject.SetActive(false);
-        lastX = transform.position.x;
+        lastPosition = transform.position;
     }
 }

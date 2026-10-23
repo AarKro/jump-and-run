@@ -52,6 +52,9 @@ public static class PrefabGridEnforcer
         Transform[] transforms =
             Resources.FindObjectsOfTypeAll<Transform>();
 
+        // Gibt es eine Laufbahn mit Kurven, wird entlang dieser Bahn eingerastet statt auf X/Z = 0
+        LanePath lane = Object.FindAnyObjectByType<LanePath>();
+
         foreach (Transform currentTransform in transforms)
         {
             GameObject currentObject = currentTransform.gameObject;
@@ -76,7 +79,17 @@ public static class PrefabGridEnforcer
             if (prefabRoot != currentObject)
                 continue;
 
+            // UI (z.B. HUD) liegt nicht in der Welt
+            if (currentTransform is RectTransform)
+                continue;
+
             Vector3 currentPosition = currentTransform.position;
+
+            if (lane != null)
+            {
+                SnapToLane(currentTransform, lane);
+                continue;
+            }
 
             Vector3 snappedPosition = new Vector3(
                 SnapToGrid(currentPosition.x, GridSizeX),
@@ -99,6 +112,28 @@ public static class PrefabGridEnforcer
                 currentObject.scene
             );
         }
+    }
+
+    // Auf die Bahn: Stelle u auf ganze Meter runden, Position auf dem Pfad, Drehung in den Lane-Rahmen.
+    // Auf dem geraden Stück entlang +X ist das genau dasselbe wie vorher (u = X, Z = 0, keine Drehung)
+    private static void SnapToLane(Transform target, LanePath lane)
+    {
+        float u = SnapToGrid(lane.Project(target.position), GridSizeX);
+        Vector3 snappedPosition = lane.PointAt(u) + Vector3.up * SnapToGrid(target.position.y, GridSizeY);
+        Vector3 back = Vector3.Cross(lane.TangentAt(u), Vector3.up);
+        Quaternion snappedRotation = Quaternion.LookRotation(back, Vector3.up);
+
+        // Mit kleiner Toleranz vergleichen: Positionen nach einer Kurve sind krumme Werte (z.B. 13.7168...), die in der
+        // Szenen-Datei mit weniger Stellen gespeichert werden. Ohne Toleranz würde jedes Laden die Szene "ändern"
+        if ((target.position - snappedPosition).sqrMagnitude < 0.0005f * 0.0005f &&
+            Quaternion.Angle(target.rotation, snappedRotation) < 0.05f)
+        {
+            return;
+        }
+
+        target.SetPositionAndRotation(snappedPosition, snappedRotation);
+        EditorUtility.SetDirty(target);
+        EditorSceneManager.MarkSceneDirty(target.gameObject.scene);
     }
 
     private static float SnapToGrid(
