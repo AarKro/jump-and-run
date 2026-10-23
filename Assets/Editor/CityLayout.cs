@@ -1,0 +1,123 @@
+using UnityEngine;
+
+// Grundriss der gemeinsamen Stadt, dieselben Werte wie auf dem Stadtplan (Artefakt "Pizza City Map").
+// Welt-Meter: X = Osten (rechts), Z = Norden (in den Bildschirm hinein). Gehweg-Oberkante y = 0.5, Straße y = 0.3.
+// Level 1 liegt in der Südost-Ecke: Margherita Avenue ist der Südrand (Laufbahn bei z = 0), Pepperoni Parkway der Ostrand (x = 68).
+public static class CityLayout
+{
+    // Blockkanten der Stadt (dort liegt bei den Ringstraßen die Laufbahn)
+    public const float West = -250f;
+    public const float East = 68f;
+    public const float North = 318f;
+
+    public const float Surface = 0.5f;
+    public const float RoadTop = 0.3f;
+
+    // Ringstraße: Straßenmitte 7 m außerhalb der Blockkante (Bordstein bei 2 m, Fahrbahn 10 m breit)
+    public const float RingOffset = 7f;
+
+    // Straßenarten. Ring = Außenring wie Level 1 (Kamera schaut von außen hinein),
+    // Avenue = 20 m Fassade zu Fassade (die Kamera 8 m vor dem Spieler bleibt über der Fahrbahn),
+    // Narrow = 10 m, nur zum Überqueren (Autos wie die Querstraße in Level 1)
+    public enum Side { Ring, Avenue, Narrow }
+
+    // Abstand Straßenmitte → Fassade bzw. → Gehweg-Kante (Bordstein). Beim Ring von der Blockkante aus gemessen
+    public static float FacadeInset(Side side) => side == Side.Narrow ? 5f : side == Side.Avenue ? 10f : 3f;
+    public static float SidewalkInset(Side side) => side == Side.Narrow ? 3f : side == Side.Avenue ? 6f : -2f;
+
+    public enum BlockKind { Houses, Downtown, Piazza, Park, Ruins }
+
+    public readonly struct Street
+    {
+        public readonly string Name;
+        public readonly bool Vertical;   // true: verläuft nach Norden (konstantes X)
+        public readonly float At;        // X (vertikal) bzw. Z (horizontal) der Straßenmitte
+        public readonly float From, To;  // Ausdehnung entlang der Straße
+        public readonly Side Type;
+
+        public Street(string name, bool vertical, float at, float from, float to, Side type)
+        {
+            Name = name; Vertical = vertical; At = at; From = from; To = to; Type = type;
+        }
+
+        // Halbe Fahrbahnbreite
+        public float HalfRoad => Type == Side.Narrow ? 3f : Type == Side.Avenue ? 6f : 5f;
+    }
+
+    private const float RW = West - RingOffset, RE = East + RingOffset, RS = -RingOffset, RN = North + RingOffset;
+
+    public static readonly Street[] Streets =
+    {
+        // Außenring
+        new Street("Margherita Avenue", false, RS, RW, RE, Side.Ring),
+        new Street("Pepperoni Parkway", true, RE, RS, RN, Side.Ring),
+        new Street("Calzone Road", false, RN, RW, RE, Side.Ring),
+        new Street("Marinara Promenade", true, RW, RS, RN, Side.Ring),
+        // Nord-Süd
+        new Street("Basil Street", true, -180f, RS, RN, Side.Avenue),
+        new Street("Oregano Street", true, -110f, RS, 130f, Side.Avenue),
+        new Street("Oregano Street", true, -110f, 215f, RN, Side.Avenue),
+        new Street("Mozzarella Blvd", true, -40f, RS, RN, Side.Avenue),
+        new Street("Anchovy Alley", true, 50f, RS, RN, Side.Narrow),
+        // Ost-West
+        new Street("Crust Street", false, 130f, RW, -40f, Side.Avenue),
+        new Street("Crust Street", false, 112f, -40f, RE, Side.Avenue),
+        new Street("Olive Lane", false, 165f, -40f, RE, Side.Avenue),
+        new Street("Four Cheese Avenue", false, 215f, RW, RE, Side.Avenue),
+        new Street("Salami Street", false, 265f, RW, -110f, Side.Avenue),
+    };
+
+    public readonly struct Block
+    {
+        public readonly float X0, X1, Z0, Z1;               // begrenzende Straßenmitten bzw. Blockkanten am Ring
+        public readonly Side Left, Right, Bottom, Top;      // Bottom = Süden, Top = Norden
+        public readonly BlockKind Kind;
+
+        public Block(float x0, float x1, float z0, float z1, string sides, BlockKind kind)
+        {
+            X0 = x0; X1 = x1; Z0 = z0; Z1 = z1; Kind = kind;
+            Left = Parse(sides[0]); Right = Parse(sides[1]); Bottom = Parse(sides[2]); Top = Parse(sides[3]);
+        }
+
+        private static Side Parse(char c) => c == 'r' ? Side.Ring : c == 'n' ? Side.Narrow : Side.Avenue;
+
+        // Fläche, auf der Häuser stehen (bis zu den Fassaden)
+        public Rect Lots => Inset(FacadeInset);
+
+        // Gehweg-Platte: bis zum Bordstein der umgebenden Straßen
+        public Rect Sidewalk => Inset(SidewalkInset);
+
+        private Rect Inset(System.Func<Side, float> inset)
+        {
+            return Rect.MinMaxRect(X0 + inset(Left), Z0 + inset(Bottom), X1 - inset(Right), Z1 - inset(Top));
+        }
+    }
+
+    // Seiten: links (West), rechts (Ost), unten (Süd), oben (Nord). r = Ring, a = Avenue, n = Narrow
+    public static readonly Block[] Blocks =
+    {
+        new Block(West, -180f, 0f, 130f, "rara", BlockKind.Piazza),
+        new Block(-180f, -110f, 0f, 130f, "aara", BlockKind.Houses),
+        new Block(-110f, -40f, 0f, 130f, "aara", BlockKind.Houses),
+        new Block(-40f, 50f, 0f, 112f, "anra", BlockKind.Houses),
+        new Block(50f, East, 0f, 112f, "nrra", BlockKind.Houses),
+        new Block(West, -180f, 130f, 215f, "raaa", BlockKind.Houses),
+        new Block(-180f, -40f, 130f, 215f, "aaaa", BlockKind.Park),
+        new Block(-40f, 50f, 112f, 165f, "anaa", BlockKind.Downtown),
+        new Block(50f, East, 112f, 165f, "nraa", BlockKind.Houses),
+        new Block(-40f, 50f, 165f, 215f, "anaa", BlockKind.Downtown),
+        new Block(50f, East, 165f, 215f, "nraa", BlockKind.Houses),
+        new Block(West, -180f, 215f, 265f, "raaa", BlockKind.Houses),
+        new Block(West, -180f, 265f, North, "raar", BlockKind.Houses),
+        new Block(-180f, -110f, 215f, 265f, "aaaa", BlockKind.Houses),
+        new Block(-180f, -110f, 265f, North, "aaar", BlockKind.Houses),
+        new Block(-110f, -40f, 215f, North, "aaar", BlockKind.Ruins),
+        new Block(-40f, 50f, 215f, North, "anar", BlockKind.Ruins),
+        new Block(50f, East, 215f, North, "nrar", BlockKind.Houses),
+    };
+
+    // Sehenswürdigkeiten
+    public static readonly Vector2 LeaningTower = new Vector2(-200f, 50f);
+    public static readonly Vector2 FoundersCircle = new Vector2(-40f, 130f);
+    public static readonly Vector2 KaijuFight = new Vector2(-40f, 270f);
+}
