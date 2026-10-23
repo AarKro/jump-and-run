@@ -79,7 +79,9 @@ public class KaijuFight : MonoBehaviour
 
         if (robotVisor != null)
         {
-            // Visier pulsiert. MaterialPropertyBlock statt material.color: sonst legt Unity eine Kopie des Materials an
+            // Visier pulsiert. MaterialPropertyBlock statt material.color: sonst legt Unity eine Kopie des Materials an.
+            // Hier erst anlegen, falls nötig: Nach einem Neukompilieren mitten im Play Mode sind nicht gespeicherte Felder leer
+            visorBlock ??= new MaterialPropertyBlock();
             robotVisor.GetPropertyBlock(visorBlock);
             visorBlock.SetColor(BaseColor, visorColor * (0.65f + 0.35f * Mathf.Sin(t * 4f)));
             robotVisor.SetPropertyBlock(visorBlock);
