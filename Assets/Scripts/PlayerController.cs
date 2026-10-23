@@ -63,6 +63,13 @@ public class PlayerController : MonoBehaviour
     private Coroutine jumpBoostRoutine;
     private PowerUpShine shine;
 
+    // +1 = schaut nach rechts (+X, Levelrichtung), -1 = nach links. Kommt aus der Eingabe, nicht aus der
+    // Geschwindigkeit, damit eine Plattform den Spieler nicht umdreht. Bleibt im Stehen beim letzten Wert.
+    public float FacingDirection { get; private set; } = 1f;
+
+    // Ab diesem Eingabe-Anteil in X zählt es als Umdrehen (filtert leichtes Stick-Wackeln)
+    private const float FacingInputThreshold = 0.1f;
+
     private void Awake()
     {
         body = GetComponent<Rigidbody>();
@@ -180,6 +187,10 @@ public class PlayerController : MonoBehaviour
         right.Normalize();
 
         Vector3 desiredDirection = (forward * moveInput.y + right * moveInput.x).normalized;
+        if (Mathf.Abs(desiredDirection.x) > FacingInputThreshold)
+        {
+            FacingDirection = Mathf.Sign(desiredDirection.x);
+        }
         Vector3 desiredVelocity = desiredDirection * moveSpeed * currentSpeedMultiplier;
         // Nur die eigene Bewegung steuern, der Plattform-Anteil kommt am Ende obendrauf
         Vector3 horizontalVelocity = new Vector3(body.linearVelocity.x, 0f, body.linearVelocity.z) - carryVelocity;

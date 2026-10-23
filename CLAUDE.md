@@ -2,6 +2,18 @@
 
 A small 2.5D platformer the user is building to **learn Unity**. When you change code, explain the Unity idea behind it (for example interpolation or why physics runs in FixedUpdate). Don't just make silent fixes.
 
+## Working mode
+- **Never assume. Always ask, interview style.** Before you implement or decide anything (design, gameplay, code structure, naming, assets), ask the user with a set of concrete options (use the AskUserQuestion tool). Put the option you **recommend first** and mark it as recommended. Only act once the user has chosen.
+- **Git**: local repo (branch `main`, no remote, no LFS yet; set up LFS before the first large binary like models/textures/audio). **Commit after every finished work item**, as soon as it compiles cleanly and is done on your side, without waiting for the playtest. Tuning or fixes after the playtest get their own small commits. Commit messages in **English**, short and imperative. `.gitignore` covers `Library/`, `Temp/`, `Logs/`, `UserSettings/`, `obj/`, `*.csproj`, `*.slnx`, `.DS_Store`.
+
+## Theme (decided as of 2026-10-23)
+Only decided things go here, no loose ideas.
+- **Pizza delivery**: the player is a pizza delivery guy carrying a pizza carton. Each level he picks up a new pizza at his **pizzeria** (start, a house in the background) and delivers it to a **customer** (goal), who is super happy and starts dancing.
+- **Level 1 = city.** Enemies are dogs (instead of the red `Enemy`). Platforms are city objects (benches, balconies, ...).
+- **Heat meter + tip**: the pizza cools down over time (a heat bar instead of the plain countdown). The remaining heat on delivery sets the tip (1–3 stars). At 0 the pizza is cold, the customer is grumpy and the level restarts.
+- **Dog stomp**: no squashing. The player still bounces, the dog gets dizzy (stars over its head) and runs out of the level, then comes back on `LevelReset`.
+- **Placeholder look**: until there's a real model, the player stays a **sphere** (collider radius 0.5; physics unchanged) and carries a red carton with a white lid (`Pizza Carton` → `Box`/`Lid`, materials `PizzaRed`/`PizzaWhite`, no colliders).
+
 ## Setup
 - Unity **6000.6.2f1** (Unity 6), URP 17.6, new **Input System** 1.20 (read directly with `Keyboard.current` / `Gamepad.current`, so the `InputSystem_Actions.inputactions` asset isn't wired up yet).
 - Code comments, Inspector headers and tooltips are in **German**. Keep it that way.
@@ -20,6 +32,7 @@ A small 2.5D platformer the user is building to **learn Unity**. When you change
 - Enemy prefabs: `Enemy` (red, `EnemyPlatformPatrol`, needs `WaypointA/B` on its platform) and `Flying Enemy` (purple, `PointToPointMover` between its children `Point A`/`Point B`). Both use `EnemyDamage`.
 - `EnemyDamage`: a contact from above (direction to player `y >= stompDirectionThreshold`, player not rising) is a **stomp**. The enemy is disabled immediately (collider plus all other scripts), squashes flat and is destroyed, and `PlayerController.StompBounce()` bounces the player (higher while jump is held). Any other contact calls `GameManager.RespawnPlayer()`.
 - **Level reset on respawn**: `GameManager.RespawnPlayer()` raises the static event `GameManager.LevelReset`. Subscribers (subscribe in `Awake`, unsubscribe in `OnDestroy`): `EnemyDamage` revives squashed enemies, `EnemyPlatformPatrol` and `PointToPointMover` go back to their start positions, `PowerUp` reactivates (`respawnOnLevelReset`), and `PlayerController` clears boosts, shine and platform momentum. Enemies and power-ups are therefore only **deactivated** (`SetActive(false)`), never `Destroy`ed. Keep it that way for new resettable objects.
+- `PizzaCarton` (on `Pizza Carton`, child of the Player): mirrors its local X offset in `LateUpdate` based on `PlayerController.FacingDirection` (+1/-1, set from the world-space input direction, not from velocity, so platforms don't turn the player; it keeps its last value while standing still). Instant flip. The steam effect of the heat meter will go here later.
 - Other scripts: `GameManager` (singleton, level timer, respawn), `Checkpoint`, `KillZone`, `LevelGoal`, `PowerUp`, `EnemyPlatformPatrol`, `TimerDisplay`.
 - Editor tools under **Tools > Jump and Run**: `ObstacleCourseBuilder` generates the levels from `Level1Layout`/`Level2Layout` (gaps measured from edge to edge). `LevelEssentialsSetup` copies Player/GameManager into level 2. `LevelCleaner` (**Clear Level (active scene)**) deletes platforms, enemies, checkpoints and waypoints but keeps Player, StartPoint, GameManager, camera, Goal and KillZone. The levels are hand-built (as of 2026-10-02): level 1 is finished, and level 2 was reset from a copy of level 1 (course removed; Player/GameManager/Goal are prefab instances). The `ObstacleCourseBuilder` layouts are outdated. Don't run them, because they would overwrite the hand-built level.
 
@@ -29,5 +42,5 @@ A small 2.5D platformer the user is building to **learn Unity**. When you change
 - "Grounded" for jumping = ground check hit + no jump in the last 0.1 s (`GroundLockAfterJump`). **Don't** add a vertical-velocity condition. On moving platforms the player's vy never exactly matches the platform's (easing, solver), so jumps got dropped.
 - The player Rigidbody needs **Interpolate** (set on the prefab). Without it the camera jitters, because physics runs at 50 Hz and rendering doesn't.
 - Serialized values in prefabs/scenes override code defaults. If you change a default in code, also check the prefab (`Assets/Prefabs/Player.prefab`) and scene overrides.
+- New `.cs` files aren't in `Assembly-CSharp.csproj` until Unity re-imports (the csproj lists every file). For a pre-check without the editor, add a `<Compile Include=...>` line by hand.
 - Verify it compiles without the editor: `/Applications/Unity/Hub/Editor/6000.6.2f1/Unity.app/Contents/Resources/Scripting/DotNetSdk/dotnet build Assembly-CSharp.csproj` (the CS0649 warnings for `[SerializeField]` are normal). Game feel can only be tested in the editor, so ask the user.
-- Not committed yet: the repo has no `.gitignore`. `Library/`, `Temp/`, `Logs/`, `UserSettings/`, `*.csproj` and `*.slnx` should not be committed.
