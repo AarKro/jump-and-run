@@ -70,6 +70,10 @@ public static class PrefabGridEnforcer
             if (!PrefabUtility.IsPartOfPrefabInstance(currentObject))
                 continue;
 
+            // Die Stadt-Szene hat ihre festen Gebäude an festen Weltpositionen (auch quer zur Laufbahn eines Levels)
+            if (currentObject.scene.path == CityBuilder.ScenePath)
+                continue;
+
             GameObject prefabRoot =
                 PrefabUtility.GetOutermostPrefabInstanceRoot(
                     currentObject

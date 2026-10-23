@@ -116,6 +116,26 @@ public static class CityLayout
         new Block(50f, East, 215f, North, "nrar", BlockKind.Houses),
     };
 
+    // Feste Gebäude (Prefabs mit Spiel-Funktion, bekommen eine CityLandmark). Stehen genau da, wo sie in Level 1 standen:
+    // Position = Prefab-Wurzel, Drehung = Lane-Rahmen (nach der Kurve -90°)
+    public static readonly (string prefab, Vector3 position, float yaw)[] Landmarks =
+    {
+        ("Pizzeria", new Vector3(-8f, 0f, 0f), 0f),
+        ("Coffee Shop", new Vector3(61f, 0f, 0f), 0f),
+        // Lane-Stelle u = 80 nach der Kurve: x 68, z = 4 + (80 - 70.28)
+        ("Kiosk", new Vector3(68f, 0f, 13.7168f), -90f),
+    };
+
+    // Grundstücke, auf denen der Generator keine zufälligen Häuser baut: unter den festen Gebäuden, und ein Haus mit fester
+    // Größe dort, wo in Level 1 das Kundenhaus steht (Level 1 schneidet genau dieses Haus aus und setzt sein Ziel hinein)
+    public static readonly Rect[] LandmarkLots =
+    {
+        Rect.MinMaxRect(-13f, 3f, -3f, 11f),       // Pizzeria
+        Rect.MinMaxRect(57f, 3f, 65f, 11f),        // Café
+        Rect.MinMaxRect(55f, 10.7f, 65f, 16.7f),   // Kiosk
+    };
+    public static readonly Rect CustomerHouseLot = Rect.MinMaxRect(55f, 75.7f, 65f, 83.7f);
+
     // Sehenswürdigkeiten
     public static readonly Vector2 LeaningTower = new Vector2(-200f, 50f);
     public static readonly Vector2 FoundersCircle = new Vector2(-40f, 130f);
