@@ -204,6 +204,8 @@ public static class PizzaHeatSetup
         CreateText("Continue Hint", panel, "Press Jump to continue", 38f, new Color(1f, 1f, 1f, 0.75f), new Vector2(0f, -190f));
 
         hud.FindProperty("deliveredPanel").objectReferenceValue = panel.gameObject;
+        // Im Prefab ausgeschaltet speichern, sonst verdeckt das Panel im Edit Mode die Game-Ansicht
+        panel.gameObject.SetActive(false);
     }
 
     private static void BuildColdPanel(Transform parent, SerializedObject hud)
@@ -214,6 +216,7 @@ public static class PizzaHeatSetup
         CreateText("Title", panel, "Pizza's cold!", 120f, new Color(0.75f, 0.9f, 1f), Vector2.zero);
 
         hud.FindProperty("coldPanel").objectReferenceValue = panel.gameObject;
+        panel.gameObject.SetActive(false);
     }
 
     // ---------- Dampf ----------
