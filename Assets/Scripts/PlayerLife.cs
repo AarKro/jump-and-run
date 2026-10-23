@@ -94,6 +94,16 @@ public class PlayerLife : MonoBehaviour
         Revive();
     }
 
+    // Wartet drinnen hinter der geschlossenen Tür (z.B. während der Kamerafahrt zum Levelstart). PlayExit holt ihn danach raus
+    public void WaitInside(SpawnDoor door)
+    {
+        controller.Freeze();
+        body.linearVelocity = Vector3.zero;
+        body.isKinematic = true;
+        ResetLook(door.OutsidePosition);
+        Teleport(door.InsidePosition);
+    }
+
     // Ohne Tür (z.B. Level 2): am Punkt kurz aufploppen
     public IEnumerator PlayPopIn(Vector3 position)
     {

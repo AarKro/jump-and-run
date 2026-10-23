@@ -12,10 +12,31 @@ public class LevelFlow : MonoBehaviour
     public const string CitySceneName = "City";
 
     private static LevelFlow runner;
+    // Das gerade geladene Level ist ein Neustart (Pizza kalt): dann ohne Kamerafahrt
+    private static bool restartPending;
+
+    // Mit ausgeschaltetem Domain Reload (Enter Play Mode Options) behalten statische Felder ihre Werte vom letzten Play.
+    // Diese Methode läuft bei jedem Play-Start ganz früh und setzt sie zurück
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        runner = null;
+        restartPending = false;
+    }
 
     public static void Restart()
     {
-        Load(SceneManager.GetActiveScene().buildIndex);
+        int current = SceneManager.GetActiveScene().buildIndex;
+        Load(current);
+        restartPending = true;
+    }
+
+    // Einmal abfragbar: true, wenn dieses Level per Restart() geladen wurde
+    public static bool ConsumeRestart()
+    {
+        bool wasRestart = restartPending;
+        restartPending = false;
+        return wasRestart;
     }
 
     // Nächstes Level in den Build Settings, die Stadt-Szene wird übersprungen. -1 = es gibt keins mehr
@@ -33,6 +54,7 @@ public class LevelFlow : MonoBehaviour
 
     public static void Load(int buildIndex)
     {
+        restartPending = false;
         if (!SceneManager.GetSceneByName(CitySceneName).isLoaded)
         {
             SceneManager.LoadScene(buildIndex);

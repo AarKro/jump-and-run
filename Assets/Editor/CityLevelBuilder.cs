@@ -319,6 +319,13 @@ public static class CityLevelBuilder
         serialized.FindProperty("levelTime").floatValue = KeepWarmTime;
         serialized.ApplyModifiedPropertiesWithoutUndo();
 
+        // Kamerafahrt zum Levelstart (Kunde → Route → Pizzeria)
+        GameObject mainCamera = GameObject.Find("Main Camera");
+        if (mainCamera != null && mainCamera.GetComponent<IntroFlyover>() == null)
+        {
+            mainCamera.AddComponent<IntroFlyover>();
+        }
+
         GameObject goal = GameObject.Find("Goal");
         if (goal != null)
         {

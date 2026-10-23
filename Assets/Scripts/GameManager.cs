@@ -68,12 +68,15 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // Levelstart läuft (Stadt geladen, falls das Level eine hat). Vorher läuft weder Wärme noch Stoppuhr
+    // Der Spieler ist draußen und spielt. Vorher (Stadt laden, Kamerafahrt, aus der Tür laufen) laufen weder Wärme noch Stoppuhr
     private bool started;
 
-    // Start als Coroutine: Unity wartet dann einfach mit dem Rest, bis die Stadt-Szene geladen und eingerichtet ist
+    // Start als Coroutine: Unity wartet dann einfach mit dem Rest (Stadt laden, Kamerafahrt, Tür), Frame für Frame
     private IEnumerator Start()
     {
+        // Nach "Pizza's cold!" ohne Kamerafahrt, damit der neue Versuch schnell losgeht. Immer abfragen, damit das Merkzeichen weg ist
+        bool restarted = LevelFlow.ConsumeRestart();
+
         if (LevelCity.Instance != null)
         {
             while (LevelCity.Instance != null && !LevelCity.Instance.Ready)
@@ -81,24 +84,27 @@ public class GameManager : MonoBehaviour
                 yield return null;
             }
         }
-        started = true;
         currentRespawnPoint = startPoint;
         currentDoor = startDoor;
 
-        if (player == null)
+        if (player != null && currentDoor != null && playerLife != null)
         {
-            yield break;
+            // Levelstart: Der Pizzabote wartet in der Pizzeria, die Kamera fliegt die Route ab, dann kommt er mit der frischen Pizza heraus
+            IsRespawning = true;
+            playerLife.WaitInside(currentDoor);
+            IntroFlyover intro = FindAnyObjectByType<IntroFlyover>();
+            LevelGoal goal = FindAnyObjectByType<LevelGoal>();
+            if (!restarted && intro != null && goal != null)
+            {
+                yield return intro.Play(goal.transform.position, player.transform.position);
+            }
+            yield return SpawnFromDoor();
         }
-
-        if (currentDoor != null && playerLife != null)
-        {
-            // Levelstart: Der Pizzabote kommt mit der frischen Pizza aus der Pizzeria
-            StartCoroutine(SpawnFromDoor());
-        }
-        else if (currentRespawnPoint != null)
+        else if (player != null && currentRespawnPoint != null)
         {
             PlacePlayerAt(currentRespawnPoint);
         }
+        started = true;
     }
 
     private IEnumerator SpawnFromDoor()

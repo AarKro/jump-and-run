@@ -4,7 +4,8 @@ public class ThirdPersonCamera : MonoBehaviour
 {
     [SerializeField] private Transform target;
     [SerializeField] private Vector3 offset = new Vector3(0f, 5f, -8f);
-    [SerializeField] private float lookHeight = 1f;
+    [Tooltip("Blickpunkt so hoch über dem Player. Höher = flacherer Blick (mehr Hintergrund), 2.86 ≈ 15° nach unten, 1 ≈ 27°")]
+    [SerializeField] private float lookHeight = 2.86f;
 
     [Header("Nachziehen (Sekunden bis ~63 % des Weges)")]
     [SerializeField] private float horizontalSmoothTime = 0.08f;
@@ -14,15 +15,27 @@ public class ThirdPersonCamera : MonoBehaviour
 
     private Vector3 velocity;
 
+    // Für die Kamerafahrt zum Levelstart (IntroFlyover): Sie landet genau in dieser Spielkamera-Pose
+    public Vector3 Offset => offset;
+    public float LookHeight => lookHeight;
+
     private void Start()
     {
         // Beim Start direkt an die Zielposition springen, statt vom Szenen-Ursprung heranzufahren
-        if (target != null)
+        SnapToTarget();
+    }
+
+    // Sofort in die Spielkamera-Pose (ohne Nachziehen), z.B. nach der Kamerafahrt
+    public void SnapToTarget()
+    {
+        if (target == null)
         {
-            Quaternion frame = Lane.Frame(Lane.Project(target.position));
-            transform.position = target.position + frame * offset;
-            transform.rotation = frame * FixedRotation();
+            return;
         }
+        Quaternion frame = Lane.Frame(Lane.Project(target.position));
+        transform.position = target.position + frame * offset;
+        transform.rotation = frame * FixedRotation();
+        velocity = Vector3.zero;
     }
 
     private void LateUpdate()

@@ -1390,9 +1390,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ThirdPersonCamera
   target: {fileID: 1880874313}
   offset: {x: 0, y: 5, z: -8}
-  lookHeight: 1
+  lookHeight: 2.86
   horizontalSmoothTime: 0.08
   verticalSmoothTime: 0.2
+  rotationSharpness: 8
 --- !u!1001 &860014126
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2414,7 +2415,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 6117011104289064102, guid: 225395a68050f4eff9f8c86f452165c9, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 0}
   m_SourcePrefab: {fileID: 100100000, guid: 225395a68050f4eff9f8c86f452165c9, type: 3}
 --- !u!1 &1880874309 stripped
 GameObject:
