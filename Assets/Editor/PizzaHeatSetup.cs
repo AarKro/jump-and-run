@@ -14,6 +14,8 @@ public static class PizzaHeatSetup
     private const string HudPrefabPath = "Assets/Prefabs/HUD.prefab";
     private const string PlayerPrefabPath = "Assets/Prefabs/Player.prefab";
     private const string ParticleMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat";
+    // Schrift-Material mit schwarzem Rand aus den TMP Essentials: Text bleibt lesbar, auch ohne dunklen Hintergrund
+    private const string OutlineFontMaterialPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Outline.mat";
 
     // Referenzauflösung: Alle Größen unten sind in Pixeln bei 1920x1080, der CanvasScaler rechnet sie um
     private static readonly Vector2 ReferenceResolution = new Vector2(1920f, 1080f);
@@ -182,11 +184,18 @@ public static class PizzaHeatSetup
 
     private static void BuildDeliveredPanel(Transform parent, SerializedObject hud)
     {
-        RectTransform panel = CreateImage("Delivered Panel", parent, new Color(0f, 0f, 0f, 0.45f));
-        Stretch(panel, 0f);
+        // Kompakt im oberen Drittel, ohne Abdunkeln: Die Bildmitte bleibt frei für den tanzenden Kunden.
+        // Oben mittig verankert, direkt unter dem Wärmebalken (der endet bei y = -76)
+        RectTransform panel = CreateRect("Delivered Panel", parent);
+        panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 1f);
+        panel.pivot = new Vector2(0.5f, 1f);
+        panel.sizeDelta = new Vector2(1400f, 400f);
+        panel.anchoredPosition = new Vector2(0f, -100f);
 
-        CreateText("Title", panel, "Delivered!", 110f, Color.white, new Vector2(0f, 170f));
-        CreateText("Tip Label", panel, "Tip", 44f, new Color(1f, 1f, 1f, 0.8f), new Vector2(0f, 60f));
+        var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
+        // Positionen relativ zur Panel-Mitte (200 px unter der Panel-Oberkante)
+        CreateText("Title", panel, "Delivered!", 84f, Color.white, new Vector2(0f, 130f), outline);
+        CreateText("Tip Label", panel, "Tip", 32f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, 60f), outline);
 
         // Eingebautes Kreis-Sprite aus Unitys UI-Ressourcen als Münze
         Sprite circle = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
@@ -196,12 +205,12 @@ public static class PizzaHeatSetup
         {
             RectTransform coin = CreateImage("Coin " + (i + 1), panel, Color.white);
             coin.GetComponent<Image>().sprite = circle;
-            coin.sizeDelta = new Vector2(110f, 110f);
-            coin.anchoredPosition = new Vector2((i - 1) * 150f, -50f);
+            coin.sizeDelta = new Vector2(80f, 80f);
+            coin.anchoredPosition = new Vector2((i - 1) * 110f, -15f);
             coins.GetArrayElementAtIndex(i).objectReferenceValue = coin.GetComponent<Image>();
         }
 
-        CreateText("Continue Hint", panel, "Press Jump to continue", 38f, new Color(1f, 1f, 1f, 0.75f), new Vector2(0f, -190f));
+        CreateText("Continue Hint", panel, "Press Jump to continue", 30f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, -110f), outline);
 
         hud.FindProperty("deliveredPanel").objectReferenceValue = panel.gameObject;
         // Im Prefab ausgeschaltet speichern, sonst verdeckt das Panel im Edit Mode die Game-Ansicht
@@ -295,7 +304,7 @@ public static class PizzaHeatSetup
         return rect;
     }
 
-    private static void CreateText(string name, Transform parent, string text, float fontSize, Color color, Vector2 position)
+    private static void CreateText(string name, Transform parent, string text, float fontSize, Color color, Vector2 position, Material fontMaterial = null)
     {
         RectTransform rect = CreateRect(name, parent);
         rect.sizeDelta = new Vector2(1400f, fontSize * 1.4f);
@@ -308,6 +317,10 @@ public static class PizzaHeatSetup
         label.alignment = TextAlignmentOptions.Center;
         label.fontStyle = FontStyles.Bold;
         label.raycastTarget = false;
+        if (fontMaterial != null)
+        {
+            label.fontSharedMaterial = fontMaterial;
+        }
     }
 
     // Anker auf die Ecken des Elternteils: Das Rechteck füllt es komplett aus, abzüglich Rand
