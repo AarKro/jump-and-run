@@ -26,14 +26,8 @@ public static class CityLevelBuilder
     private const string ScenePath = "Assets/Scenes/levels/level01.unity";
     private const float KeepWarmTime = 75f;
 
-    // Kein "Directional Light": Die Sonne kommt aus der Stadt-Szene (sonst wäre alles doppelt beleuchtet)
-    private static readonly HashSet<string> Keep = new HashSet<string>
-    {
-        "Main Camera", "Player", "GameManager", "HUD", "KillZone", "Goal", "StartPoint"
-    };
-
     private static Transform groundParent, buildingParent, propParent, gameplayParent;
-    private static LanePath lane;
+    private static LanePath lane => LevelBuildKit.Lane;
 
     // Kurve: beginnt direkt hinter dem Café (u = 64), Linkskurve um 90° mit 4 m Radius
     private const float CornerU = 64f;
@@ -58,16 +52,8 @@ public static class CityLevelBuilder
     // Ohne Dialog, für den Aufruf über Skripte (MCP)
     public static void Build()
     {
-        var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-        foreach (GameObject root in scene.GetRootGameObjects())
-        {
-            if (!Keep.Contains(root.name))
-            {
-                Object.DestroyImmediate(root);
-            }
-        }
-
-        lane = BuildLane();
+        var scene = LevelBuildKit.OpenAndClear(ScenePath);
+        BuildLane();
         groundParent = new GameObject("City Ground").transform;
         buildingParent = new GameObject("City Buildings").transform;
         propParent = new GameObject("City Props").transform;
@@ -78,29 +64,24 @@ public static class CityLevelBuilder
         BuildGameplay();
         BuildProps();
         SetupCityLink();
-        SetupEssentials();
-        // Gleicher Himmel und Nebel wie die Stadt, dann ist egal, welche der beiden Szenen gerade aktiv ist
-        CityBuilder.ApplyAtmosphere();
-
-        EditorSceneManager.MarkSceneDirty(scene);
-        EditorSceneManager.SaveScene(scene);
+        // Knapp über dem Baugruben-Boden (y = -4): Der Tod passiert noch sichtbar in der Grube.
+        // Groß genug für beide Straßen (vor der Kurve entlang X, danach entlang Z). Kundenhaus nach der Kurve bei u = 146
+        LevelBuildKit.SetupEssentials(146f, "42", KeepWarmTime, new Vector3(25f, -3f, 70f), new Vector3(140f, 1f, 190f));
+        LevelBuildKit.Save(scene);
         Debug.Log("CityLevelBuilder: Level 1 als Stadt gebaut.");
     }
 
     // ---------- Laufbahn ----------
 
-    private static LanePath BuildLane()
+    private static void BuildLane()
     {
-        var laneObject = new GameObject("Lane Path");
-        var path = laneObject.AddComponent<LanePath>();
         var pieces = new List<LanePath.Piece>
         {
-            new LanePath.Piece { type = LanePath.PieceType.Straight, length = CornerU + 40f },
-            new LanePath.Piece { type = LanePath.PieceType.Arc, length = CornerLength, turnDegrees = 90f },
-            new LanePath.Piece { type = LanePath.PieceType.Straight, length = 110f }
+            LevelBuildKit.Straight(CornerU + 40f),
+            LevelBuildKit.Arc(CornerRadius, 90f),
+            LevelBuildKit.Straight(110f)
         };
-        path.Configure(new Vector3(-40f, 0f, 0f), 0f, -40f, pieces);
-        return path;
+        LevelBuildKit.BuildLane(new Vector3(-40f, 0f, 0f), 0f, -40f, pieces);
     }
 
     // ---------- Boden ----------
@@ -217,21 +198,12 @@ public static class CityLevelBuilder
 
     private static void PowerUp(int u, int y, PowerUpKind kind, bool respawn)
     {
-        GameObject powerUp = PlaceAsset("Assets/Prefabs/PowerUp.prefab", u, y, gameplayParent);
-        var serialized = new SerializedObject(powerUp.GetComponent<PowerUp>());
-        serialized.FindProperty("type").enumValueIndex = (int)kind;
-        serialized.FindProperty("respawnOnLevelReset").boolValue = respawn;
-        serialized.ApplyModifiedPropertiesWithoutUndo();
-        powerUp.name = $"PowerUp {kind}";
+        LevelBuildKit.PowerUp(u, y, (LevelBuildKit.PowerUpKind)kind, respawn, gameplayParent);
     }
 
-    // Hund-Wurzel 1 m über der Gehweg-Mitte: Box-Unterkante liegt dann genau auf der Oberkante
     private static void Dog(int u, float startDirection)
     {
-        GameObject dog = PlaceAsset("Assets/Prefabs/Dog.prefab", u, 1, gameplayParent);
-        var serialized = new SerializedObject(dog.GetComponent<GroundPatrol>());
-        serialized.FindProperty("startDirection").floatValue = startDirection;
-        serialized.ApplyModifiedPropertiesWithoutUndo();
+        LevelBuildKit.Dog(u, startDirection, gameplayParent);
     }
 
     // ---------- Deko ----------
@@ -269,113 +241,24 @@ public static class CityLevelBuilder
     // Querstraße mit Zebrastreifen) und wo sein Kundenhaus (Teil des Goal-Prefabs) steht
     private static void SetupCityLink()
     {
-        Transform link = new GameObject("City Link").transform;
-        link.gameObject.AddComponent<LevelCity>();
-
-        // Rechteck in Welt-X/Z (von, bis)
-        void Cutout(string name, float x0, float x1, float z0, float z1)
-        {
-            Transform cutout = new GameObject("Cutout " + name).transform;
-            cutout.SetParent(link, false);
-            cutout.position = new Vector3((x0 + x1) / 2f, 0f, (z0 + z1) / 2f);
-            cutout.localScale = new Vector3(x1 - x0, 1f, z1 - z0);
-            cutout.gameObject.AddComponent<CityCutout>();
-        }
+        Transform link = LevelBuildKit.CityLink("Pizzeria", "Coffee Shop", "Kiosk");
         // Gehweg + Straße davor (Sidewalk-Prefab reicht von Z -14 bis 3) ab dem ersten Gehwegstück bei u = -18
-        Cutout("Main Street", -18f, 66f, -14f, 3f);
+        LevelBuildKit.Cutout(link, "Main Street", -18f, 66f, -14f, 3f);
         // Nach der Kurve bis zum Ende des letzten Gehwegstücks (u = 154 → z 87.7), Straße bis 14 m davor
-        Cutout("After Bend", 64f, 82f, -14f, 88f);
+        LevelBuildKit.Cutout(link, "After Bend", 64f, 82f, -14f, 88f);
         // Querstraße (Street Crossing): eigene Fahrbahn und Gehwege bis z 104
-        Cutout("Cross Street", 45f, 55f, -14f, 104f);
+        LevelBuildKit.Cutout(link, "Cross Street", 45f, 55f, -14f, 104f);
         Rect customer = CityLayout.CustomerHouseLot;
-        Cutout("Customer House", customer.xMin, customer.xMax + 1f, customer.yMin - 0.2f, customer.yMax + 0.2f);
-    }
-
-    // ---------- Grundausstattung ----------
-
-    private static void SetupEssentials()
-    {
-        // Die Pizzeria steht in der Stadt: Ihre Tür-Position aus dem Prefab plus ihrem Platz in der Stadt berechnen
-        var landmark = System.Array.Find(CityLayout.Landmarks, entry => entry.prefab == "Pizzeria");
-        var pizzeriaPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{CityPropsSetup.PrefabFolder}/Pizzeria.prefab");
-        Vector3 doorOutside = landmark.position + Quaternion.Euler(0f, landmark.yaw, 0f) * pizzeriaPrefab.GetComponent<SpawnDoor>().OutsidePosition;
-
-        GameObject startPoint = GameObject.Find("StartPoint");
-        if (startPoint != null)
-        {
-            startPoint.transform.position = doorOutside;
-        }
-
-        GameObject player = GameObject.Find("Player");
-        if (player != null)
-        {
-            player.transform.position = doorOutside;
-        }
-
-        // Die Start-Tür setzt LevelCity zur Laufzeit (liegt in der Stadt-Szene, das kann man nicht im Inspector verknüpfen)
-        var gameManager = Object.FindAnyObjectByType<GameManager>();
-        var serialized = new SerializedObject(gameManager);
-        serialized.FindProperty("startDoor").objectReferenceValue = null;
-        serialized.FindProperty("levelTime").floatValue = KeepWarmTime;
-        serialized.ApplyModifiedPropertiesWithoutUndo();
-
-        // Kamerafahrt zum Levelstart (Kunde → Route → Pizzeria)
-        GameObject mainCamera = GameObject.Find("Main Camera");
-        if (mainCamera != null && mainCamera.GetComponent<IntroFlyover>() == null)
-        {
-            mainCamera.AddComponent<IntroFlyover>();
-        }
-
-        GameObject goal = GameObject.Find("Goal");
-        if (goal != null)
-        {
-            // Kundenhaus nach der Kurve, also auch in den Lane-Rahmen drehen
-            const float goalU = 146f;
-            goal.transform.SetPositionAndRotation(lane.PointAt(goalU), Frame(goalU));
-        }
-
-        GameObject killZone = GameObject.Find("KillZone");
-        if (killZone != null)
-        {
-            // Knapp über dem Baugruben-Boden (y = -4): Der Tod passiert noch sichtbar in der Grube.
-            // Groß genug für beide Straßen (vor der Kurve entlang X, danach entlang Z)
-            killZone.transform.SetPositionAndRotation(new Vector3(25f, -3f, 70f), Quaternion.identity);
-            killZone.transform.localScale = new Vector3(140f, 1f, 190f);
-            // Unsichtbar: Man soll in die Baugrube fallen, nicht auf eine rote Fläche schauen
-            if (killZone.TryGetComponent(out MeshRenderer killRenderer))
-            {
-                killRenderer.enabled = false;
-            }
-        }
+        LevelBuildKit.Cutout(link, "Customer House", customer.xMin, customer.xMax + 1f, customer.yMin - 0.2f, customer.yMax + 0.2f);
     }
 
     // ---------- Hilfen ----------
 
-    private static Quaternion Frame(float u) => Quaternion.LookRotation(Vector3.Cross(lane.TangentAt(u), Vector3.up), Vector3.up);
+    private static Quaternion Frame(float u) => LevelBuildKit.Frame(u);
 
-    private static GameObject Place(string cityPrefab, int u, int y, Transform parent)
-    {
-        return PlaceAsset($"{CityPropsSetup.PrefabFolder}/{cityPrefab}.prefab", u, y, parent);
-    }
+    private static GameObject Place(string cityPrefab, int u, int y, Transform parent) => LevelBuildKit.Place(cityPrefab, u, y, parent);
 
-    private static GameObject Stretched(string cityPrefab, int u, int y, float length, Transform parent)
-    {
-        GameObject instance = Place(cityPrefab, u, y, parent);
-        instance.transform.localScale = new Vector3(length, 1f, 1f);
-        return instance;
-    }
+    private static GameObject Stretched(string cityPrefab, int u, int y, float length, Transform parent) => LevelBuildKit.Stretched(cityPrefab, u, y, length, parent);
 
-    // Auf die Bahn stellen: Position an der Stelle u, gedreht in den Lane-Rahmen (lokal +X = Laufrichtung)
-    private static GameObject PlaceAsset(string path, int u, int y, Transform parent)
-    {
-        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-        if (prefab == null)
-        {
-            throw new System.Exception($"CityLevelBuilder: Prefab fehlt: {path} (erst Build City Prefabs ausführen)");
-        }
-        var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent.gameObject.scene);
-        instance.transform.SetParent(parent, false);
-        instance.transform.SetPositionAndRotation(lane.PointAt(u) + Vector3.up * y, Frame(u));
-        return instance;
-    }
+    private static GameObject PlaceAsset(string path, int u, int y, Transform parent) => LevelBuildKit.PlaceAsset(path, u, y, parent);
 }
