@@ -23,6 +23,14 @@ public class EnemyPlatformPatrol : MonoBehaviour
 
     [Header("Visuals")]
     [SerializeField] private bool flipEnemy = true;
+    [Tooltip("Dieses Objekt wird zum Umdrehen gespiegelt (scale.x). Leer = der Gegner selbst. " +
+             "Besser ein Kind mit der Optik, dann bleiben Collider/Rigidbody ungespiegelt")]
+    [SerializeField] private Transform flipTarget;
+
+    // Für Erweiterungen wie den Hund: Ist der Spieler gerade auf derselben Plattform?
+    public bool IsChasing => isChasing;
+    // Solange true, bleibt der Gegner stehen (schaut aber zum Spieler), z.B. während der Hund bellt
+    public bool HoldPosition { get; set; }
 
     private Rigidbody rb;
     private Transform player;
@@ -41,7 +49,11 @@ public class EnemyPlatformPatrol : MonoBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        originalScale = transform.localScale;
+        if (flipTarget == null)
+        {
+            flipTarget = transform;
+        }
+        originalScale = flipTarget.localScale;
         startPosition = transform.position;
         GameManager.LevelReset += ResetPatrol;
     }
@@ -56,8 +68,9 @@ public class EnemyPlatformPatrol : MonoBehaviour
     {
         transform.position = startPosition;
         rb.position = startPosition;
-        transform.localScale = originalScale;
+        flipTarget.localScale = originalScale;
         isChasing = false;
+        HoldPosition = false;
 
         if (routeFound)
         {
@@ -84,6 +97,15 @@ public class EnemyPlatformPatrol : MonoBehaviour
         }
 
         isChasing = IsPlayerOnSamePlatform();
+
+        if (HoldPosition)
+        {
+            if (isChasing && flipEnemy)
+            {
+                SetFacingDirection(Mathf.Sign(player.position.x - rb.position.x));
+            }
+            return;
+        }
 
         if (isChasing)
             ChasePlayer();
@@ -344,7 +366,7 @@ public class EnemyPlatformPatrol : MonoBehaviour
         newScale.x =
             Mathf.Abs(originalScale.x) * direction;
 
-        transform.localScale = newScale;
+        flipTarget.localScale = newScale;
     }
 
     private void OnDrawGizmosSelected()

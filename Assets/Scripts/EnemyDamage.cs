@@ -2,6 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// Hat ein Gegner eine Komponente mit diesem Interface, entscheidet sie selbst, was beim Draufspringen passiert
+// (statt plattgedrückt zu werden), z.B. der Hund wird benommen und läuft weg.
+// Sie muss den Gegner am Ende selbst ausblenden (SetActive(false)). Zurückgesetzt wird über GameManager.LevelReset.
+public interface IStompHandler
+{
+    void OnStomped();
+}
+
 public class EnemyDamage : MonoBehaviour
 {
     [Header("Draufspringen")]
@@ -97,7 +105,16 @@ public class EnemyDamage : MonoBehaviour
         PlayerController player = other.GetComponent<PlayerController>();
         if (player != null && IsStomp(player))
         {
-            Squash();
+            IStompHandler handler = GetComponent<IStompHandler>();
+            DisableEnemy(handler as Behaviour);
+            if (handler != null)
+            {
+                handler.OnStomped();
+            }
+            else
+            {
+                StartCoroutine(SquashRoutine());
+            }
             player.StompBounce();
             return;
         }
@@ -117,7 +134,8 @@ public class EnemyDamage : MonoBehaviour
         return toPlayer.y >= stompDirectionThreshold && notRising;
     }
 
-    private void Squash()
+    // Sofort harmlos machen. "keepEnabled" (der Stomp-Handler) läuft weiter, damit er seine Reaktion abspielen kann
+    private void DisableEnemy(Behaviour keepEnabled)
     {
         squashed = true;
 
@@ -136,7 +154,7 @@ public class EnemyDamage : MonoBehaviour
         // Alle anderen Skripte (Patrouille, Flugbewegung, ...) anhalten
         foreach (MonoBehaviour behaviour in GetComponents<MonoBehaviour>())
         {
-            if (behaviour != this && behaviour.enabled)
+            if (behaviour != this && behaviour != keepEnabled && behaviour.enabled)
             {
                 behaviour.enabled = false;
                 disabledOnSquash.Add(behaviour);
@@ -149,8 +167,6 @@ public class EnemyDamage : MonoBehaviour
         {
             body.interpolation = RigidbodyInterpolation.None;
         }
-
-        StartCoroutine(SquashRoutine());
     }
 
     private IEnumerator SquashRoutine()

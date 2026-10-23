@@ -16,7 +16,7 @@ public static class ObstacleCourseBuilder
     private const string GoalMaterialPath = "Assets/Materials/Goal.mat";
     private const string KillZoneMaterialPath = "Assets/Materials/KillZone.mat";
     private const string MovingMaterialPath = "Assets/Materials/Moving.mat";
-    private const string EnemyPath = "Assets/Prefabs/Enemy.prefab";
+    private const string EnemyPath = "Assets/Prefabs/Dog.prefab";
 
     private const string Level1ScenePath = "Assets/Scenes/levels/level01.unity";
     private const string Level2ScenePath = "Assets/Scenes/levels/level02.unity";

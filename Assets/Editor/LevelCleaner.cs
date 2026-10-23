@@ -17,7 +17,7 @@ public static class LevelCleaner
         "Assets/Prefabs/Platform Medium.prefab",
         "Assets/Prefabs/Platform Small.prefab",
         "Assets/Prefabs/Moving Platform Small.prefab",
-        "Assets/Prefabs/Enemy.prefab",
+        "Assets/Prefabs/Dog.prefab",
         "Assets/Prefabs/Flying Enemy.prefab",
         "Assets/Prefabs/Checkpoint.prefab",
         "Assets/Prefabs/PowerUp.prefab",
