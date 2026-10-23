@@ -64,6 +64,7 @@ public static partial class CityBuilder
         BuildFoundersCircle(Group("Landmarks"));
         BuildKaiju(Group("Kaiju"));
         BuildSurroundings();
+        BuildStreetSigns();
 
         EditorSceneManager.SaveScene(scene, ScenePath);
         if (previousActive.IsValid() && previousActive != scene)
