@@ -62,6 +62,7 @@ public static partial class CityBuilder
         BuildStreets();
         BuildBlocks();
         BuildFoundersCircle(Group("Landmarks"));
+        BuildKaiju(Group("Kaiju"));
 
         EditorSceneManager.SaveScene(scene, ScenePath);
         if (previousActive.IsValid() && previousActive != scene)
@@ -173,6 +174,9 @@ public static partial class CityBuilder
                     break;
                 case CityLayout.BlockKind.Park:
                     BuildPark(parent, block, random);
+                    break;
+                case CityLayout.BlockKind.Ruins:
+                    BuildRuins(parent, block, random);
                     break;
             }
         }
