@@ -26,6 +26,19 @@ Only decided things go here, no loose ideas.
 - **Dog stomp**: no squashing. The player still bounces, the dog gets dizzy (stars over its head, 1 s), runs toward the camera (−Z, 10 m, small hop down the curb onto the road) out of the bottom of the screen and disappears, then comes back on `LevelReset`.
 - **Placeholder look**: until there's a real model, the player stays a **sphere** (collider radius 0.5; physics unchanged) and carries a red carton with a white lid (`Pizza Carton` → `Box`/`Lid`, materials `PizzaRed`/`PizzaWhite`, no colliders).
 
+## City plan (decided as of 2026-10-23, not built yet)
+Map (draft 2): https://claude.ai/artifact/Td2MZGGfPz26UzNzvvVcuh. Coordinates are Unity world X/Z (top-down, +Z = north = into the screen).
+- **One shared city for all levels**: every level starts at the pizzeria and takes a different route to a different customer; roads can be blocked off per level. **Level 1's route stays exactly as it is** (bottom street east, bend, east edge north to house no. 42).
+- **Size**: square, x −250…68, z 0…318 (318 m). Level 1 sits in the south-east corner: bottom street = south edge (z 0), the bend = the east edge (x 68).
+- **Unity structure**: one **City** scene (static buildings and streets) plus small level scenes (route, enemies, customer, roadblocks) loaded **additively** on top.
+- **Fog**: the whole city stays visible. Light haze, linear fog start ~150 m, end ~900 m (camera far clip is 1000).
+- **Edges**: mountains to the north, sea with beach (along the south edge) and harbor (west) to the south and west, fields with wind turbines to the east.
+- **Landmarks**: **Leaning Tower of Pizza** (stacked pizzas, leaning) on a piazza at x −200, z 50 that opens onto the avenue next to it. **Kaiju fight in the background: giant lizard vs. giant robot**, visible from everywhere; one level runs through it. Park with fountain and a roundabout with a founder's statue are proposals (positions on the map still to be confirmed).
+- **Street names**: pizza puns, shown on street signs (proposed names on the map, not confirmed yet).
+- **Roadblocks** vary by level: construction barriers, police tape, monster rubble, a parked truck.
+- Grid on the map (draft): outer ring + avenues 20 m facade to facade (the camera is 8 m in front of the player and must not end up inside the opposite houses), narrow 10 m streets are only crossed (cars, like the current cross street at x 50).
+- **Order**: build the city first, then levels 2 and 3.
+
 ## Setup
 - Unity **6000.6.2f1** (Unity 6), URP 17.6, new **Input System** 1.20 (read directly with `Keyboard.current` / `Gamepad.current`, so the `InputSystem_Actions.inputactions` asset isn't wired up yet).
 - Code comments, Inspector headers and tooltips are in **German**. Keep it that way.
