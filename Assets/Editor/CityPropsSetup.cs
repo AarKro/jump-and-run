@@ -180,6 +180,8 @@ public static class CityPropsSetup
         PrimitiveKit.Quad("Shop Window", t, new Vector3(-width * 0.15f, Surface + 1.5f, FacadeZ - 0.13f), new Vector2(width * 0.5f, 1.7f), Hash(name, 0, 0) % 2 == 0 ? windowLit : windowDark);
         PrimitiveKit.Box("Door", t, new Vector3(width * 0.32f, Surface + 1.1f, FacadeZ - 0.15f), new Vector3(1.1f, 2.2f, 0.06f), doorWood);
         AddWindowGrid(t, name, width, Surface + 4.6f, top - 1.2f);
+        // Auch hinten Fenster: Nach der Kurve schaut die Rückseite der Häuserzeile auf die Querstraße
+        AddWindowGrid(t, name + " Back", width, Surface + 4.6f, top - 1.2f, onBack: true);
         PrimitiveKit.Box("Cornice", t, new Vector3(0f, top + 0.2f, FacadeZ + 0.15f), new Vector3(width + 0.3f, 0.4f, 0.6f), sill);
         // Etwas Kram auf dem Dach
         PrimitiveKit.Box("AC Unit", t, new Vector3(width * 0.25f, top + 0.5f, FacadeZ + 2f), new Vector3(1.2f, 0.8f, 1f), curb);
@@ -190,11 +192,15 @@ public static class CityPropsSetup
         PrimitiveKit.SavePrefab(root, PathFor(name));
     }
 
-    // Fensterraster: Spalten im Abstand von etwa 2 m, Etagen alle 3 m. Manche Fenster leuchten (pseudo-zufällig, aber fest)
-    private static void AddWindowGrid(Transform parent, string seed, float width, float fromY, float toY)
+    // Fensterraster: Spalten im Abstand von etwa 2 m, Etagen alle 3 m. Manche Fenster leuchten (pseudo-zufällig, aber fest).
+    // onBack: auf die Rückwand (Fassade + Haustiefe 8 m), die Quads um 180° gedreht, weil ein Quad nur von vorne (-Z) sichtbar ist
+    private static void AddWindowGrid(Transform parent, string seed, float width, float fromY, float toY, bool onBack = false)
     {
         int columns = Mathf.Max(1, Mathf.FloorToInt((width - 1f) / 2f));
         float spacing = width / columns;
+        float wallZ = onBack ? FacadeZ + 8f : FacadeZ;
+        float outward = onBack ? 1f : -1f;
+        string prefix = onBack ? "Back " : "";
         int row = 0;
         for (float y = fromY; y + 0.75f <= toY; y += 3f, row++)
         {
@@ -202,8 +208,12 @@ public static class CityPropsSetup
             {
                 float x = -width / 2f + spacing * (column + 0.5f);
                 bool lit = Hash(seed, row, column) % 4 == 0;
-                PrimitiveKit.Quad($"Window {row}-{column}", parent, new Vector3(x, y, FacadeZ - 0.01f), new Vector2(1.1f, 1.5f), lit ? windowLit : windowDark);
-                PrimitiveKit.Box($"Sill {row}-{column}", parent, new Vector3(x, y - 0.8f, FacadeZ - 0.08f), new Vector3(1.3f, 0.1f, 0.16f), sill);
+                Renderer window = PrimitiveKit.Quad($"{prefix}Window {row}-{column}", parent, new Vector3(x, y, wallZ + outward * 0.01f), new Vector2(1.1f, 1.5f), lit ? windowLit : windowDark);
+                if (onBack)
+                {
+                    window.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                }
+                PrimitiveKit.Box($"{prefix}Sill {row}-{column}", parent, new Vector3(x, y - 0.8f, wallZ + outward * 0.08f), new Vector3(1.3f, 0.1f, 0.16f), sill);
             }
         }
     }

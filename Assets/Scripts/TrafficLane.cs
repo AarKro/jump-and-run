@@ -21,6 +21,9 @@ public class TrafficLane : MonoBehaviour
     [SerializeField] private float spawnZ = 40f;
     [Tooltip("Hier verschwinden sie wieder, hinter der Kamera (die steht bei etwa Z = -8)")]
     [SerializeField] private float despawnZ = -15f;
+    [Tooltip("Fahrbahnhöhe (lokales Y) über lokalem Z. Damit rollen die Autos über den erhöhten Zebrastreifen. " +
+             "Waagerecht bei 0 = flache Straße")]
+    [SerializeField] private AnimationCurve heightOverZ = AnimationCurve.Constant(-100f, 100f, 0f);
 
     [Header("Autos")]
     [Tooltip("Ausgeschaltete Vorlage als Kind der Spur. Daraus wird beim Start der Pool erzeugt")]
@@ -93,7 +96,8 @@ public class TrafficLane : MonoBehaviour
             }
 
             float z = spawnZ - speed * (t - n * interval);
-            Vector3 position = transform.TransformPoint(new Vector3(0f, 0f, z));
+            // Die Kurve ist hier eine Funktion Z → Höhe: Evaluate liest den Wert an der Stelle z ab
+            Vector3 position = transform.TransformPoint(new Vector3(0f, heightOverZ.Evaluate(z), z));
 
             if (poolSlot[i] != n)
             {

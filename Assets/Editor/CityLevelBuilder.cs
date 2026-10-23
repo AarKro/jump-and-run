@@ -36,6 +36,9 @@ public static class CityLevelBuilder
     private const float CornerRadius = 4f;
     private static float CornerLength => Mathf.PI / 2f * CornerRadius;
 
+    // Querstraße: Mitte bei u = 50, in einer 10 m breiten Lücke der Häuserzeile (siehe StreetSetup.OuterHalfWidth)
+    private const int StreetU = 50;
+
     [MenuItem("Tools/Jump and Run/City/Rebuild Level 1 (City)")]
     public static void Rebuild()
     {
@@ -165,11 +168,15 @@ public static class CityLevelBuilder
         Place("Kiosk", 80, 0, buildingParent);                                // 77 .. 83, Mikrowelle vor der langen Grube
 
         // Häuserzeile vor der Kurve (bis zum Café). Pizzeria, Querstraße (Autos fahren dort von hinten durch), Café frei
-        int next = FillBuildingRow(-27f, 57f, new List<(float, float)> { (-13, -3), (45, 55) }, 0);
+        float streetFrom = StreetU - StreetSetup.OuterHalfWidth;
+        float streetTo = StreetU + StreetSetup.OuterHalfWidth;
+        int next = FillBuildingRow(-27f, 57f, new List<(float, float)> { (-13, -3), (streetFrom, streetTo) }, 0);
         // Häuserzeile nach der Kurve. Sie beginnt erst, wo sie hinter dem Café (das 8 m tief ist) herauskommt,
-        // also bei Z = 11: u = Kurvenende + 7. Kiosk und Kundenhaus (Teil des Goal-Prefabs) frei
+        // also bei Z = 11: u = Kurvenende + 7. Kiosk und Kundenhaus (Teil des Goal-Prefabs) frei.
+        // Ihre Rückseiten säumen die rechte Seite der Querstraße, deshalb reicht sie so weit nach hinten wie die Querstraße
         float rowStart = CornerU + CornerLength + 7f;
-        FillBuildingRow(rowStart, 160f, new List<(float, float)> { (77, 83), (142, 150) }, next);
+        next = FillBuildingRow(rowStart, 170f, new List<(float, float)> { (77, 83), (142, 150) }, next);
+        BuildSideStreet(next);
 
         // Skyline-Gruppen sind je 42 m breit. Vor der Kurve nur links der Querstraße (bis u = 43),
         // nach der Kurve erst weit hinten, damit sie sich nicht mit der ersten Skyline überschneiden
@@ -220,6 +227,72 @@ public static class CityLevelBuilder
         return next;
     }
 
+    // Häuser und Boden entlang der Querstraße (in deren Rahmen: lokal +X = Laufrichtung, +Z = nach hinten die Straße entlang).
+    // Links eine eigene Häuserzeile mit Fassaden zur Straße, hinter dem Eckhaus der Hauptzeile beginnend. Rechts stehen
+    // schon die Rückseiten der Zeile nach der Kurve (Café, Kiosk, ...), dort nur den Streifen bis zu deren Rückwand pflastern.
+    // Die Häuser werden ausgepackt (keine Prefab-Instanzen): Sonst würde der PrefabGridEnforcer jede Prefab-Wurzel
+    // wieder in den Lane-Rahmen zurückdrehen, und sie sollen ja um 90° gedreht zur Querstraße schauen
+    private static void BuildSideStreet(int next)
+    {
+        const float houseDepth = 8f;
+        float halfGap = StreetSetup.OuterHalfWidth;
+        Vector3 origin = lane.PointAt(StreetU);
+        Quaternion frame = Frame(StreetU);
+        Vector3 ToWorld(Vector3 local) => origin + frame * local;
+
+        var widths = new Dictionary<string, float>();
+        foreach (var type in CityPropsSetup.BuildingTypes)
+        {
+            widths[type.name] = type.width;
+        }
+
+        Transform row = new GameObject("Side Street Houses").transform;
+        row.SetParent(buildingParent, false);
+        // -90° um Y: Die Hausfront (im Prefab lokal -Z) zeigt dann nach +X, also zur Straße. Die Fassade (Prefab-Z = 3)
+        // landet bei x = Wurzel - 3, also muss die Wurzel 3 m innerhalb der Lücke stehen, damit die Fassade genau an der Kante ist
+        Quaternion facing = frame * Quaternion.Euler(0f, -90f, 0f);
+        float cursor = CityPropsSetup.FacadeZ + houseDepth;
+        while (true)
+        {
+            string name = BuildingOrder[next % BuildingOrder.Length];
+            float width = widths[name];
+            if (cursor + width > StreetSetup.RoadEndZ)
+            {
+                break;
+            }
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{CityPropsSetup.PrefabFolder}/{name}.prefab");
+            var house = (GameObject)PrefabUtility.InstantiatePrefab(prefab, row.gameObject.scene);
+            PrefabUtility.UnpackPrefabInstance(house, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            house.transform.SetParent(row, false);
+            house.transform.SetPositionAndRotation(ToWorld(new Vector3(-halfGap + CityPropsSetup.FacadeZ, 0f, cursor + width / 2f)), facing);
+            cursor += width;
+            next++;
+        }
+
+        // Boden neben den Gehwegen der Querstraße: links die Ecke zwischen Eckhaus und Straße (bis hinter das Eckhaus),
+        // rechts der Streifen bis zu den Rückwänden der Zeile nach der Kurve. Was in Hauswände ragt, sieht man nicht
+        const string materials = "Assets/Materials/City";
+        Material concrete = AssetDatabase.LoadAssetAtPath<Material>($"{materials}/Sidewalk.mat");
+        Material foundation = AssetDatabase.LoadAssetAtPath<Material>($"{materials}/Foundation.mat");
+        Transform ground = new GameObject("Side Street Ground").transform;
+        ground.SetParent(groundParent, false);
+        ground.SetPositionAndRotation(origin, frame);
+
+        void Paving(string name, float x0, float x1, float z0, float z1)
+        {
+            var center = new Vector3((x0 + x1) / 2f, 0f, (z0 + z1) / 2f);
+            var size = new Vector3(x1 - x0, 1f, z1 - z0);
+            PrimitiveKit.Box(name, ground, center, size, concrete);
+            PrimitiveKit.Box(name + " Foundation", ground, center + Vector3.down * 3.25f, new Vector3(size.x, 5.5f, size.z), foundation);
+        }
+        float rowFront = CityPropsSetup.FacadeZ;
+        Paving("Corner Left", -halfGap - 5f, -halfGap, rowFront, rowFront + houseDepth);
+        // Rechts: Die Rückwände der Zeile nach der Kurve stehen bei Welt-X = Kurvenende - Fassade - Haustiefe
+        float backWallX = (CornerU + CornerRadius) - (CityPropsSetup.FacadeZ + houseDepth) - StreetU;
+        Paving("Strip Right", halfGap, backWallX, rowFront, StreetSetup.RoadEndZ);
+    }
+
     // ---------- Spiel-Elemente ----------
 
     private static void BuildGameplay()
@@ -236,7 +309,7 @@ public static class CityLevelBuilder
         Place("Dumpster", 44, 0, gameplayParent);
 
         // Querstraße mit Verkehr
-        PlaceAsset("Assets/Prefabs/Street Crossing.prefab", 50, 0, gameplayParent);
+        PlaceAsset("Assets/Prefabs/Street Crossing.prefab", StreetU, 0, gameplayParent);
 
         // Nach der Kurve: Markise (Oberkante 2.5) katapultiert ~5 m hoch → Balkon (Oberkante 6.5) mit Wärme-Bonus
         Place("Bouncy Awning", 77, 2, gameplayParent);
