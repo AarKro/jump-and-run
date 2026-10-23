@@ -78,6 +78,14 @@ public static class DogSetup
             box.center = ColliderCenter;
             box.size = ColliderSize;
 
+            // Keine Constraints: Bewegt wird der kinematische Rigidbody nur von GroundPatrol (MovePosition/MoveRotation).
+            // Das alte Enemy-Prefab hatte noch "Freeze Position Z + Rotation" aus der 2D-Zeit. Nach der Kurve läuft die
+            // Bahn entlang Z, dort hat das den Hund festgehalten
+            if (root.TryGetComponent(out Rigidbody body))
+            {
+                body.constraints = RigidbodyConstraints.None;
+            }
+
             // Alte Wegpunkt-Patrouille entfernen. Über den Namen (bzw. fehlendes Skript), damit dieses Tool
             // auch noch kompiliert, wenn EnemyPlatformPatrol.cs gelöscht ist
             foreach (MonoBehaviour behaviour in root.GetComponents<MonoBehaviour>())

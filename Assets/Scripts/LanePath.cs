@@ -8,7 +8,10 @@ using UnityEngine;
 //
 // Lane-Rahmen an einer Stelle u: lokal +X = Laufrichtung, +Y = oben, +Z = "hinten" (Hausseite), -Z = Kameraseite.
 // Prefabs sind in diesem Rahmen gebaut (Fassaden bei lokal Z = 3), also einfach mit Frame(u) drehen.
+// Läuft vor allen normalen Skripten (Awake/OnEnable), damit z.B. GroundPatrol schon in Awake auf der Bahn rechnet.
+// Sonst ist die Reihenfolge zufällig, und wer vor uns dran ist, bekommt die Ersatz-X-Achse
 [ExecuteAlways]
+[DefaultExecutionOrder(-100)]
 public class LanePath : MonoBehaviour
 {
     public enum PieceType { Straight, Arc }
