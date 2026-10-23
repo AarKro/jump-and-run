@@ -70,6 +70,9 @@ public class PlayerController : MonoBehaviour
     // Ab diesem Eingabe-Anteil in X zählt es als Umdrehen (filtert leichtes Stick-Wackeln)
     private const float FacingInputThreshold = 0.1f;
 
+    // Aus bei Lieferung oder kalter Pizza. Wird mit dem Neuladen der Szene automatisch wieder true
+    private bool controlEnabled = true;
+
     private void Awake()
     {
         body = GetComponent<Rigidbody>();
@@ -128,6 +131,12 @@ public class PlayerController : MonoBehaviour
         moveInput = Vector2.zero;
         bool jumpPressed = false;
         bool held = false;
+
+        if (!controlEnabled)
+        {
+            jumpHeld = false;
+            return;
+        }
 
         Keyboard keyboard = Keyboard.current;
         if (keyboard != null)
@@ -273,6 +282,17 @@ public class PlayerController : MonoBehaviour
 
     // Abprallen nach dem Draufspringen auf einen Gegner. Wie beim Sprung entscheidet die gehaltene
     // Sprungtaste über die Höhe (ohne Taste greift die Jump-Cut-Schwerkraft und es wird ein kleiner Hüpfer)
+    // Keine Eingabe mehr und eigene Laufbewegung sofort stoppen. Schwerkraft und Plattform-Schwung laufen weiter,
+    // damit der Spieler nicht in der Luft hängen bleibt oder von einer fahrenden Plattform rutscht
+    public void Freeze()
+    {
+        controlEnabled = false;
+        moveInput = Vector2.zero;
+        jumpBufferTimer = 0f;
+        Vector3 velocity = body.linearVelocity;
+        body.linearVelocity = new Vector3(carryVelocity.x, velocity.y, carryVelocity.z);
+    }
+
     public void StompBounce()
     {
         Vector3 velocity = body.linearVelocity;
