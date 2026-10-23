@@ -61,6 +61,7 @@ public static partial class CityBuilder
         BuildGround();
         BuildStreets();
         BuildBlocks();
+        BuildFoundersCircle(Group("Landmarks"));
 
         EditorSceneManager.SaveScene(scene, ScenePath);
         if (previousActive.IsValid() && previousActive != scene)
@@ -166,6 +167,12 @@ public static partial class CityBuilder
                     {
                         House(parent, lot, Pick(random, 14f, 18f, 22f, 26f, 30f, 34f));
                     }
+                    break;
+                case CityLayout.BlockKind.Piazza:
+                    BuildPiazza(parent, block, random);
+                    break;
+                case CityLayout.BlockKind.Park:
+                    BuildPark(parent, block, random);
                     break;
             }
         }
