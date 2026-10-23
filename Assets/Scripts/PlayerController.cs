@@ -72,6 +72,8 @@ public class PlayerController : MonoBehaviour
 
     // Aus bei Lieferung oder kalter Pizza. Wird mit dem Neuladen der Szene automatisch wieder true
     private bool controlEnabled = true;
+    // Nach Bounce(): solange er steigt, kein Jump Cut, damit die Höhe nicht von der Sprungtaste abhängt
+    private bool ignoreJumpCut;
 
     private void Awake()
     {
@@ -120,6 +122,7 @@ public class PlayerController : MonoBehaviour
         carryVelocity = Vector3.zero;
         jumpBufferTimer = 0f;
         coyoteTimer = 0f;
+        ignoreJumpCut = false;
     }
 
     // Aus Höhe und Steigzeit abgeleitet, damit man im Inspector in verständlichen Größen tunen kann
@@ -171,6 +174,13 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        // Während Tod/Respawn bewegt PlayerLife den Spieler (kinematisch). Geschwindigkeiten auf einem
+        // kinematischen Rigidbody zu setzen ist nicht erlaubt, also hier gar nichts tun
+        if (body.isKinematic)
+        {
+            return;
+        }
+
         int hitCount = Physics.OverlapSphereNonAlloc(
             groundCheck.position,
             groundCheckRadius,
@@ -261,12 +271,17 @@ public class PlayerController : MonoBehaviour
             groundLockTimer = GroundLockAfterJump;
         }
 
+        if (velocity.y <= 0f)
+        {
+            ignoreJumpCut = false;
+        }
+
         float gravityMultiplier = 1f;
         if (velocity.y < 0f)
         {
             gravityMultiplier = fallGravityMultiplier;
         }
-        else if (velocity.y > 0f && !jumpHeld)
+        else if (velocity.y > 0f && !jumpHeld && !ignoreJumpCut)
         {
             gravityMultiplier = jumpCutGravityMultiplier;
         }
@@ -280,8 +295,6 @@ public class PlayerController : MonoBehaviour
         body.linearVelocity = velocity;
     }
 
-    // Abprallen nach dem Draufspringen auf einen Gegner. Wie beim Sprung entscheidet die gehaltene
-    // Sprungtaste über die Höhe (ohne Taste greift die Jump-Cut-Schwerkraft und es wird ein kleiner Hüpfer)
     // Keine Eingabe mehr und eigene Laufbewegung sofort stoppen. Schwerkraft und Plattform-Schwung laufen weiter,
     // damit der Spieler nicht in der Luft hängen bleibt oder von einer fahrenden Plattform rutscht
     public void Freeze()
@@ -289,16 +302,42 @@ public class PlayerController : MonoBehaviour
         controlEnabled = false;
         moveInput = Vector2.zero;
         jumpBufferTimer = 0f;
-        Vector3 velocity = body.linearVelocity;
-        body.linearVelocity = new Vector3(carryVelocity.x, velocity.y, carryVelocity.z);
+        if (!body.isKinematic)
+        {
+            Vector3 velocity = body.linearVelocity;
+            body.linearVelocity = new Vector3(carryVelocity.x, velocity.y, carryVelocity.z);
+        }
     }
 
+    // Steuerung nach Freeze() wieder freigeben (z.B. nach dem Respawn, wenn er aus der Tür gelaufen ist)
+    public void Unfreeze()
+    {
+        controlEnabled = true;
+        jumpBufferTimer = 0f;
+        carryVelocity = Vector3.zero;
+    }
+
+    // Abprallen nach dem Draufspringen auf einen Gegner. Wie beim Sprung entscheidet die gehaltene
+    // Sprungtaste über die Höhe (ohne Taste greift die Jump-Cut-Schwerkraft und es wird ein kleiner Hüpfer)
     public void StompBounce()
     {
         Vector3 velocity = body.linearVelocity;
         velocity.y = JumpVelocity * stompBounceFraction;
         body.linearVelocity = velocity;
 
+        coyoteTimer = 0f;
+        groundLockTimer = GroundLockAfterJump;
+    }
+
+    // Federndes Abprallen (Markise): immer gleich hoch, egal ob die Sprungtaste gehalten wird.
+    // Höhe = v² / (2 * Schwerkraft), bei 40 m/s² und 20 m/s also etwa 5 m
+    public void Bounce(float upwardVelocity)
+    {
+        Vector3 velocity = body.linearVelocity;
+        velocity.y = upwardVelocity;
+        body.linearVelocity = velocity;
+
+        ignoreJumpCut = true;
         coyoteTimer = 0f;
         groundLockTimer = GroundLockAfterJump;
     }

@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class Checkpoint : MonoBehaviour
 {
+    [Tooltip("Gebäude-Tür (z.B. Café): Beim Respawn läuft der Spieler aus dieser Tür. Hat Vorrang vor respawnPoint")]
+    [SerializeField] private SpawnDoor door;
     [SerializeField] private Transform respawnPoint;
     [SerializeField] private GameObject inactiveVisual;
     [SerializeField] private GameObject activeVisual;
@@ -24,7 +26,14 @@ public class Checkpoint : MonoBehaviour
 
         if (GameManager.Instance != null)
         {
-            GameManager.Instance.SetCheckpoint(respawnPoint != null ? respawnPoint : transform);
+            if (door != null)
+            {
+                GameManager.Instance.SetCheckpoint(door);
+            }
+            else
+            {
+                GameManager.Instance.SetCheckpoint(respawnPoint != null ? respawnPoint : transform);
+            }
         }
 
         UpdateVisuals(true);

@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -20,7 +21,10 @@ public class GameManager : MonoBehaviour
 
     [Header("Player und Start")]
     [SerializeField] private GameObject player;
+    [Tooltip("Fallback ohne Tür: Hier taucht der Spieler auf")]
     [SerializeField] private Transform startPoint;
+    [Tooltip("Tür, aus der der Spieler beim Levelstart läuft (Pizzeria). Leer = einfach am Startpunkt")]
+    [SerializeField] private SpawnDoor startDoor;
 
     [Header("Wärme (Pizza wird kalt)")]
     [Tooltip("So viele Sekunden bleibt die Pizza warm. Bei 0 ist sie kalt und das Level startet neu.")]
@@ -34,9 +38,15 @@ public class GameManager : MonoBehaviour
     // Geliefert oder kalt: Wärme läuft nicht mehr weiter, Respawns werden ignoriert
     public bool LevelFinished { get; private set; }
 
+    // Gerade am Sterben/Wiederauftauchen: weitere Treffer in der Zeit zählen nicht
+    public bool IsRespawning { get; private set; }
+
     private PlayerController playerController;
+    private PlayerLife playerLife;
 
     private Transform currentRespawnPoint;
+    // Tür des letzten Checkpoints (bzw. die Start-Tür). Ohne Tür wird am currentRespawnPoint aufgeploppt
+    private SpawnDoor currentDoor;
 
     private void Awake()
     {
@@ -51,17 +61,36 @@ public class GameManager : MonoBehaviour
         if (player != null)
         {
             playerController = player.GetComponent<PlayerController>();
+            playerLife = player.GetComponent<PlayerLife>();
         }
     }
 
     private void Start()
     {
         currentRespawnPoint = startPoint;
+        currentDoor = startDoor;
 
-        if (player != null && currentRespawnPoint != null)
+        if (player == null)
+        {
+            return;
+        }
+
+        if (currentDoor != null && playerLife != null)
+        {
+            // Levelstart: Der Pizzabote kommt mit der frischen Pizza aus der Pizzeria
+            StartCoroutine(SpawnFromDoor());
+        }
+        else if (currentRespawnPoint != null)
         {
             PlacePlayerAt(currentRespawnPoint);
         }
+    }
+
+    private IEnumerator SpawnFromDoor()
+    {
+        IsRespawning = true;
+        yield return playerLife.PlayExit(currentDoor);
+        IsRespawning = false;
     }
 
     private void Update()
@@ -82,24 +111,61 @@ public class GameManager : MonoBehaviour
     public void SetCheckpoint(Transform checkpoint)
     {
         currentRespawnPoint = checkpoint;
+        currentDoor = null;
+    }
+
+    // Checkpoint mit Gebäude (Café): Beim Respawn läuft der Spieler aus dessen Tür
+    public void SetCheckpoint(SpawnDoor door)
+    {
+        currentDoor = door;
+        currentRespawnPoint = door.OutsidePoint;
     }
 
     public void RespawnPlayer()
     {
-        // Nach dem Abliefern (oder bei kalter Pizza) soll z.B. ein Hund den Spieler nicht mehr zurücksetzen
-        if (LevelFinished)
+        // Nach dem Abliefern (oder bei kalter Pizza) soll z.B. ein Hund den Spieler nicht mehr zurücksetzen.
+        // Während der Todesanimation zählen weitere Treffer (Auto, Hund, KillZone) nicht
+        if (LevelFinished || IsRespawning)
         {
             return;
         }
 
-        if (player == null || currentRespawnPoint == null)
+        if (player == null || (currentRespawnPoint == null && currentDoor == null))
         {
             Debug.LogWarning("GameManager: Player oder Respawn Point fehlt.");
             return;
         }
 
-        PlacePlayerAt(currentRespawnPoint);
+        StartCoroutine(RespawnRoutine());
+    }
+
+    // Erst sterben, dann das Level zurücksetzen (Gegner, Power-Ups, Verkehr), dann wieder auftauchen.
+    // Das Zurücksetzen passiert, während der Spieler unsichtbar ist, damit man es nicht sieht
+    private IEnumerator RespawnRoutine()
+    {
+        IsRespawning = true;
+
+        if (playerLife != null)
+        {
+            yield return playerLife.PlayDeath();
+        }
+
         LevelReset?.Invoke();
+
+        if (playerLife == null)
+        {
+            PlacePlayerAt(currentRespawnPoint);
+        }
+        else if (currentDoor != null)
+        {
+            yield return playerLife.PlayExit(currentDoor);
+        }
+        else
+        {
+            yield return playerLife.PlayPopIn(currentRespawnPoint.position);
+        }
+
+        IsRespawning = false;
     }
 
     // Wärme-Bonus. Bewusst nicht auf levelTime begrenzt: Die Wärme darf als Puffer über 100% gehen
