@@ -63,6 +63,7 @@ public static partial class CityBuilder
         BuildBlocks();
         BuildFoundersCircle(Group("Landmarks"));
         BuildKaiju(Group("Kaiju"));
+        BuildSurroundings();
 
         EditorSceneManager.SaveScene(scene, ScenePath);
         if (previousActive.IsValid() && previousActive != scene)
@@ -88,14 +89,27 @@ public static partial class CityBuilder
         sun.intensity = 1f;
         sun.shadows = LightShadows.Soft;
 
+        // Die ganze Stadt soll sichtbar bleiben: Dunst erst ab 150 m, ganz weg erst bei 900 m (Kamera-Far-Clip ist 1000 m)
+        var fogColor = new Color(0.74f, 0.81f, 0.9f);
+
+        // Eigener Himmel statt Default-Skybox: Dessen untere Hälfte ist grau und schaut hinter dem Far Clip (1000 m) unter dem
+        // Horizont hervor. Hier hat der "Boden" des Himmels die Nebelfarbe, so geht das Meer nahtlos in den Dunst über
+        string skyPath = $"{MaterialFolder}/City Sky.mat";
+        var sky = AssetDatabase.LoadAssetAtPath<Material>(skyPath);
+        if (sky == null)
+        {
+            sky = new Material(Shader.Find("Skybox/Procedural"));
+            sky.SetColor("_GroundColor", fogColor);
+            AssetDatabase.CreateAsset(sky, skyPath);
+        }
+
         RenderSettings.sun = sun;
-        RenderSettings.skybox = AssetDatabase.GetBuiltinExtraResource<Material>("Default-Skybox.mat");
+        RenderSettings.skybox = sky;
         RenderSettings.ambientMode = AmbientMode.Skybox;
 
-        // Die ganze Stadt soll sichtbar bleiben: Dunst erst ab 150 m, ganz weg erst bei 900 m (Kamera-Far-Clip ist 1000 m)
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Linear;
-        RenderSettings.fogColor = new Color(0.74f, 0.81f, 0.9f);
+        RenderSettings.fogColor = fogColor;
         RenderSettings.fogStartDistance = 150f;
         RenderSettings.fogEndDistance = 900f;
         DynamicGI.UpdateEnvironment();
