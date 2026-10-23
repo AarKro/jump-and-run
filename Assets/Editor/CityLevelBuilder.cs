@@ -98,9 +98,8 @@ public static class CityLevelBuilder
         GameObject pizzeria = Place("Pizzeria", -8, 0, buildingParent);       // -13 .. -3
         Place("Coffee Shop", 61, 0, buildingParent);                          // 57 .. 65
 
-        // Bereiche ohne normale Häuser: Pizzeria, Querstraße (Autos fahren dort von hinten durch), Café, Kunde
-        // Hinter dem Kunden stehen normale Häuser, seine Haustür wirkt dann wie ein Eingang
-        var reserved = new List<(float from, float to)> { (-13, -3), (45, 55), (57, 65) };
+        // Pizzeria, Querstraße (Autos fahren dort von hinten durch), Café und das Kundenhaus (Teil des Goal-Prefabs, 8 m breit)
+        var reserved = new List<(float from, float to)> { (-13, -3), (45, 55), (57, 65), (136, 144) };
 
         string[] order = { "Building Brick", "Building Beige", "Building Gray", "Building Teal", "Building Yellow", "Building Pink" };
         var widths = new Dictionary<string, float>();
@@ -212,7 +211,7 @@ public static class CityLevelBuilder
         // (Laterne und Baumkrone würden sonst durch die Platte stechen)
         var blocked = new List<(float from, float to)>
         {
-            (19, 25), (46, 54), (79, 97), (-10, -6), (59, 63), (138, 143),
+            (19, 25), (46, 54), (79, 97), (-10, -6), (59, 63), (136, 144),
             (6.5f, 15.5f), (68.5f, 77.5f), (113.5f, 118.5f)
         };
         bool Free(int x) => blocked.TrueForAll(zone => x < zone.from || x > zone.to);

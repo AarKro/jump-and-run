@@ -1,33 +1,30 @@
 using UnityEditor;
 using UnityEngine;
 
-// Baut den Kunden mit Haustür ins Goal-Prefab (ersetzt die alte Stange "Visual").
+// Baut das Kundenhaus (eigenes Gebäude mit Tür, aus der der Kunde herauskommt) und den Kunden ins Goal-Prefab.
 // Alle Teile ohne Collider: Der Trigger am Goal bleibt das Einzige, was mit dem Spieler interagiert.
+// Goal-Wurzel = Mitte der 1 m dicken Bodenplatte (wie alle Stadt-Prefabs), Gehweg-Oberkante also bei +0.5.
 // Menü: Tools > Jump and Run > Build Customer into Goal Prefab. Mehrfach ausführbar, vorhandenes wird ersetzt.
 public static class CustomerSetup
 {
     private const string GoalPrefabPath = "Assets/Prefabs/Goal.prefab";
     private const string CustomerMaterialPath = "Assets/Materials/Customer.mat";
-    private const string WallMaterialPath = "Assets/Materials/House Wall.mat";
-    private const string DoorMaterialPath = "Assets/Materials/Door.mat";
-    private const string KnobMaterialPath = "Assets/Materials/Door Knob.mat";
-
-    // Kunde steht etwas hinter der Mitte des Triggers, damit der Spieler davor stehen bleibt
-    private static readonly Vector3 CustomerPosition = new Vector3(0.5f, 0f, 0f);
+    private const float Surface = CityPropsSetup.Surface;
+    // Der Kunde steht (Füße) erst im dunklen Raum hinter der Tür, dann draußen etwas rechts der Tür.
+    // Der Spieler kommt von links und bleibt am Trigger davor stehen
+    private static readonly Vector3 CustomerInside = new Vector3(0f, Surface, CityPropsSetup.FacadeZ + 1.3f);
+    private static readonly Vector3 CustomerOutside = new Vector3(0.9f, Surface, 0.4f);
 
     [MenuItem("Tools/Jump and Run/Build Customer into Goal Prefab")]
     public static void BuildCustomer()
     {
         // Weiß, damit die Farbe aus dem MaterialPropertyBlock (Customer-Skript) unverfälscht ankommt
         Material customerMaterial = GetOrCreateMaterial(CustomerMaterialPath, Color.white, 0.3f);
-        Material wallMaterial = GetOrCreateMaterial(WallMaterialPath, new Color(0.93f, 0.86f, 0.74f), 0.1f);
-        Material doorMaterial = GetOrCreateMaterial(DoorMaterialPath, new Color(0.45f, 0.26f, 0.13f), 0.3f);
-        Material knobMaterial = GetOrCreateMaterial(KnobMaterialPath, new Color(1f, 0.8f, 0.2f), 0.8f);
 
         GameObject root = PrefabUtility.LoadPrefabContents(GoalPrefabPath);
         try
         {
-            foreach (string oldName in new[] { "Visual", "Front Door", "Customer" })
+            foreach (string oldName in new[] { "Visual", "Front Door", "Customer", "Customer House" })
             {
                 Transform old = root.transform.Find(oldName);
                 if (old != null)
@@ -36,8 +33,16 @@ public static class CustomerSetup
                 }
             }
 
-            BuildFrontDoor(root.transform, wallMaterial, doorMaterial, knobMaterial);
-            BuildCustomerFigure(root.transform, customerMaterial);
+            SpawnDoor door = CityPropsSetup.BuildCustomerHouse(root.transform);
+            // Die Tür-Punkte gelten hier für den Kunden (Füße auf dem Boden), nicht für den Spieler (Kugelmitte)
+            door.transform.Find("Inside Point").localPosition = CustomerInside;
+            door.transform.Find("Outside Point").localPosition = CustomerOutside;
+            BuildCustomerFigure(root.transform, customerMaterial, door);
+
+            // Ziel-Trigger vor der Haustür, auf Gehweg-Höhe
+            var trigger = root.GetComponent<BoxCollider>();
+            trigger.center = new Vector3(0f, Surface + 1.5f, 0f);
+            trigger.size = new Vector3(2f, 3f, 3f);
 
             PrefabUtility.SaveAsPrefabAsset(root, GoalPrefabPath);
             Debug.Log("CustomerSetup: Kunde und Haustür ins Goal-Prefab gebaut.");
@@ -48,23 +53,11 @@ public static class CustomerSetup
         }
     }
 
-    private static void BuildFrontDoor(Transform parent, Material wall, Material door, Material knob)
-    {
-        Transform frontDoor = new GameObject("Front Door").transform;
-        frontDoor.SetParent(parent, false);
-
-        // Hinter der Laufbahn (Spieler ist bei Z = 0 eingefroren), Tür etwas vor der Wand
-        CreatePart("Wall", PrimitiveType.Cube, frontDoor, new Vector3(0.5f, 1.8f, 1.3f), new Vector3(3.2f, 3.6f, 0.2f), wall);
-        CreatePart("Door", PrimitiveType.Cube, frontDoor, new Vector3(0.5f, 1f, 1.16f), new Vector3(1f, 2f, 0.08f), door);
-        CreatePart("Knob", PrimitiveType.Sphere, frontDoor, new Vector3(0.85f, 1f, 1.1f), Vector3.one * 0.1f, knob);
-        CreatePart("Doorstep", PrimitiveType.Cube, frontDoor, new Vector3(0.5f, 0.06f, 0.95f), new Vector3(1.4f, 0.12f, 0.5f), wall);
-    }
-
-    private static void BuildCustomerFigure(Transform parent, Material material)
+    private static void BuildCustomerFigure(Transform parent, Material material, SpawnDoor homeDoor)
     {
         var customerObject = new GameObject("Customer");
         customerObject.transform.SetParent(parent, false);
-        customerObject.transform.localPosition = CustomerPosition;
+        customerObject.transform.localPosition = CustomerInside;
 
         // Rig = beweglicher Teil. Customer bewegt nur das Rig, die Wurzel bleibt stehen
         Transform rig = new GameObject("Rig").transform;
@@ -89,6 +82,7 @@ public static class CustomerSetup
         serialized.FindProperty("leftArm").objectReferenceValue = leftArm;
         serialized.FindProperty("rightArm").objectReferenceValue = rightArm;
         serialized.FindProperty("handsPoint").objectReferenceValue = hands;
+        serialized.FindProperty("homeDoor").objectReferenceValue = homeDoor;
         SetRenderers(serialized.FindProperty("shirtRenderers"), body);
         SetRenderers(serialized.FindProperty("skinRenderers"), head, leftArmMesh, rightArmMesh);
         serialized.ApplyModifiedPropertiesWithoutUndo();

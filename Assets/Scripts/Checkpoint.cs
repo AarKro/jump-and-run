@@ -2,6 +2,11 @@ using UnityEngine;
 
 public class Checkpoint : MonoBehaviour
 {
+    // Dieser Checkpoint wurde gerade erreicht (z.B. für Effekte am Café)
+    public event System.Action Activated;
+    // Irgendein Checkpoint wurde erreicht (z.B. für die "Checkpoint!"-Meldung im HUD, das die Checkpoints nicht kennt)
+    public static event System.Action AnyActivated;
+
     [Tooltip("Gebäude-Tür (z.B. Café): Beim Respawn läuft der Spieler aus dieser Tür. Hat Vorrang vor respawnPoint")]
     [SerializeField] private SpawnDoor door;
     [SerializeField] private Transform respawnPoint;
@@ -37,6 +42,8 @@ public class Checkpoint : MonoBehaviour
         }
 
         UpdateVisuals(true);
+        Activated?.Invoke();
+        AnyActivated?.Invoke();
     }
 
     private void UpdateVisuals(bool isActive)

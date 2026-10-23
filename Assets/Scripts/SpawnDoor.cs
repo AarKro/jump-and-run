@@ -1,8 +1,8 @@
 using System.Collections;
 using UnityEngine;
 
-// Tür eines Gebäudes, aus der der Spieler beim Levelstart bzw. nach dem Respawn herausläuft
-// (Pizzeria am Start, Café als Checkpoint). Die Tür dreht sich dabei auf und wieder zu.
+// Tür eines Gebäudes mit Punkt drinnen und draußen. Der Spieler läuft beim Levelstart bzw. nach dem Respawn
+// heraus (Pizzeria, Café als Checkpoint), der Kunde aus seinem Haus am Ziel. Die Tür dreht sich dabei auf und wieder zu.
 public class SpawnDoor : MonoBehaviour
 {
     [Tooltip("Startpunkt im Gebäude, hinter der Tür (Z > 0, außerhalb der Laufbahn)")]
@@ -26,6 +26,16 @@ public class SpawnDoor : MonoBehaviour
     public IEnumerator Close()
     {
         yield return Swing(openAngle, 0f);
+    }
+
+    // Sofort zu, ohne Animation (z.B. beim Zurücksetzen des Levels)
+    public void SnapClosed()
+    {
+        StopAllCoroutines();
+        if (doorLeaf != null)
+        {
+            doorLeaf.localRotation = Quaternion.identity;
+        }
     }
 
     private IEnumerator Swing(float from, float to)

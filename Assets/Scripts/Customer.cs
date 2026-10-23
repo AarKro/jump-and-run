@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
 
-// Der Kunde am Ziel: wartet, winkt wenn der Spieler nahe ist, nimmt beim Abliefern den Karton
+// Der Kunde am Ziel: wartet in seinem Haus, kommt heraus, wenn der Spieler nahe ist, winkt, nimmt beim Abliefern den Karton
 // und tanzt je nach Trinkgeld (1-3 Münzen) unterschiedlich wild. Alles prozedural im Code, ohne Animation-Clips.
 // Aufgebaut von Tools > Jump and Run > Build Customer into Goal Prefab.
 public class Customer : MonoBehaviour
@@ -20,6 +20,13 @@ public class Customer : MonoBehaviour
     [SerializeField] private Transform rightArm;
     [Tooltip("Hier landet der Pizzakarton")]
     [SerializeField] private Transform handsPoint;
+
+    [Header("Haus")]
+    [Tooltip("Haustür, aus der der Kunde herauskommt. Leer = steht von Anfang an draußen")]
+    [SerializeField] private SpawnDoor homeDoor;
+    [Tooltip("Ab diesem Abstand (in X) öffnet er die Tür und kommt heraus")]
+    [SerializeField] private float comeOutDistance = 8f;
+    [SerializeField] private float walkOutDuration = 0.8f;
 
     [Header("Warten")]
     [Tooltip("Ab diesem Abstand (in X) winkt der Kunde dem Spieler zu")]
@@ -40,7 +47,7 @@ public class Customer : MonoBehaviour
     [Tooltip("Drehung beim wildesten Tanz (Grad pro Sekunde)")]
     [SerializeField] private float spinSpeed = 270f;
 
-    private enum State { Waiting, Receiving, Dancing }
+    private enum State { Inside, ComingOut, Waiting, Receiving, Dancing }
 
     private State state = State.Waiting;
     private int coins;
@@ -51,12 +58,14 @@ public class Customer : MonoBehaviour
     private void Awake()
     {
         GameManager.PizzaDelivered += OnPizzaDelivered;
+        GameManager.LevelReset += GoBackInside;
         ApplyColors();
     }
 
     private void OnDestroy()
     {
         GameManager.PizzaDelivered -= OnPizzaDelivered;
+        GameManager.LevelReset -= GoBackInside;
     }
 
     // Läuft im Editor bei jeder Änderung im Inspector: So sieht man die Farben sofort, ohne Play zu drücken
@@ -100,12 +109,57 @@ public class Customer : MonoBehaviour
         {
             player = controller.transform;
         }
+
+        if (homeDoor != null)
+        {
+            GoBackInside();
+        }
+    }
+
+    // Startzustand mit Haus: drinnen hinter der geschlossenen Tür (unsichtbar im dunklen Raum).
+    // Auch beim Respawn des Spielers, solange noch nicht geliefert wurde
+    private void GoBackInside()
+    {
+        if (homeDoor == null || state == State.Receiving || state == State.Dancing)
+        {
+            return;
+        }
+        StopAllCoroutines();
+        homeDoor.SnapClosed();
+        transform.position = homeDoor.InsidePosition;
+        rig.localPosition = Vector3.zero;
+        rig.localRotation = Quaternion.identity;
+        state = State.Inside;
+    }
+
+    private IEnumerator ComeOut()
+    {
+        state = State.ComingOut;
+        yield return homeDoor.Open();
+
+        Vector3 from = homeDoor.InsidePosition;
+        Vector3 to = homeDoor.OutsidePosition;
+        for (float t = 0f; t < walkOutDuration; t += Time.deltaTime)
+        {
+            float k = t / walkOutDuration;
+            transform.position = Vector3.Lerp(from, to, k) + Vector3.up * (Mathf.Abs(Mathf.Sin(k * Mathf.PI * 3f)) * 0.06f);
+            yield return null;
+        }
+        transform.position = to;
+        StartCoroutine(homeDoor.Close());
+        state = State.Waiting;
     }
 
     private void Update()
     {
         switch (state)
         {
+            case State.Inside:
+                if (player != null && Mathf.Abs(player.position.x - transform.position.x) < comeOutDistance)
+                {
+                    StartCoroutine(ComeOut());
+                }
+                break;
             case State.Waiting:
                 UpdateWaiting();
                 break;
@@ -132,6 +186,13 @@ public class Customer : MonoBehaviour
     private void OnPizzaDelivered(int earnedCoins)
     {
         coins = earnedCoins;
+        // Noch drinnen oder unterwegs (Spieler war sehr schnell): sofort draußen hinstellen
+        if (homeDoor != null && (state == State.Inside || state == State.ComingOut))
+        {
+            StopAllCoroutines();
+            transform.position = homeDoor.OutsidePosition;
+            homeDoor.SnapClosed();
+        }
         StartCoroutine(ReceiveCarton());
     }
 

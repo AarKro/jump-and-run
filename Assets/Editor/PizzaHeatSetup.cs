@@ -124,6 +124,7 @@ public static class PizzaHeatSetup
         BuildHeatBar(root.transform, serializedHud);
         BuildDeliveredPanel(root.transform, serializedHud);
         BuildColdPanel(root.transform, serializedHud);
+        BuildCheckpointToast(root.transform, serializedHud);
 
         serializedHud.ApplyModifiedPropertiesWithoutUndo();
         return root;
@@ -226,6 +227,31 @@ public static class PizzaHeatSetup
 
         hud.FindProperty("coldPanel").objectReferenceValue = panel.gameObject;
         panel.gameObject.SetActive(false);
+    }
+
+    // "Checkpoint!" unter dem Wärmebalken (der endet bei y = -76). Startet ausgeschaltet, PizzaHud blendet ihn ein
+    private static void BuildCheckpointToast(Transform parent, SerializedObject hud)
+    {
+        var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
+        RectTransform rect = CreateRect("Checkpoint Toast", parent);
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.sizeDelta = new Vector2(800f, 70f);
+        rect.anchoredPosition = new Vector2(0f, -95f);
+
+        var label = rect.gameObject.AddComponent<TextMeshProUGUI>();
+        label.text = "Checkpoint!";
+        label.fontSize = 54f;
+        label.color = new Color(0.55f, 1f, 0.6f);
+        label.alignment = TextAlignmentOptions.Center;
+        label.fontStyle = FontStyles.Bold;
+        label.raycastTarget = false;
+        if (outline != null)
+        {
+            label.fontSharedMaterial = outline;
+        }
+        rect.gameObject.SetActive(false);
+        hud.FindProperty("checkpointToast").objectReferenceValue = label;
     }
 
     // ---------- Dampf ----------

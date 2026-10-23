@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEditor;
 using UnityEngine;
 
@@ -66,7 +67,8 @@ public static class CityPropsSetup
         Debug.Log("CityPropsSetup: Stadt-Prefabs gebaut.");
     }
 
-    private static void CreateMaterials()
+    // Öffentlich, damit andere Tools (CustomerSetup) Gebäudeteile mit denselben Materialien bauen können
+    public static void CreateMaterials()
     {
         Material Lit(string name, Color color, float smoothness = 0.15f) =>
             PrimitiveKit.Material($"{MaterialFolder}/{name}.mat", PrimitiveKit.LitShader, color, smoothness);
@@ -222,7 +224,7 @@ public static class CityPropsSetup
 
     // Gebäude mit echter Türöffnung (für SpawnDoor): Erdgeschoss aus Wandstücken links/rechts/über der Tür,
     // dahinter ein dunkler Raum. Der Spieler startet in diesem Raum und läuft durch die Öffnung heraus
-    private static SpawnDoor BuildDoorBuilding(Transform root, float width, float height, Material groundFloor, Material upper)
+    public static SpawnDoor BuildDoorBuilding(Transform root, float width, float height, Material groundFloor, Material upper)
     {
         const float doorWidth = 1.4f;
         const float doorHeight = 2.2f;
@@ -303,27 +305,137 @@ public static class CityPropsSetup
         SpawnDoor door = BuildDoorBuilding(t, width, height, darkGreen, beige);
 
         AddDecorativeAwning(t, new Vector3(0f, Surface + 3.0f, FacadeZ - 0.8f), 4f, green, white);
-        PrimitiveKit.Quad("Shop Window L", t, new Vector3(-2.5f, Surface + 1.5f, FacadeZ - 0.01f), new Vector2(1.8f, 1.7f), windowLit);
-        PrimitiveKit.Quad("Shop Window R", t, new Vector3(2.5f, Surface + 1.5f, FacadeZ - 0.01f), new Vector2(1.8f, 1.7f), windowLit);
+        Renderer windowLeft = PrimitiveKit.Quad("Shop Window L", t, new Vector3(-2.5f, Surface + 1.5f, FacadeZ - 0.01f), new Vector2(1.8f, 1.7f), windowDark);
+        Renderer windowRight = PrimitiveKit.Quad("Shop Window R", t, new Vector3(2.5f, Surface + 1.5f, FacadeZ - 0.01f), new Vector2(1.8f, 1.7f), windowDark);
         PrimitiveKit.Box("Sign Board", t, new Vector3(0f, Surface + 4.4f, FacadeZ - 0.1f), new Vector3(5f, 1.2f, 0.15f), green);
-        PrimitiveKit.Text("Sign Text", t, new Vector3(0f, Surface + 4.4f, FacadeZ - 0.2f), new Vector2(4.6f, 1f), "COFFEE", new Color(0.97f, 0.96f, 0.92f));
+        TextMeshPro signText = PrimitiveKit.Text("Sign Text", t, new Vector3(0f, Surface + 4.4f, FacadeZ - 0.2f), new Vector2(4.6f, 1f), "COFFEE", new Color(0.97f, 0.96f, 0.92f));
         AddWindowGrid(t, "Coffee", width, Surface + 6.2f, Surface + height - 0.6f);
         PrimitiveKit.Box("Cornice", t, new Vector3(0f, Surface + height + 0.2f, FacadeZ + 0.15f), new Vector3(width + 0.3f, 0.4f, 0.6f), green);
 
         // Neon-Schild im Fenster: aus (grau) bis zum Checkpoint, dann an (pink). TMP-Text ist ohnehin unbeleuchtet,
         // also "leuchtet" er von selbst, die Farbe reicht
-        GameObject inactive = PrimitiveKit.Text("Open Sign Off", t, new Vector3(2.5f, Surface + 1.6f, FacadeZ - 0.05f), new Vector2(1.6f, 0.6f), "OPEN", new Color(0.3f, 0.3f, 0.3f)).gameObject;
-        GameObject active = PrimitiveKit.Text("Open Sign On", t, new Vector3(2.5f, Surface + 1.6f, FacadeZ - 0.05f), new Vector2(1.6f, 0.6f), "OPEN", new Color(1f, 0.35f, 0.6f)).gameObject;
-        active.SetActive(false);
+        GameObject neonOff = PrimitiveKit.Text("Open Sign Off", t, new Vector3(2.5f, Surface + 1.6f, FacadeZ - 0.05f), new Vector2(1.6f, 0.6f), "OPEN", new Color(0.3f, 0.3f, 0.3f)).gameObject;
+        GameObject neonOn = PrimitiveKit.Text("Open Sign On", t, new Vector3(2.5f, Surface + 1.6f, FacadeZ - 0.05f), new Vector2(1.6f, 0.6f), "OPEN", new Color(1f, 0.35f, 0.6f)).gameObject;
+        neonOn.SetActive(false);
+
+        // "CLOSED"-Schildchen am Türblatt: hängt am Scharnier, dreht beim Öffnen also mit
+        Transform hinge = t.Find("Door Hinge");
+        Transform closedSign = PrimitiveKit.Pivot("Closed Sign", hinge, new Vector3(0.7f, 1.55f, -0.06f));
+        PrimitiveKit.Box("Board", closedSign, Vector3.zero, new Vector3(0.8f, 0.32f, 0.03f), signWhite);
+        PrimitiveKit.Text("Text", closedSign, new Vector3(0f, 0f, -0.02f), new Vector2(0.72f, 0.26f), "CLOSED", new Color(0.8f, 0.13f, 0.1f));
+
+        Transform chalkboard = BuildChalkboard(t, new Vector3(-2.3f, Surface, 1.3f));
+        Transform cup = BuildCoffeeCup(t, new Vector3(0.5f, Surface + 3.3f, 0f));
+        ParticleSystem sparkles = BuildSparkles(t);
 
         PrimitiveKit.AddBoxCollider(root, new Vector3(0.5f, Surface + 1.5f, 0f), new Vector3(1.5f, 3f, 3f), true);
         var checkpoint = root.AddComponent<Checkpoint>();
         var serialized = new SerializedObject(checkpoint);
         serialized.FindProperty("door").objectReferenceValue = door;
-        serialized.FindProperty("inactiveVisual").objectReferenceValue = inactive;
-        serialized.FindProperty("activeVisual").objectReferenceValue = active;
         serialized.ApplyModifiedPropertiesWithoutUndo();
+
+        var effects = root.AddComponent<CoffeeShopEffects>();
+        var fx = new SerializedObject(effects);
+        PrimitiveKit.SetReferences(fx, "shopWindows", windowLeft, windowRight);
+        fx.FindProperty("windowsClosed").objectReferenceValue = windowDark;
+        fx.FindProperty("windowsOpen").objectReferenceValue = windowLit;
+        fx.FindProperty("signText").objectReferenceValue = signText;
+        fx.FindProperty("closedDoorSign").objectReferenceValue = closedSign.gameObject;
+        fx.FindProperty("neonOff").objectReferenceValue = neonOff;
+        fx.FindProperty("neonOn").objectReferenceValue = neonOn;
+        fx.FindProperty("chalkboard").objectReferenceValue = chalkboard;
+        fx.FindProperty("cupHint").objectReferenceValue = cup;
+        fx.FindProperty("sparkles").objectReferenceValue = sparkles;
+        fx.ApplyModifiedPropertiesWithoutUndo();
         PrimitiveKit.SavePrefab(root, PathFor("Coffee Shop"));
+    }
+
+    // Gehweg-Tafel: vorne "CLOSED", hinten "OPEN" (um 180° gedreht, damit es nach dem Umklappen richtig herum steht).
+    // Gibt den Drehpunkt zurück, den CoffeeShopEffects beim Aktivieren um 180° dreht
+    private static Transform BuildChalkboard(Transform parent, Vector3 position)
+    {
+        Material slate = PrimitiveKit.Material($"{MaterialFolder}/Chalkboard.mat", PrimitiveKit.LitShader, new Color(0.12f, 0.16f, 0.14f));
+        Transform stand = PrimitiveKit.Pivot("Chalkboard", parent, position);
+        PrimitiveKit.Box("Leg L", stand, new Vector3(-0.45f, 0.55f, 0f), new Vector3(0.06f, 1.1f, 0.06f), doorWood);
+        PrimitiveKit.Box("Leg R", stand, new Vector3(0.45f, 0.55f, 0f), new Vector3(0.06f, 1.1f, 0.06f), doorWood);
+        Transform board = PrimitiveKit.Pivot("Board Pivot", stand, new Vector3(0f, 0.75f, 0f));
+        PrimitiveKit.Box("Frame", board, Vector3.zero, new Vector3(0.9f, 0.75f, 0.06f), doorWood);
+        PrimitiveKit.Box("Slate", board, Vector3.zero, new Vector3(0.8f, 0.65f, 0.07f), slate);
+        PrimitiveKit.Text("Closed", board, new Vector3(0f, 0f, -0.04f), new Vector2(0.72f, 0.5f), "CLOSED", new Color(0.92f, 0.92f, 0.88f));
+        TextMeshPro open = PrimitiveKit.Text("Open", board, new Vector3(0f, 0f, 0.04f), new Vector2(0.72f, 0.5f), "OPEN\n<size=60%>fresh coffee</size>", new Color(1f, 0.85f, 0.35f));
+        open.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        return board;
+    }
+
+    // Schwebende Kaffeetasse über der Laufbahn als Hinweis "hier ist ein Checkpoint"
+    private static Transform BuildCoffeeCup(Transform parent, Vector3 position)
+    {
+        Material coffee = PrimitiveKit.Material($"{MaterialFolder}/Coffee.mat", PrimitiveKit.LitShader, new Color(0.35f, 0.2f, 0.1f));
+        Transform cup = PrimitiveKit.Pivot("Coffee Cup Hint", parent, position);
+        PrimitiveKit.Part("Cup", PrimitiveType.Cylinder, cup, Vector3.zero, new Vector3(0.4f, 0.22f, 0.4f), white);
+        PrimitiveKit.Part("Coffee", PrimitiveType.Cylinder, cup, new Vector3(0f, 0.2f, 0f), new Vector3(0.34f, 0.02f, 0.34f), coffee);
+        PrimitiveKit.Box("Handle", cup, new Vector3(0.24f, 0.02f, 0f), new Vector3(0.1f, 0.22f, 0.06f), white);
+        PrimitiveKit.Part("Saucer", PrimitiveType.Cylinder, cup, new Vector3(0f, -0.22f, 0f), new Vector3(0.6f, 0.02f, 0.6f), white);
+        return cup;
+    }
+
+    // Funken-Ladung beim Aktivieren (nur Emit, keine Dauer-Emission)
+    private static ParticleSystem BuildSparkles(Transform parent)
+    {
+        var sparkleObject = new GameObject("Sparkles");
+        sparkleObject.transform.SetParent(parent, false);
+        var sparkles = sparkleObject.AddComponent<ParticleSystem>();
+        sparkles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        ParticleSystem.MainModule main = sparkles.main;
+        main.playOnAwake = false;
+        main.loop = false;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(2f, 5f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.18f);
+        main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.9f, 0.3f), new Color(1f, 1f, 1f));
+        main.gravityModifier = 0.6f;
+        main.maxParticles = 60;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        ParticleSystem.EmissionModule emission = sparkles.emission;
+        emission.rateOverTime = 0f;
+        ParticleSystem.ShapeModule shape = sparkles.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.2f;
+        sparkleObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(ParticleMaterialPath);
+        return sparkles;
+    }
+
+    // Haus des Kunden fürs Ziel (wird von CustomerSetup ins Goal-Prefab gebaut). Hellblau mit weißem Erdgeschoss,
+    // echte Türöffnung, Hausnummer, Türlampe, Blumenkästen. Der Kunde kommt durch die Tür heraus
+    public static SpawnDoor BuildCustomerHouse(Transform parent)
+    {
+        CreateMaterials();
+        const float width = 8f;
+        const float height = 10f;
+        Material blue = PrimitiveKit.Material($"{MaterialFolder}/Customer House.mat", PrimitiveKit.LitShader, new Color(0.55f, 0.72f, 0.86f), 0.1f);
+        Material porchWhite = PrimitiveKit.Material($"{MaterialFolder}/Customer House Ground.mat", PrimitiveKit.LitShader, new Color(0.93f, 0.92f, 0.88f), 0.1f);
+
+        Transform house = PrimitiveKit.Pivot("Customer House", parent, Vector3.zero);
+        SpawnDoor door = BuildDoorBuilding(house, width, height, porchWhite, blue);
+
+        PrimitiveKit.Quad("Window L", house, new Vector3(-2.6f, Surface + 1.5f, FacadeZ - 0.01f), new Vector2(1.8f, 1.5f), windowLit);
+        PrimitiveKit.Quad("Window R", house, new Vector3(2.6f, Surface + 1.5f, FacadeZ - 0.01f), new Vector2(1.8f, 1.5f), windowLit);
+        // Kleines Vordach über der Tür statt Markise
+        PrimitiveKit.Box("Porch Roof", house, new Vector3(0f, Surface + 2.85f, FacadeZ - 0.5f), new Vector3(2.2f, 0.12f, 1f), white);
+        PrimitiveKit.Box("Porch Post L", house, new Vector3(-1f, Surface + 1.4f, FacadeZ - 0.95f), new Vector3(0.08f, 2.8f, 0.08f), white);
+        PrimitiveKit.Box("Porch Post R", house, new Vector3(1f, Surface + 1.4f, FacadeZ - 0.95f), new Vector3(0.08f, 2.8f, 0.08f), white);
+        PrimitiveKit.Box("Doorstep", house, new Vector3(0f, Surface + 0.05f, FacadeZ - 0.4f), new Vector3(1.8f, 0.1f, 0.8f), curb);
+        PrimitiveKit.Part("Door Lamp", PrimitiveType.Sphere, house, new Vector3(-1.55f, Surface + 2.2f, FacadeZ - 0.1f), Vector3.one * 0.22f, lampGlow);
+        PrimitiveKit.Box("Number Plate", house, new Vector3(1.6f, Surface + 2.1f, FacadeZ - 0.04f), new Vector3(0.5f, 0.4f, 0.04f), signWhite);
+        PrimitiveKit.Text("Number", house, new Vector3(1.6f, Surface + 2.1f, FacadeZ - 0.07f), new Vector2(0.44f, 0.34f), "42", new Color(0.15f, 0.25f, 0.45f));
+
+        AddWindowGrid(house, "Customer House", width, Surface + 4.6f, Surface + height - 1.2f);
+        // Blumenkästen unter der ersten Fensterreihe
+        PrimitiveKit.Box("Flower Box L", house, new Vector3(-2f, Surface + 3.7f, FacadeZ - 0.15f), new Vector3(1.3f, 0.2f, 0.25f), leaves);
+        PrimitiveKit.Box("Flower Box R", house, new Vector3(2f, Surface + 3.7f, FacadeZ - 0.15f), new Vector3(1.3f, 0.2f, 0.25f), leavesLight);
+        PrimitiveKit.Box("Cornice", house, new Vector3(0f, Surface + height + 0.2f, FacadeZ + 0.15f), new Vector3(width + 0.3f, 0.4f, 0.6f), white);
+        PrimitiveKit.Box("Chimney", house, new Vector3(-width / 2f + 1.5f, Surface + height + 1f, FacadeZ + 3f), new Vector3(0.8f, 2f, 0.8f), brick);
+        return door;
     }
 
     // ---------- Begehbares ----------
