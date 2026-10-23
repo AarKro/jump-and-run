@@ -12,16 +12,22 @@ public static partial class CityBuilder
 
     // ---------- Piazza Pisa ----------
 
-    // Häuser nur an drei Seiten, die Ostseite bleibt offen zur Basil Street, damit man den Turm von der Straße aus sieht
+    // Häuser nur an drei Seiten, die Ostseite bleibt offen zur Basil Street und die Südreihe ab PiazzaSouthOpeningFrom
+    // zur Margherita Avenue, damit man den Turm von beiden Straßen aus sieht
     private static void BuildPiazza(Transform parent, CityLayout.Block block, System.Random random)
     {
         Rect area = block.Lots;
         foreach (Rect lot in Lots(area, random, skipEast: true))
         {
-            House(parent, lot, Pick(random, 10f, 11f, 13f, 14f));
+            bool inSouthOpening = lot.yMin < area.yMin + 1f && lot.center.x > CityLayout.PiazzaSouthOpeningFrom;
+            if (!inSouthOpening)
+            {
+                House(parent, lot, Pick(random, 10f, 11f, 13f, 14f));
+            }
         }
         Rect walk = block.Sidewalk;
         Slab("Piazza Paving", parent, area.xMin + 8f, area.yMin + 8f, walk.xMax, area.yMax - 8f, Surface - 0.1f, Surface + 0.02f, Paving);
+        Slab("Piazza Paving South", parent, CityLayout.PiazzaSouthOpeningFrom, area.yMin, walk.xMax, area.yMin + 8f, Surface - 0.1f, Surface + 0.02f, Paving);
         BuildLeaningTower(parent, CityLayout.LeaningTower, random);
     }
 

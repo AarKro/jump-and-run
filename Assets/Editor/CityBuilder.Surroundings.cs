@@ -34,7 +34,7 @@ public static partial class CityBuilder
         // Meer, Land und Strand liegen auch unter der Stadt: CityGround, damit Baugruben eines Levels auch hier ausgeschnitten
         // werden (sonst sähe man in der Grube Wasser, Wiese oder Sand)
         Slab("Sea", parent, W - Far, -Far, E + Far, N + Far, SeaLevel - 6f, SeaLevel, sea).gameObject.AddComponent<CityGround>();
-        Slab("Land", parent, W - 22f, -12f, E + Far, N + Far, -4f, 0.2f, Grass).gameObject.AddComponent<CityGround>();
+        Slab("Land", parent, W - 22f, -11.5f, E + Far, N + Far, -4f, 0.2f, Grass).gameObject.AddComponent<CityGround>();
         // Strand vor der Margherita Avenue, vorne eine Stufe aus nassem Sand ins Wasser
         Slab("Beach", parent, W - 22f, -30f, E + Far, -12f, -4f, 0.15f, sand).gameObject.AddComponent<CityGround>();
         Slab("Shore", parent, W - 22f, -42f, E + Far, -30f, -4f, SeaLevel + 0.2f, wetSand);

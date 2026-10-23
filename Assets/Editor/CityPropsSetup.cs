@@ -33,7 +33,8 @@ public static class CityPropsSetup
 
     private static Material concrete, curb, foundation, asphalt, roadLine, pit, iron, windowDark, windowLit,
         doorWood, interior, signWhite, red, white, green, cream, darkGreen, beige, brick, barrierOrange,
-        trunk, leaves, leavesLight, lampGlow, hydrantRed, binGray, skyline, skylineLight, cloud, gondolaYellow, sill;
+        trunk, leaves, leavesLight, lampGlow, hydrantRed, binGray, skyline, skylineLight, cloud, gondolaYellow, sill,
+        mint, blush, gelatoPink, waffle;
 
     [MenuItem("Tools/Jump and Run/City/Build City Prefabs")]
     public static void BuildAll()
@@ -51,6 +52,7 @@ public static class CityPropsSetup
         }
         BuildPizzeria();
         BuildCoffeeShop();
+        BuildGelatoShop();
         BuildKiosk();
         BuildBalcony();
         BuildAwning();
@@ -109,6 +111,19 @@ public static class CityPropsSetup
         cloud = Unlit("Cloud", new Color(0.96f, 0.97f, 1f));
         gondolaYellow = Lit("Gondola Yellow", new Color(0.95f, 0.76f, 0.16f));
         sill = Lit("Window Sill", new Color(0.85f, 0.84f, 0.8f));
+        mint = Lit("Gelato Mint", new Color(0.45f, 0.78f, 0.65f));
+        blush = Lit("Gelato Blush", new Color(0.97f, 0.86f, 0.86f));
+        gelatoPink = Lit("Gelato Pink", new Color(0.93f, 0.45f, 0.6f));
+        waffle = Lit("Waffle", new Color(0.85f, 0.62f, 0.33f));
+    }
+
+    // Nur die Gelateria neu bauen (Checkpoint in Level 2), ohne alle anderen Stadt-Prefabs neu zu speichern
+    [MenuItem("Tools/Jump and Run/City/Build Gelato Shop Prefab")]
+    public static void BuildGelatoShopPrefab()
+    {
+        CreateMaterials();
+        BuildGelatoShop();
+        AssetDatabase.SaveAssets();
     }
 
     private static string PathFor(string name) => $"{PrefabFolder}/{name}.prefab";
@@ -306,22 +321,37 @@ public static class CityPropsSetup
         PrimitiveKit.SavePrefab(root, PathFor("Pizzeria"));
     }
 
-    // Café = Checkpoint: Trigger vor der Tür. Beim Erreichen leuchtet das "OPEN"-Schild, danach respawnt man hier
+    // Café = Checkpoint (Level 1): Trigger vor der Tür. Beim Erreichen leuchtet das "OPEN"-Schild, danach respawnt man hier
     private static void BuildCoffeeShop()
     {
-        const float width = 8f;
-        const float height = 9f;
-        var root = new GameObject("Coffee Shop");
-        Transform t = root.transform;
-        SpawnDoor door = BuildDoorBuilding(t, width, height, darkGreen, beige);
+        BuildCheckpointShop("Coffee Shop", 9f, darkGreen, beige, green, "COFFEE", "fresh coffee",
+            t => BuildCoffeeCup(t, new Vector3(0.5f, Surface + 3.3f, 0f)));
+    }
 
-        AddDecorativeAwning(t, new Vector3(0f, Surface + 3.0f, FacadeZ - 0.8f), 4f, green, white);
+    // Gelateria = Checkpoint (Level 2), gleicher Aufbau wie das Café, nur in Pastell und mit Eistüte als Hinweis
+    private static void BuildGelatoShop()
+    {
+        BuildCheckpointShop("Gelato Shop", 8f, mint, blush, gelatoPink, "GELATO", "3 scoops!",
+            t => BuildGelatoCone(t, new Vector3(0.5f, Surface + 3.3f, 0f)));
+    }
+
+    // Laden als Checkpoint, 8 m breit: Tür mit SpawnDoor, Trigger davor, und CoffeeShopEffects für geschlossen/offen
+    // (Fenster, Schild, CLOSED an der Tür, Neon, Gehweg-Tafel, schwebender Hinweis, Funken)
+    private static void BuildCheckpointShop(string name, float height, Material groundFloor, Material upper, Material accent,
+        string sign, string openLine, System.Func<Transform, Transform> buildHint)
+    {
+        const float width = 8f;
+        var root = new GameObject(name);
+        Transform t = root.transform;
+        SpawnDoor door = BuildDoorBuilding(t, width, height, groundFloor, upper);
+
+        AddDecorativeAwning(t, new Vector3(0f, Surface + 3.0f, FacadeZ - 0.8f), 4f, accent, white);
         Renderer windowLeft = PrimitiveKit.Quad("Shop Window L", t, new Vector3(-2.5f, Surface + 1.5f, FacadeZ - 0.01f), new Vector2(1.8f, 1.7f), windowDark);
         Renderer windowRight = PrimitiveKit.Quad("Shop Window R", t, new Vector3(2.5f, Surface + 1.5f, FacadeZ - 0.01f), new Vector2(1.8f, 1.7f), windowDark);
-        PrimitiveKit.Box("Sign Board", t, new Vector3(0f, Surface + 4.4f, FacadeZ - 0.1f), new Vector3(5f, 1.2f, 0.15f), green);
-        TextMeshPro signText = PrimitiveKit.Text("Sign Text", t, new Vector3(0f, Surface + 4.4f, FacadeZ - 0.2f), new Vector2(4.6f, 1f), "COFFEE", new Color(0.97f, 0.96f, 0.92f));
-        AddWindowGrid(t, "Coffee", width, Surface + 6.2f, Surface + height - 0.6f);
-        PrimitiveKit.Box("Cornice", t, new Vector3(0f, Surface + height + 0.2f, FacadeZ + 0.15f), new Vector3(width + 0.3f, 0.4f, 0.6f), green);
+        PrimitiveKit.Box("Sign Board", t, new Vector3(0f, Surface + 4.4f, FacadeZ - 0.1f), new Vector3(5f, 1.2f, 0.15f), accent);
+        TextMeshPro signText = PrimitiveKit.Text("Sign Text", t, new Vector3(0f, Surface + 4.4f, FacadeZ - 0.2f), new Vector2(4.6f, 1f), sign, new Color(0.97f, 0.96f, 0.92f));
+        AddWindowGrid(t, name, width, Surface + 6.2f, Surface + height - 0.6f);
+        PrimitiveKit.Box("Cornice", t, new Vector3(0f, Surface + height + 0.2f, FacadeZ + 0.15f), new Vector3(width + 0.3f, 0.4f, 0.6f), accent);
 
         // Neon-Schild im Fenster: aus (grau) bis zum Checkpoint, dann an (pink). TMP-Text ist ohnehin unbeleuchtet,
         // also "leuchtet" er von selbst, die Farbe reicht
@@ -335,8 +365,8 @@ public static class CityPropsSetup
         PrimitiveKit.Box("Board", closedSign, Vector3.zero, new Vector3(0.8f, 0.32f, 0.03f), signWhite);
         PrimitiveKit.Text("Text", closedSign, new Vector3(0f, 0f, -0.02f), new Vector2(0.72f, 0.26f), "CLOSED", new Color(0.8f, 0.13f, 0.1f));
 
-        Transform chalkboard = BuildChalkboard(t, new Vector3(-2.3f, Surface, 1.3f));
-        Transform cup = BuildCoffeeCup(t, new Vector3(0.5f, Surface + 3.3f, 0f));
+        Transform chalkboard = BuildChalkboard(t, new Vector3(-2.3f, Surface, 1.3f), openLine);
+        Transform hint = buildHint(t);
         ParticleSystem sparkles = BuildSparkles(t);
 
         PrimitiveKit.AddBoxCollider(root, new Vector3(0.5f, Surface + 1.5f, 0f), new Vector3(1.5f, 3f, 3f), true);
@@ -355,15 +385,15 @@ public static class CityPropsSetup
         fx.FindProperty("neonOff").objectReferenceValue = neonOff;
         fx.FindProperty("neonOn").objectReferenceValue = neonOn;
         fx.FindProperty("chalkboard").objectReferenceValue = chalkboard;
-        fx.FindProperty("cupHint").objectReferenceValue = cup;
+        fx.FindProperty("cupHint").objectReferenceValue = hint;
         fx.FindProperty("sparkles").objectReferenceValue = sparkles;
         fx.ApplyModifiedPropertiesWithoutUndo();
-        PrimitiveKit.SavePrefab(root, PathFor("Coffee Shop"));
+        PrimitiveKit.SavePrefab(root, PathFor(name));
     }
 
     // Gehweg-Tafel: vorne "CLOSED", hinten "OPEN" (um 180° gedreht, damit es nach dem Umklappen richtig herum steht).
     // Gibt den Drehpunkt zurück, den CoffeeShopEffects beim Aktivieren um 180° dreht
-    private static Transform BuildChalkboard(Transform parent, Vector3 position)
+    private static Transform BuildChalkboard(Transform parent, Vector3 position, string openLine)
     {
         Material slate = PrimitiveKit.Material($"{MaterialFolder}/Chalkboard.mat", PrimitiveKit.LitShader, new Color(0.12f, 0.16f, 0.14f));
         Transform stand = PrimitiveKit.Pivot("Chalkboard", parent, position);
@@ -373,7 +403,7 @@ public static class CityPropsSetup
         PrimitiveKit.Box("Frame", board, Vector3.zero, new Vector3(0.9f, 0.75f, 0.06f), doorWood);
         PrimitiveKit.Box("Slate", board, Vector3.zero, new Vector3(0.8f, 0.65f, 0.07f), slate);
         PrimitiveKit.Text("Closed", board, new Vector3(0f, 0f, -0.04f), new Vector2(0.72f, 0.5f), "CLOSED", new Color(0.92f, 0.92f, 0.88f));
-        TextMeshPro open = PrimitiveKit.Text("Open", board, new Vector3(0f, 0f, 0.04f), new Vector2(0.72f, 0.5f), "OPEN\n<size=60%>fresh coffee</size>", new Color(1f, 0.85f, 0.35f));
+        TextMeshPro open = PrimitiveKit.Text("Open", board, new Vector3(0f, 0f, 0.04f), new Vector2(0.72f, 0.5f), $"OPEN\n<size=60%>{openLine}</size>", new Color(1f, 0.85f, 0.35f));
         open.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
         return board;
     }
@@ -388,6 +418,18 @@ public static class CityPropsSetup
         PrimitiveKit.Box("Handle", cup, new Vector3(0.24f, 0.02f, 0f), new Vector3(0.1f, 0.22f, 0.06f), white);
         PrimitiveKit.Part("Saucer", PrimitiveType.Cylinder, cup, new Vector3(0f, -0.22f, 0f), new Vector3(0.6f, 0.02f, 0.6f), white);
         return cup;
+    }
+
+    // Schwebende Eistüte über der Laufbahn als Checkpoint-Hinweis der Gelateria: Waffel mit zwei Kugeln
+    private static Transform BuildGelatoCone(Transform parent, Vector3 position)
+    {
+        Transform cone = PrimitiveKit.Pivot("Gelato Cone Hint", parent, position);
+        // Waffel: schmaler Zylinder, leicht gekippt wie in der Hand gehalten
+        Renderer waffleCone = PrimitiveKit.Part("Waffle", PrimitiveType.Cylinder, cone, new Vector3(0f, -0.15f, 0f), new Vector3(0.18f, 0.22f, 0.18f), waffle);
+        waffleCone.transform.localRotation = Quaternion.Euler(0f, 0f, 8f);
+        PrimitiveKit.Part("Scoop Mint", PrimitiveType.Sphere, cone, new Vector3(0f, 0.12f, 0f), Vector3.one * 0.32f, mint);
+        PrimitiveKit.Part("Scoop Pink", PrimitiveType.Sphere, cone, new Vector3(0.02f, 0.36f, 0f), Vector3.one * 0.28f, gelatoPink);
+        return cone;
     }
 
     // Funken-Ladung beim Aktivieren (nur Emit, keine Dauer-Emission)
