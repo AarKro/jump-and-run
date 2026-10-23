@@ -160,6 +160,9 @@ public static class CityLevelBuilder
 
     private static void BuildGameplay()
     {
+        // Westlich der Pizzeria geht es nicht weiter: Lieferwagen lädt Kisten ab, mit unsichtbarer Wand (Spieler käme von +u)
+        Place("Delivery Truck", -22, 0, gameplayParent);
+
         // Start: zwei Balkone als Kletterpartie (je 3 m höher), oben ein Speed-Boost
         Place("Balcony", 9, 3, gameplayParent);   // Oberkante 3.5
         Place("Balcony", 13, 6, gameplayParent);  // Oberkante 6.5

@@ -167,13 +167,17 @@ public static class Level2Builder
         LevelBuildKit.Dog(Mathf.Round(PiazzaU(-205f)), 1f, gameplayParent);
         LevelBuildKit.Place("Bench", Mathf.Round(PiazzaU(-215f)), 0, gameplayParent);
 
+        // Östlich der Pizzeria geht es nicht weiter: Unfall mit unsichtbarer Wand (der Spieler käme von -u)
+        LevelBuildKit.Place("Car Crash", 4, 0, gameplayParent);
+
         // Vor dem Turm: Kamera weiter weg (35 m), höher und mit Blick nach oben, damit der ganze Turm ins Bild passt.
         // Dort ist die Piazza zur Margherita Avenue hin offen, die Kamera steht also nicht in einem Haus.
-        // Voll ab x -190 (Piazza-Rand), davor über die Basil Street weich überblenden
+        // Voll von x -190 (Piazza-Rand) bis hinter die zweite Bank (x -216), davor über die Basil Street und danach
+        // zum Kunden hin (x -228) wieder weich auf die normale Kamera
         var zone = new SerializedObject(new GameObject("Tower Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
-        zone.FindProperty("fromU").floatValue = PiazzaU(PiazzaStartX);
+        zone.FindProperty("fromU").floatValue = PiazzaU(-216f);
         zone.FindProperty("toU").floatValue = PiazzaU(-190f);
-        zone.FindProperty("blend").floatValue = 10f;
+        zone.FindProperty("blend").floatValue = 8f;
         zone.ApplyModifiedPropertiesWithoutUndo();
         ((CameraZone)zone.targetObject).transform.SetParent(gameplayParent, false);
 
