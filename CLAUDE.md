@@ -37,6 +37,7 @@ Map (draft 2): https://claude.ai/artifact/Td2MZGGfPz26UzNzvvVcuh. Coordinates ar
 - **Street names** (confirmed): Margherita Avenue (south edge), Pepperoni Parkway (east), Calzone Road (north), Marinara Promenade (west), Basil Street (x −180), Oregano Street (x −110), Mozzarella Blvd (x −40), Anchovy Alley (x 50, narrow), Crust Street (z 130 / 112), Olive Lane (z 165), Four Cheese Avenue (z 215), Salami Street (z 265). Signs at every intersection.
 - **Roadblocks** vary by level: construction barriers, police tape, monster rubble, a parked truck.
 - Grid on the map (draft): outer ring + avenues 20 m facade to facade (the camera is 8 m in front of the player and must not end up inside the opposite houses), narrow 10 m streets are only crossed (cars, like the current cross street at x 50).
+- **Seeing the city in play** (decided, not built): each level starts with a **camera flyover** from high above the city (past the monster fight and the tower) down to the pizzeria while the delivery guy walks out, **and** the gameplay camera gets a **flatter angle** (less than today's ~27° down) so more sky/background is in the frame.
 - **Order**: build the city first, then levels 2 and 3.
 
 ## Setup
