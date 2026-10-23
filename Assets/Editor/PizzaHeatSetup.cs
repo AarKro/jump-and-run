@@ -16,6 +16,7 @@ public static class PizzaHeatSetup
     private const string ParticleMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat";
     // Schrift-Material mit schwarzem Rand aus den TMP Essentials: Text bleibt lesbar, auch ohne dunklen Hintergrund
     private const string OutlineFontMaterialPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Outline.mat";
+    private const string IrisMaterialPath = "Assets/Materials/Iris.mat";
 
     // Referenzauflösung: Alle Größen unten sind in Pixeln bei 1920x1080, der CanvasScaler rechnet sie um
     private static readonly Vector2 ReferenceResolution = new Vector2(1920f, 1080f);
@@ -121,10 +122,21 @@ public static class PizzaHeatSetup
         var hud = root.AddComponent<PizzaHud>();
         var serializedHud = new SerializedObject(hud);
 
-        BuildHeatBar(root.transform, serializedHud);
+        // Wärmebalken und Stoppuhr in einer eigenen Gruppe: Das Intro blendet sie zusammen aus und ein
+        RectTransform gameplay = CreateRect("Gameplay", root.transform);
+        Stretch(gameplay, 0f);
+        var gameplayGroup = gameplay.gameObject.AddComponent<CanvasGroup>();
+        gameplayGroup.interactable = false;
+        gameplayGroup.blocksRaycasts = false;
+        serializedHud.FindProperty("gameplayGroup").objectReferenceValue = gameplayGroup;
+
+        BuildHeatBar(gameplay, serializedHud);
         BuildDeliveredPanel(root.transform, serializedHud);
         BuildColdPanel(root.transform, serializedHud);
         BuildCheckpointToast(root.transform, serializedHud);
+        BuildIntroTitle(root.transform, serializedHud);
+        // Zuletzt erzeugt = zuletzt gezeichnet: Die Iris liegt über allem anderen im HUD
+        BuildIris(root.transform);
 
         serializedHud.ApplyModifiedPropertiesWithoutUndo();
         return root;
@@ -275,6 +287,50 @@ public static class PizzaHeatSetup
         }
         rect.gameObject.SetActive(false);
         hud.FindProperty("checkpointToast").objectReferenceValue = label;
+    }
+
+    // "Deliver to" + Adresse unten mittig, während die Kamera zum Kunden fliegt. Startet unsichtbar (Alpha 0)
+    private static void BuildIntroTitle(Transform parent, SerializedObject hud)
+    {
+        var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
+        RectTransform group = CreateRect("Intro Title", parent);
+        group.anchorMin = group.anchorMax = new Vector2(0.5f, 0f);
+        group.pivot = new Vector2(0.5f, 0f);
+        group.sizeDelta = new Vector2(1400f, 160f);
+        group.anchoredPosition = new Vector2(0f, 90f);
+        var canvasGroup = group.gameObject.AddComponent<CanvasGroup>();
+        canvasGroup.alpha = 0f;
+        canvasGroup.interactable = false;
+        canvasGroup.blocksRaycasts = false;
+
+        CreateText("Label", group, "Deliver to", 38f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, 40f), outline);
+        TextMeshProUGUI address = CreateText("Address", group, "No. 42, Pepperoni Parkway", 64f, new Color(1f, 0.85f, 0.35f), new Vector2(0f, -20f), outline);
+
+        hud.FindProperty("introTitle").objectReferenceValue = canvasGroup;
+        hud.FindProperty("introAddress").objectReferenceValue = address;
+    }
+
+    // Kreis-Blende über den ganzen Bildschirm. Image im Prefab aus, sonst ist die Game-Ansicht im Edit Mode schwarz
+    private static void BuildIris(Transform parent)
+    {
+        RectTransform rect = CreateImage("Iris", parent, Color.black);
+        Stretch(rect, 0f);
+        var image = rect.GetComponent<Image>();
+        image.material = LoadOrCreateIrisMaterial();
+        image.enabled = false;
+        rect.gameObject.AddComponent<ScreenIris>();
+    }
+
+    private static Material LoadOrCreateIrisMaterial()
+    {
+        var material = AssetDatabase.LoadAssetAtPath<Material>(IrisMaterialPath);
+        if (material != null)
+        {
+            return material;
+        }
+        material = new Material(Shader.Find("JumpAndRun/UI/Iris"));
+        AssetDatabase.CreateAsset(material, IrisMaterialPath);
+        return material;
     }
 
     // ---------- Dampf ----------

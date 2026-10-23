@@ -53,6 +53,8 @@ public class Customer : MonoBehaviour
     private enum State { Inside, ComingOut, Waiting, Receiving, Dancing }
 
     private State state = State.Waiting;
+    // Während des Level-Intros: steht draußen und winkt in die Kamera, egal wo der Spieler ist
+    private bool introWave;
     private int coins;
     private float danceTime;
     private Transform player;
@@ -115,10 +117,36 @@ public class Customer : MonoBehaviour
             player = controller.transform;
         }
 
-        if (homeDoor != null)
+        // Hat das Intro ihn schon nach draußen gestellt (kann im selben Frame vor diesem Start passieren), dort lassen
+        if (homeDoor != null && !introWave)
         {
             GoBackInside();
         }
+    }
+
+    // Blickpunkt für die Kamera im Intro: etwa Brusthöhe
+    public Vector3 IntroFocus => transform.position + Vector3.up * 1.1f;
+
+    // Level-Intro: wartet schon draußen vor der Tür und winkt, damit man sieht, wohin die Pizza muss
+    public void ShowForIntro()
+    {
+        StopAllCoroutines();
+        if (homeDoor != null)
+        {
+            homeDoor.SnapClosed();
+            transform.position = homeDoor.OutsidePosition;
+        }
+        rig.localPosition = Vector3.zero;
+        rig.localRotation = Quaternion.identity;
+        introWave = true;
+        state = State.Waiting;
+    }
+
+    // Intro vorbei (der Bildschirm ist gerade schwarz): wieder rein, er kommt heraus, wenn der Bote wirklich da ist
+    public void EndIntro()
+    {
+        introWave = false;
+        GoBackInside();
     }
 
     // Startzustand mit Haus: drinnen hinter der geschlossenen Tür (unsichtbar im dunklen Raum).
@@ -181,7 +209,7 @@ public class Customer : MonoBehaviour
         float t = Time.time;
         rig.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * swaySpeed) * swayAngle);
 
-        bool playerClose = player != null && FlatDistanceToPlayer() < waveDistance;
+        bool playerClose = introWave || (player != null && FlatDistanceToPlayer() < waveDistance);
         // Winkel um Z: 0 = Arm hängt runter, -X-Arm geht mit negativen Winkeln nach außen/oben
         float leftAngle = playerClose ? -150f + Mathf.Sin(t * waveSpeed) * 25f : -8f;
         leftArm.localRotation = Quaternion.Euler(0f, 0f, leftAngle);

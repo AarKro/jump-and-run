@@ -79,7 +79,8 @@ public static class Level2Builder
         BuildGround(link);
         BuildGameplay();
         BuildProps();
-        LevelBuildKit.SetupEssentials(PiazzaU(-228f), "7", KeepWarmTime, new Vector3(-110f, -3f, 10f), new Vector3(280f, 1f, 90f));
+        LevelBuildKit.SetupEssentials(PiazzaU(-228f), "7", KeepWarmTime, new Vector3(-110f, -3f, 10f), new Vector3(280f, 1f, 90f),
+            "No. 7, Piazza Pisa", new Vector3(-30f, 90f, -110f));
         LevelBuildKit.Save(scene);
         Debug.Log("Level2Builder: Level 2 (Leaning Tower) gebaut.");
     }

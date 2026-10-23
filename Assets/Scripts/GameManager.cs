@@ -77,6 +77,13 @@ public class GameManager : MonoBehaviour
         // Nach "Pizza's cold!" ohne Kamerafahrt, damit der neue Versuch schnell losgeht. Immer abfragen, damit das Merkzeichen weg ist
         bool restarted = LevelFlow.ConsumeRestart();
 
+        // Intro: sofort schwarz (Iris zu) und HUD aus, noch bevor das erste Bild gezeichnet wird
+        IntroFlyover intro = FindAnyObjectByType<IntroFlyover>();
+        if (intro != null)
+        {
+            intro.Prepare();
+        }
+
         if (LevelCity.Instance != null)
         {
             while (LevelCity.Instance != null && !LevelCity.Instance.Ready)
@@ -89,20 +96,27 @@ public class GameManager : MonoBehaviour
 
         if (player != null && currentDoor != null && playerLife != null)
         {
-            // Levelstart: Der Pizzabote wartet in der Pizzeria, die Kamera fliegt die Route ab, dann kommt er mit der frischen Pizza heraus
+            // Levelstart: Der Pizzabote wartet in der Pizzeria, die Kamera fliegt zum Kunden, Iris zu und an der Pizzeria
+            // wieder auf, dann kommt er mit der frischen Pizza heraus
             IsRespawning = true;
             playerLife.WaitInside(currentDoor);
-            IntroFlyover intro = FindAnyObjectByType<IntroFlyover>();
             LevelGoal goal = FindAnyObjectByType<LevelGoal>();
-            if (!restarted && intro != null && goal != null)
+            if (intro != null)
             {
-                yield return intro.Play(goal.transform.position, player.transform.position);
+                yield return intro.Play(goal != null ? goal.transform : null, currentDoor, withFlight: !restarted);
             }
             yield return SpawnFromDoor();
         }
-        else if (player != null && currentRespawnPoint != null)
+        else
         {
-            PlacePlayerAt(currentRespawnPoint);
+            if (intro != null)
+            {
+                intro.Release();
+            }
+            if (player != null && currentRespawnPoint != null)
+            {
+                PlacePlayerAt(currentRespawnPoint);
+            }
         }
         started = true;
     }

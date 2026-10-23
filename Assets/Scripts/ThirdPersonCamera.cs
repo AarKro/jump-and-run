@@ -51,7 +51,7 @@ public class ThirdPersonCamera : MonoBehaviour
         float u = Lane.Project(target.position);
         ViewAt(u, out Vector3 viewOffset, out float viewLookHeight);
         Quaternion frame = Lane.Frame(u);
-        transform.position = target.position + frame * viewOffset;
+        transform.position = Anchor(u) + frame * viewOffset;
         transform.rotation = frame * FixedRotation(viewOffset, viewLookHeight);
         velocity = Vector3.zero;
     }
@@ -68,7 +68,7 @@ public class ThirdPersonCamera : MonoBehaviour
         float u = Lane.Project(target.position);
         ViewAt(u, out Vector3 viewOffset, out float viewLookHeight);
         Quaternion frame = Lane.Frame(u);
-        Vector3 desiredPosition = target.position + frame * viewOffset;
+        Vector3 desiredPosition = Anchor(u) + frame * viewOffset;
         Vector3 position = transform.position;
 
         // Horizontal eng folgen, vertikal weicher, damit Sprünge das Bild nicht durchschütteln
@@ -81,6 +81,16 @@ public class ThirdPersonCamera : MonoBehaviour
         // Exponentielles Nachziehen: Anteil 1 - e^(-k*dt) ist unabhängig von der Framerate gleich schnell
         Quaternion desiredRotation = frame * FixedRotation(viewOffset, viewLookHeight);
         transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Exp(-rotationSharpness * Time.deltaTime));
+    }
+
+    // Punkt auf der Laufbahn an der Stelle des Players, in seiner Höhe. Im Spiel steht er sowieso auf der Bahn,
+    // aber beim Herauslaufen aus einer Tür (oder an der Mikrowelle) ist er ein Stück dahinter: Die Kamera bleibt
+    // dann ruhig auf der Bahn, statt ihm ins Haus hinterher zu rücken
+    private Vector3 Anchor(float u)
+    {
+        Vector3 anchor = Lane.Point(u);
+        anchor.y = target.position.y;
+        return anchor;
     }
 
     private static Quaternion FixedRotation(Vector3 viewOffset, float viewLookHeight)

@@ -7,6 +7,13 @@ using UnityEngine.UI;
 // Wird von Tools > Jump and Run > Pizza Heat > Create HUD Prefab aufgebaut, die Referenzen setzt das Tool.
 public class PizzaHud : MonoBehaviour
 {
+    [Header("Intro")]
+    [Tooltip("Wärmebalken und Stoppuhr: im Level-Intro ausgeblendet, danach eingeblendet")]
+    [SerializeField] private CanvasGroup gameplayGroup;
+    [Tooltip("\"Deliver to\" + Adresse, während die Kamera zum Kunden fliegt")]
+    [SerializeField] private CanvasGroup introTitle;
+    [SerializeField] private TextMeshProUGUI introAddress;
+
     [Header("Wärmebalken")]
     [Tooltip("Füllung des Balkens. Die Breite kommt über anchorMax.x (0-1), nicht über die Größe")]
     [SerializeField] private RectTransform heatFill;
@@ -46,6 +53,8 @@ public class PizzaHud : MonoBehaviour
     [SerializeField] private float toastFadeTime = 0.5f;
 
     private float overheatBaseAlpha;
+    private Coroutine gameplayFade;
+    private Coroutine titleFade;
 
     private void Awake()
     {
@@ -59,7 +68,66 @@ public class PizzaHud : MonoBehaviour
             checkpointToast.gameObject.SetActive(false);
         }
         coldPanel.SetActive(false);
+        if (introTitle != null)
+        {
+            introTitle.alpha = 0f;
+        }
         overheatBaseAlpha = overheatImage.color.a;
+    }
+
+    // ---------- Intro ----------
+
+    public void SetGameplayVisible(bool visible)
+    {
+        if (gameplayGroup != null)
+        {
+            gameplayGroup.alpha = visible ? 1f : 0f;
+        }
+    }
+
+    public void FadeInGameplay(float duration)
+    {
+        gameplayFade = RestartFade(gameplayFade, gameplayGroup, 1f, duration);
+    }
+
+    public void ShowIntroTitle(string address, float duration)
+    {
+        if (introAddress != null)
+        {
+            introAddress.text = address;
+        }
+        titleFade = RestartFade(titleFade, introTitle, 1f, duration);
+    }
+
+    public void HideIntroTitle(float duration)
+    {
+        titleFade = RestartFade(titleFade, introTitle, 0f, duration);
+    }
+
+    // Eine laufende Blende derselben Gruppe erst anhalten, sonst ziehen zwei Coroutines am selben Alpha
+    private Coroutine RestartFade(Coroutine running, CanvasGroup group, float target, float duration)
+    {
+        if (group == null)
+        {
+            return null;
+        }
+        if (running != null)
+        {
+            StopCoroutine(running);
+        }
+        return StartCoroutine(Fade(group, target, duration));
+    }
+
+    // CanvasGroup.alpha blendet alle Kinder auf einmal, ohne jede Farbe einzeln anzufassen
+    private static IEnumerator Fade(CanvasGroup group, float target, float duration)
+    {
+        float from = group.alpha;
+        for (float t = 0f; t < duration; t += Time.deltaTime)
+        {
+            group.alpha = Mathf.Lerp(from, target, t / duration);
+            yield return null;
+        }
+        group.alpha = target;
     }
 
     private void OnDestroy()

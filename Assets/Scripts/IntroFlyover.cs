@@ -2,62 +2,188 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-// Kamerafahrt zum Levelstart, wie eine Streckenvorschau: Beginnt hoch über dem Kunden (da muss die Pizza hin),
-// fliegt die Route rückwärts entlang der Laufbahn ab (Stadt, Turm und Monster im Hintergrund) und sinkt dabei herunter,
-// bis sie genau in der Pose der Spielkamera an der Pizzeria-Tür ankommt. Springen überspringt sie.
-// Der GameManager startet sie (nicht nach einem Neustart wegen kalter Pizza). Solange ist die ThirdPersonCamera aus.
+// Intro zum Levelstart, wie in Mario Sunshine: Erst ein Blick über die Stadt, dann schwingt die Kamera im Bogen hinunter
+// zum Kunden, der vor seinem Haus wartet und winkt (die Lieferadresse wird eingeblendet). Eine Kreis-Blende (Iris)
+// schließt sich um ihn, kurz schwarz, dann öffnet sie sich um die Tür der Pizzeria und der Pizzabote kommt heraus.
+// Springen überspringt den Flug (die Iris läuft trotzdem). Nach "Pizza's cold!" gibt es nur Schwarz → Iris auf.
+// Der GameManager ruft Prepare() (sofort schwarz, HUD aus) und dann Play() auf. Solange ist die ThirdPersonCamera aus.
 [RequireComponent(typeof(ThirdPersonCamera))]
 public class IntroFlyover : MonoBehaviour
 {
-    [SerializeField] private float duration = 5f;
-    [Tooltip("Kamera-Versatz am Anfang, im Lane-Rahmen (x seitlich, y hoch, z nach hinten; negativ = vor der Laufbahn)")]
-    [SerializeField] private Vector3 startOffset = new Vector3(0f, 40f, -60f);
-    [Tooltip("Blickpunkt am Anfang so hoch über der Laufbahn: hoch = fast waagerechter Blick über die Stadt")]
-    [SerializeField] private float startLookHeight = 25f;
-    [Tooltip("Anteil der Fahrt, in dem die Kamera noch oben bleibt, bevor sie heruntersinkt")]
-    [Range(0f, 0.9f)]
-    [SerializeField] private float stayHigh = 0.35f;
+    [Header("Übersicht (pro Level)")]
+    [Tooltip("Startposition der Kamera relativ zum Kunden, in Welt-Achsen (z.B. hoch über dem Meer im Süden)")]
+    [SerializeField] private Vector3 overviewOffset = new Vector3(20f, 90f, -110f);
+    [Tooltip("Blickpunkt am Anfang so weit über dem Kunden: Die Kamera schaut flacher, man sieht mehr Stadt und Horizont")]
+    [SerializeField] private float overviewLookAbove = 20f;
+    [Tooltip("So lange schaut die Kamera über die Stadt, bevor sie losfliegt. Die Iris öffnet sich in dieser Zeit")]
+    [SerializeField] private float overviewDuration = 1f;
+
+    [Header("Anflug")]
+    [Tooltip("Kamera am Ende, relativ zum Kunden im Rahmen des Ziels (x seitlich, y hoch, z nach hinten; negativ = vor dem Haus)")]
+    [SerializeField] private Vector3 closeOffset = new Vector3(-2.5f, 0.8f, -6.5f);
+    [SerializeField] private float swoopDuration = 3f;
+    [Tooltip("Die letzten Meter fliegt die Kamera fast gerade auf den Kunden zu, so kommt sie schräg von der Seite statt von oben")]
+    [SerializeField] private float approachLength = 30f;
+    [Tooltip("So lange bleibt die Kamera beim winkenden Kunden, bevor sich die Iris schließt")]
+    [SerializeField] private float holdDuration = 0.6f;
+
+    [Header("Lieferadresse")]
+    [SerializeField] private string deliveryAddress = "No. 42, Pepperoni Parkway";
+    [SerializeField] private float titleFadeDuration = 0.4f;
+
+    [Header("Iris und HUD")]
+    [SerializeField] private float irisOpenDuration = 0.5f;
+    [SerializeField] private float irisCloseDuration = 0.5f;
+    [Tooltip("So lange bleibt es zwischen Kunde und Pizzeria schwarz")]
+    [SerializeField] private float blackDuration = 0.5f;
+    [Tooltip("Nach einem Neustart (kalte Pizza) ohne Flug: nur so lange schwarz, dann geht die Iris an der Pizzeria auf")]
+    [SerializeField] private float restartBlackDuration = 0.2f;
+    [SerializeField] private float hudFadeDuration = 0.4f;
+
     [Tooltip("Erst nach dieser Zeit zählt Springen als Überspringen")]
     [SerializeField] private float skipDelay = 0.3f;
 
-    // from: Ziel (Kunde), to: wo die Spielkamera am Ende hinschaut (Spieler hinter der Tür)
-    public IEnumerator Play(Vector3 from, Vector3 to)
+    private ThirdPersonCamera follow;
+    private Camera view;
+    private ScreenIris iris;
+    private PizzaHud hud;
+
+    // Sofort schwarz und HUD aus. Läuft im Start des GameManagers, also bevor das erste Bild gezeichnet wird:
+    // So sieht man auch das Laden der Stadt nicht
+    public void Prepare()
     {
-        var follow = GetComponent<ThirdPersonCamera>();
+        follow = GetComponent<ThirdPersonCamera>();
+        view = GetComponent<Camera>();
+        iris = FindAnyObjectByType<ScreenIris>();
+        hud = FindAnyObjectByType<PizzaHud>();
+
+        if (iris != null)
+        {
+            iris.SetClosed();
+        }
+        if (hud != null)
+        {
+            hud.SetGameplayVisible(false);
+        }
+    }
+
+    // Ohne Tür kein Intro: Blende einfach weg und HUD an
+    public void Release()
+    {
+        if (iris != null)
+        {
+            iris.SetOpen();
+        }
+        if (hud != null)
+        {
+            hud.SetGameplayVisible(true);
+        }
+    }
+
+    // goal: Ziel mit Kunde (null = kein Flug), door: Pizzeria-Tür, aus der der Spieler gleich kommt
+    public IEnumerator Play(Transform goal, SpawnDoor door, bool withFlight)
+    {
+        if (withFlight && goal != null)
+        {
+            yield return FlyToCustomer(goal);
+        }
+        else
+        {
+            yield return new WaitForSeconds(restartBlackDuration);
+        }
+
+        // Während es schwarz ist, springt die Spielkamera an die Pizzeria. Der Kreis geht dort auf, wo der Bote gleich steht
+        follow.enabled = true;
+        follow.SnapToTarget();
+        if (iris != null)
+        {
+            yield return iris.Open(view, door.OutsidePosition + Vector3.up * 0.8f, irisOpenDuration);
+        }
+        if (hud != null)
+        {
+            hud.FadeInGameplay(hudFadeDuration);
+        }
+    }
+
+    private IEnumerator FlyToCustomer(Transform goal)
+    {
         follow.enabled = false;
 
-        float uFrom = Lane.Project(from);
-        float uTo = Lane.Project(to);
-        // Abstand der beiden Punkte zur Laufbahn (z.B. Spieler steht hinter der Tür, nicht auf der Bahn):
-        // wird mitgeblendet, damit die Fahrt exakt am Spieler endet
-        Vector3 fromShift = from - Lane.Point(uFrom);
-        Vector3 toShift = to - Lane.Point(uTo);
-
-        for (float t = 0f; t < duration; t += Time.deltaTime)
+        Customer customer = goal.GetComponentInChildren<Customer>();
+        if (customer != null)
         {
-            if (t > skipDelay && SkipPressed())
+            customer.ShowForIntro();
+        }
+        Vector3 focus = customer != null ? customer.IntroFocus : goal.position + Vector3.up;
+
+        // Kurve als kubische Bézier-Kurve aus 4 Punkten: Start und Ende liegen auf der Kurve, die zwei Punkte
+        // dazwischen ziehen sie nur in ihre Richtung. Kontrollpunkt 2 liegt auf der Verlängerung der Endposition
+        // (vom Kunden weg), dadurch kommt die Kamera zum Schluss gerade und schräg von vorne herein.
+        // Kontrollpunkt 1 liegt in Starthöhe darüber: erst oben bleiben und herumschwenken, dann hinunterstoßen.
+        Vector3 start = focus + overviewOffset;
+        Vector3 end = focus + goal.rotation * closeOffset;
+        Vector3 approach = end + (end - focus).normalized * approachLength;
+        Vector3 high = new Vector3(approach.x, start.y, approach.z);
+
+        float elapsed = 0f;
+        bool titleShown = false;
+        float total = overviewDuration + swoopDuration + holdDuration;
+
+        // Iris geht über der Stadt auf (aus der Bildmitte, da schaut die Kamera ja auf den Kunden).
+        // Läuft nebenher weiter, während die Kamera schon fliegt
+        Coroutine opening = iris != null ? StartCoroutine(iris.Open(view, focus, irisOpenDuration)) : null;
+
+        while (elapsed < total)
+        {
+            if (elapsed > skipDelay && SkipPressed())
             {
                 break;
             }
-            float k = t / duration;
-            // Entlang der Route: weich anfahren und abbremsen
-            float along = Mathf.SmoothStep(0f, 1f, k);
-            // Herunter erst nach stayHigh: so sieht man am Anfang lange über die Stadt
-            float down = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((k - stayHigh) / (1f - stayHigh)));
 
-            float u = Mathf.Lerp(uFrom, uTo, along);
-            Vector3 anchor = Lane.Point(u) + Vector3.Lerp(fromShift, toShift, along);
-            Quaternion frame = Lane.Frame(u);
-            Vector3 offset = Vector3.Lerp(startOffset, follow.Offset, down);
-            float lookHeight = Mathf.Lerp(startLookHeight, follow.LookHeight, down);
+            float swoop = Mathf.Clamp01((elapsed - overviewDuration) / swoopDuration);
+            if (hud != null && swoop > 0f && !titleShown)
+            {
+                titleShown = true;
+                hud.ShowIntroTitle(deliveryAddress, titleFadeDuration);
+            }
+            // SmootherStep (Ken Perlin): wie SmoothStep, aber noch weicher an beiden Enden. Losfliegen und Ankommen ohne Ruck
+            float k = swoop * swoop * swoop * (swoop * (swoop * 6f - 15f) + 10f);
 
-            transform.position = anchor + frame * offset;
-            transform.rotation = frame * Quaternion.LookRotation(Vector3.up * lookHeight - offset);
+            transform.position = Bezier(start, high, approach, end, k);
+            // Immer den Kunden im Blick, am Anfang etwas darüber (flacherer Blick über die Stadt)
+            Vector3 lookPoint = focus + Vector3.up * (overviewLookAbove * (1f - k));
+            transform.rotation = Quaternion.LookRotation(lookPoint - transform.position);
+
+            elapsed += Time.deltaTime;
             yield return null;
         }
 
-        follow.enabled = true;
-        follow.SnapToTarget();
+        // Übersprungen, während die Iris noch aufging: das Öffnen anhalten, sonst kämpfen beide um den Radius
+        if (opening != null)
+        {
+            StopCoroutine(opening);
+        }
+
+        if (hud != null)
+        {
+            hud.HideIntroTitle(irisCloseDuration);
+        }
+        if (iris != null)
+        {
+            yield return iris.Close(view, focus, irisCloseDuration);
+        }
+        // Im Dunkeln wieder rein, damit er herauskommt, wenn der Bote wirklich ankommt
+        if (customer != null)
+        {
+            customer.EndIntro();
+        }
+        yield return new WaitForSeconds(blackDuration);
+    }
+
+    private static Vector3 Bezier(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+    {
+        float u = 1f - t;
+        return u * u * u * p0 + 3f * u * u * t * p1 + 3f * u * t * t * p2 + t * t * t * p3;
     }
 
     private static bool SkipPressed()

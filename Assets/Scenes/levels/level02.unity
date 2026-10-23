@@ -1727,10 +1727,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1bd3c2c80c3d442c1a391323adc2f042, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IntroFlyover
-  duration: 5
-  startOffset: {x: 0, y: 40, z: -60}
-  startLookHeight: 25
-  stayHigh: 0.35
+  overviewOffset: {x: -30, y: 90, z: -110}
+  overviewLookAbove: 20
+  overviewDuration: 1
+  closeOffset: {x: -2.5, y: 0.8, z: -6.5}
+  swoopDuration: 3
+  approachLength: 30
+  holdDuration: 0.6
+  deliveryAddress: No. 7, Piazza Pisa
+  titleFadeDuration: 0.4
+  irisOpenDuration: 0.5
+  irisCloseDuration: 0.5
+  blackDuration: 0.5
+  restartBlackDuration: 0.2
+  hudFadeDuration: 0.4
   skipDelay: 0.3
 --- !u!1001 &842343515
 PrefabInstance:
@@ -4571,7 +4581,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1123710795281210768, guid: 225395a68050f4eff9f8c86f452165c9, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -228
+      value: -227.86725
       objectReference: {fileID: 0}
     - target: {fileID: 1123710795281210768, guid: 225395a68050f4eff9f8c86f452165c9, type: 3}
       propertyPath: m_LocalPosition.y
@@ -5759,7 +5769,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1510100525748948031, guid: 6df5999b66ef04e57b2c1f84157d2ac8, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -7.5
+      value: -8
       objectReference: {fileID: 0}
     - target: {fileID: 1510100525748948031, guid: 6df5999b66ef04e57b2c1f84157d2ac8, type: 3}
       propertyPath: m_LocalPosition.y
@@ -5767,7 +5777,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1510100525748948031, guid: 6df5999b66ef04e57b2c1f84157d2ac8, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: -0.00000023841858
       objectReference: {fileID: 0}
     - target: {fileID: 1510100525748948031, guid: 6df5999b66ef04e57b2c1f84157d2ac8, type: 3}
       propertyPath: m_LocalRotation.w
