@@ -30,11 +30,13 @@ public static partial class CityBuilder
         Material wetSand = Mat("Wet Sand", new Color(0.72f, 0.64f, 0.46f), 0.3f);
         Material quay = Mat("Port Concrete", new Color(0.62f, 0.62f, 0.6f));
 
-        // Ein großes Meer unter allem, das Land liegt als Platten darauf
-        Slab("Sea", parent, W - Far, -Far, E + Far, N + Far, SeaLevel - 6f, SeaLevel, sea);
-        Slab("Land", parent, W - 22f, -12f, E + Far, N + Far, -4f, 0.2f, Grass);
+        // Ein großes Meer unter allem, das Land liegt als Platten darauf.
+        // Meer, Land und Strand liegen auch unter der Stadt: CityGround, damit Baugruben eines Levels auch hier ausgeschnitten
+        // werden (sonst sähe man in der Grube Wasser, Wiese oder Sand)
+        Slab("Sea", parent, W - Far, -Far, E + Far, N + Far, SeaLevel - 6f, SeaLevel, sea).gameObject.AddComponent<CityGround>();
+        Slab("Land", parent, W - 22f, -12f, E + Far, N + Far, -4f, 0.2f, Grass).gameObject.AddComponent<CityGround>();
         // Strand vor der Margherita Avenue, vorne eine Stufe aus nassem Sand ins Wasser
-        Slab("Beach", parent, W - 22f, -30f, E + Far, -12f, -4f, 0.15f, sand);
+        Slab("Beach", parent, W - 22f, -30f, E + Far, -12f, -4f, 0.15f, sand).gameObject.AddComponent<CityGround>();
         Slab("Shore", parent, W - 22f, -42f, E + Far, -30f, -4f, SeaLevel + 0.2f, wetSand);
         // Kaimauer an der Westseite (Marinara Promenade)
         Slab("Quay", parent, W - 22f, -42f, W - 12f, N + 12f, -4f, 0.4f, quay);
