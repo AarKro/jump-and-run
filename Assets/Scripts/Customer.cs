@@ -18,8 +18,11 @@ public class Customer : MonoBehaviour
     [Tooltip("Arm auf der -X-Seite (zum ankommenden Spieler hin), Drehpunkt an der Schulter")]
     [SerializeField] private Transform leftArm;
     [SerializeField] private Transform rightArm;
-    [Tooltip("Hier landet der Pizzakarton")]
-    [SerializeField] private Transform handsPoint;
+    [Tooltip("Länge eines Arms vom Schulter-Drehpunkt bis zur Hand (Arm-Kapsel ist 0.56 lang)")]
+    [SerializeField] private float armLength = 0.56f;
+    [Tooltip("Der Karton sitzt so weit vor den Händen (Richtung Kamera), damit er beim Hochheben nicht im Kopf steckt")]
+    [SerializeField] private float holdForward = 0.18f;
+    [SerializeField] private float holdAbove = 0.06f;
 
     [Header("Haus")]
     [Tooltip("Haustür, aus der der Kunde herauskommt. Leer = steht von Anfang an draußen")]
@@ -53,6 +56,8 @@ public class Customer : MonoBehaviour
     private int coins;
     private float danceTime;
     private Transform player;
+    // Der gehaltene Karton: Seine Position wird jeden Frame zwischen die Hände gesetzt
+    private Transform heldCarton;
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
     private void Awake()
@@ -200,9 +205,8 @@ public class Customer : MonoBehaviour
     {
         state = State.Receiving;
         rig.localRotation = Quaternion.identity;
-        // Arme leicht nach innen, wie zum Entgegennehmen
-        leftArm.localRotation = Quaternion.Euler(0f, 0f, 25f);
-        rightArm.localRotation = Quaternion.Euler(0f, 0f, -25f);
+        // Beide Arme nach vorne strecken, wie zum Entgegennehmen
+        SetHoldPose(70f);
 
         PizzaCarton carton = FindAnyObjectByType<PizzaCarton>();
         if (carton != null)
@@ -216,15 +220,15 @@ public class Customer : MonoBehaviour
             {
                 float k = t / handoffDuration;
                 // Bogen: geradlinig von A nach B plus eine Parabel nach oben (0 an den Enden, Maximum in der Mitte)
-                Vector3 position = Vector3.Lerp(from, handsPoint.position, k);
+                Vector3 position = Vector3.Lerp(from, HoldPoint(), k);
                 position.y += 4f * handoffArcHeight * k * (1f - k);
                 cartonTransform.position = position;
                 yield return null;
             }
 
-            // Umhängen: Ab jetzt ist der Karton Teil des Kunden und tanzt mit
-            cartonTransform.SetParent(handsPoint, false);
-            cartonTransform.localPosition = Vector3.zero;
+            // Ab jetzt gehört der Karton dem Kunden, LateUpdate hält ihn zwischen den Händen
+            cartonTransform.SetParent(rig, true);
+            heldCarton = cartonTransform;
         }
 
         state = State.Dancing;
@@ -238,26 +242,52 @@ public class Customer : MonoBehaviour
         switch (coins)
         {
             case 3:
-                // Wild: hoch hüpfen, im Kreis drehen, Arme über dem Kopf
+                // Wild: hoch hüpfen, im Kreis drehen, die Pizza wie einen Pokal vor dem Gesicht hochstemmen
                 rig.localPosition = Vector3.up * (hopHeightThreeCoins * Mathf.Abs(Mathf.Sin(t)));
                 rig.localRotation = Quaternion.Euler(0f, danceTime * spinSpeed, 0f);
-                leftArm.localRotation = Quaternion.Euler(0f, 0f, -160f + Mathf.Sin(t * 2f) * 20f);
-                rightArm.localRotation = Quaternion.Euler(0f, 0f, 160f - Mathf.Sin(t * 2f) * 20f);
+                SetHoldPose(125f + Mathf.Sin(t * 2f) * 15f);
                 break;
             case 2:
-                // Fröhlich wippen, Arme abwechselnd hoch
+                // Fröhlich wippen, die Pizza im Takt auf und ab
                 rig.localPosition = Vector3.up * (hopHeightTwoCoins * Mathf.Abs(Mathf.Sin(t)));
                 rig.localRotation = Quaternion.identity;
-                leftArm.localRotation = Quaternion.Euler(0f, 0f, -110f + Mathf.Sin(t) * 40f);
-                rightArm.localRotation = Quaternion.Euler(0f, 0f, 110f + Mathf.Sin(t) * 40f);
+                SetHoldPose(75f + Mathf.Sin(t) * 25f);
                 break;
             default:
-                // Kurz hin und her wiegen, Arme nur ein bisschen
+                // Kurz hin und her wiegen, die Pizza ruhig vor dem Bauch
                 rig.localPosition = Vector3.zero;
                 rig.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * 0.6f) * 8f);
-                leftArm.localRotation = Quaternion.Euler(0f, 0f, -20f + Mathf.Sin(t * 0.6f) * 10f);
-                rightArm.localRotation = Quaternion.Euler(0f, 0f, 20f + Mathf.Sin(t * 0.6f) * 10f);
+                SetHoldPose(70f + Mathf.Sin(t * 0.6f) * 5f);
                 break;
         }
+    }
+
+    // Beide Arme gleich weit nach vorne/oben (Drehung um X: 0 = hängt, 90 = waagerecht nach vorne, 180 = senkrecht hoch)
+    // und leicht nach innen (um Z), damit die Hände unter dem Karton zusammenkommen
+    private void SetHoldPose(float lift, float inward = 20f)
+    {
+        leftArm.localRotation = Quaternion.Euler(lift, 0f, inward);
+        rightArm.localRotation = Quaternion.Euler(lift, 0f, -inward);
+    }
+
+    // Mitte zwischen den beiden Handspitzen, ein Stück darüber und davor.
+    // TransformPoint rechnet "Armlänge nach unten im Arm-Raum" in Weltkoordinaten um, egal wie der Arm gerade steht
+    private Vector3 HoldPoint()
+    {
+        Vector3 leftHand = leftArm.TransformPoint(Vector3.down * armLength);
+        Vector3 rightHand = rightArm.TransformPoint(Vector3.down * armLength);
+        // Der Kunde schaut zur Kamera (-Z), "vorne" ist also Vector3.back im Rig-Raum
+        return (leftHand + rightHand) * 0.5f + rig.up * holdAbove + rig.TransformDirection(Vector3.back) * holdForward;
+    }
+
+    // LateUpdate: nach Update, also nachdem die Arme für diesen Frame gestellt wurden
+    private void LateUpdate()
+    {
+        if (heldCarton == null)
+        {
+            return;
+        }
+        heldCarton.position = HoldPoint();
+        heldCarton.rotation = rig.rotation;
     }
 }

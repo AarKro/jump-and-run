@@ -73,15 +73,12 @@ public static class CustomerSetup
         Transform rightArm = CreatePivot("Arm Pivot R", rig, new Vector3(0.33f, 0.95f, 0f));
         Renderer rightArmMesh = CreatePart("Arm", PrimitiveType.Capsule, rightArm, new Vector3(0f, -0.28f, 0f), new Vector3(0.14f, 0.28f, 0.14f), material);
 
-        // Vor dem Bauch, zur Kamera hin (Kamera schaut entlang +Z, also liegt "vorne" bei -Z)
-        Transform hands = CreatePivot("Hands Point", rig, new Vector3(0f, 0.7f, -0.4f));
 
         var customer = customerObject.AddComponent<Customer>();
         var serialized = new SerializedObject(customer);
         serialized.FindProperty("rig").objectReferenceValue = rig;
         serialized.FindProperty("leftArm").objectReferenceValue = leftArm;
         serialized.FindProperty("rightArm").objectReferenceValue = rightArm;
-        serialized.FindProperty("handsPoint").objectReferenceValue = hands;
         serialized.FindProperty("homeDoor").objectReferenceValue = homeDoor;
         SetRenderers(serialized.FindProperty("shirtRenderers"), body);
         SetRenderers(serialized.FindProperty("skinRenderers"), head, leftArmMesh, rightArmMesh);
