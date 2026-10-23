@@ -167,6 +167,16 @@ public static class Level2Builder
         LevelBuildKit.Dog(Mathf.Round(PiazzaU(-205f)), 1f, gameplayParent);
         LevelBuildKit.Place("Bench", Mathf.Round(PiazzaU(-215f)), 0, gameplayParent);
 
+        // Vor dem Turm: Kamera weiter weg (35 m), höher und mit Blick nach oben, damit der ganze Turm ins Bild passt.
+        // Dort ist die Piazza zur Margherita Avenue hin offen, die Kamera steht also nicht in einem Haus.
+        // Voll ab x -190 (Piazza-Rand), davor über die Basil Street weich überblenden
+        var zone = new SerializedObject(new GameObject("Tower Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
+        zone.FindProperty("fromU").floatValue = PiazzaU(PiazzaStartX);
+        zone.FindProperty("toU").floatValue = PiazzaU(-190f);
+        zone.FindProperty("blend").floatValue = 10f;
+        zone.ApplyModifiedPropertiesWithoutUndo();
+        ((CameraZone)zone.targetObject).transform.SetParent(gameplayParent, false);
+
         // Möwen über dem Strand-Stück, zeitversetzt
         Seagull(-100, 2f);
         Seagull(-140, 4.5f);

@@ -19,6 +19,22 @@ public class ThirdPersonCamera : MonoBehaviour
     public Vector3 Offset => offset;
     public float LookHeight => lookHeight;
 
+    // Abstand und Blickhöhe an der Stelle u, mit allen Kamera-Zonen eingerechnet (z.B. weiter weg vor dem Leaning Tower)
+    private void ViewAt(float u, out Vector3 viewOffset, out float viewLookHeight)
+    {
+        viewOffset = offset;
+        viewLookHeight = lookHeight;
+        foreach (CameraZone zone in CameraZone.Active)
+        {
+            float weight = zone.Weight(u);
+            if (weight > 0f)
+            {
+                viewOffset = Vector3.Lerp(viewOffset, zone.Offset, weight);
+                viewLookHeight = Mathf.Lerp(viewLookHeight, zone.LookHeight, weight);
+            }
+        }
+    }
+
     private void Start()
     {
         // Beim Start direkt an die Zielposition springen, statt vom Szenen-Ursprung heranzufahren
@@ -32,9 +48,11 @@ public class ThirdPersonCamera : MonoBehaviour
         {
             return;
         }
-        Quaternion frame = Lane.Frame(Lane.Project(target.position));
-        transform.position = target.position + frame * offset;
-        transform.rotation = frame * FixedRotation();
+        float u = Lane.Project(target.position);
+        ViewAt(u, out Vector3 viewOffset, out float viewLookHeight);
+        Quaternion frame = Lane.Frame(u);
+        transform.position = target.position + frame * viewOffset;
+        transform.rotation = frame * FixedRotation(viewOffset, viewLookHeight);
         velocity = Vector3.zero;
     }
 
@@ -47,8 +65,10 @@ public class ThirdPersonCamera : MonoBehaviour
 
         // Offset im Lane-Rahmen: Auf der Geraden ist das genau der alte Welt-Offset, in einer Kurve dreht er mit,
         // so bleibt die Seitenansicht erhalten und die Kamera schwenkt außen um die Ecke
-        Quaternion frame = Lane.Frame(Lane.Project(target.position));
-        Vector3 desiredPosition = target.position + frame * offset;
+        float u = Lane.Project(target.position);
+        ViewAt(u, out Vector3 viewOffset, out float viewLookHeight);
+        Quaternion frame = Lane.Frame(u);
+        Vector3 desiredPosition = target.position + frame * viewOffset;
         Vector3 position = transform.position;
 
         // Horizontal eng folgen, vertikal weicher, damit Sprünge das Bild nicht durchschütteln
@@ -59,13 +79,13 @@ public class ThirdPersonCamera : MonoBehaviour
 
         // Fester Blickwinkel (im Lane-Rahmen) statt LookAt auf den Player: verhindert Wackeln der Rotation.
         // Exponentielles Nachziehen: Anteil 1 - e^(-k*dt) ist unabhängig von der Framerate gleich schnell
-        Quaternion desiredRotation = frame * FixedRotation();
+        Quaternion desiredRotation = frame * FixedRotation(viewOffset, viewLookHeight);
         transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Exp(-rotationSharpness * Time.deltaTime));
     }
 
-    private Quaternion FixedRotation()
+    private static Quaternion FixedRotation(Vector3 viewOffset, float viewLookHeight)
     {
         // Blickrichtung von der Wunschposition auf den Punkt über dem Player
-        return Quaternion.LookRotation(Vector3.up * lookHeight - offset);
+        return Quaternion.LookRotation(Vector3.up * viewLookHeight - viewOffset);
     }
 }
