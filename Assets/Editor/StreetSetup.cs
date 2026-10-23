@@ -37,9 +37,10 @@ public static class StreetSetup
     // die Plattformmitten liegen auf ganzen Metern, ihre Oberkanten 0.5 darüber
     private const float SurfaceHeight = 0.5f;
     private const float RoadHeight = 0.3f;
-    // Hier tauchen die Autos auf. 60 m weiter hinten als früher (40): Das sind bei 12 m/s genau 2 Takte à 2.5 s,
+    // Hier tauchen die Autos auf: am Ende der Anchovy Alley (Calzone Road), seit die Stadt ohne dichten Nebel sichtbar ist.
+    // 270 m weiter hinten als ursprünglich (40): Das sind bei 12 m/s genau 9 Takte à 2.5 s,
     // am Zebrastreifen kommen sie also im selben Rhythmus an wie vorher
-    private const float CarSpawnZ = 100f;
+    private const float CarSpawnZ = 310f;
 
     [MenuItem("Tools/Jump and Run/Build Street Crossing Prefab")]
     public static void BuildStreet()

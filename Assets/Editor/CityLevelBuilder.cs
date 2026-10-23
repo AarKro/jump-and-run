@@ -3,9 +3,12 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-// Baut Level 1 als Stadt komplett neu auf (aus den Prefabs von CityPropsSetup).
+// Baut Level 1 komplett neu auf (aus den Prefabs von CityPropsSetup). Häuser, Pizzeria, Café und Kiosk stehen in der
+// gemeinsamen Stadt-Szene (CityBuilder), die das Level über "City Link" (LevelCity) dazulädt. Das Level bringt nur seine
+// Laufbahn, eigenen Boden (Gehwege mit Baugruben, Eckplatz, Querstraße), Spiel-Elemente und Deko mit und schneidet
+// die Stadt dort mit CityCutouts aus.
 // Menü: Tools > Jump and Run > City > Rebuild Level 1 (City).
-// ACHTUNG: Löscht alles im Level außer Kamera, Licht, Player, GameManager, HUD, KillZone, Goal und StartPoint.
+// ACHTUNG: Löscht alles im Level außer Kamera, Player, GameManager, HUD, KillZone, Goal und StartPoint.
 // Danach ist es ein normales, von Hand bearbeitbares Level. Erneut ausführen überschreibt Handänderungen.
 //
 // Alle Positionen sind Lauf-Koordinaten u entlang der LanePath (auf dem ersten Stück ist u = Welt-X).
@@ -23,9 +26,10 @@ public static class CityLevelBuilder
     private const string ScenePath = "Assets/Scenes/levels/level01.unity";
     private const float KeepWarmTime = 75f;
 
+    // Kein "Directional Light": Die Sonne kommt aus der Stadt-Szene (sonst wäre alles doppelt beleuchtet)
     private static readonly HashSet<string> Keep = new HashSet<string>
     {
-        "Main Camera", "Directional Light", "Player", "GameManager", "HUD", "KillZone", "Goal", "StartPoint"
+        "Main Camera", "Player", "GameManager", "HUD", "KillZone", "Goal", "StartPoint"
     };
 
     private static Transform groundParent, buildingParent, propParent, gameplayParent;
@@ -70,11 +74,13 @@ public static class CityLevelBuilder
         gameplayParent = new GameObject("City Gameplay").transform;
 
         BuildGround();
-        GameObject pizzeria = BuildBuildings();
+        BuildClouds();
         BuildGameplay();
         BuildProps();
-        SetupEssentials(pizzeria);
-        SetupAtmosphere();
+        SetupCityLink();
+        SetupEssentials();
+        // Gleicher Himmel und Nebel wie die Stadt, dann ist egal, welche der beiden Szenen gerade aktiv ist
+        CityBuilder.ApplyAtmosphere();
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
@@ -157,140 +163,16 @@ public static class CityLevelBuilder
         Stretched("Sidewalk", centerU, 0, length, groundParent);
     }
 
-    // ---------- Gebäude ----------
+    // ---------- Wolken ----------
 
-    private static readonly string[] BuildingOrder = { "Building Brick", "Building Beige", "Building Gray", "Building Teal", "Building Yellow", "Building Pink" };
-
-    private static GameObject BuildBuildings()
+    // Häuser, Pizzeria, Café und Kiosk kommen jetzt aus der Stadt-Szene (CityBuilder). Hier nur noch die Wolken
+    private static void BuildClouds()
     {
-        GameObject pizzeria = Place("Pizzeria", -8, 0, buildingParent);       // -13 .. -3
-        Place("Coffee Shop", 61, 0, buildingParent);                          // 57 .. 65, seine rechte Seitenwand ist die Hausecke
-        Place("Kiosk", 80, 0, buildingParent);                                // 77 .. 83, Mikrowelle vor der langen Grube
-
-        // Häuserzeile vor der Kurve (bis zum Café). Pizzeria, Querstraße (Autos fahren dort von hinten durch), Café frei
-        float streetFrom = StreetU - StreetSetup.OuterHalfWidth;
-        float streetTo = StreetU + StreetSetup.OuterHalfWidth;
-        int next = FillBuildingRow(-27f, 57f, new List<(float, float)> { (-13, -3), (streetFrom, streetTo) }, 0);
-        // Häuserzeile nach der Kurve. Sie beginnt erst, wo sie hinter dem Café (das 8 m tief ist) herauskommt,
-        // also bei Z = 11: u = Kurvenende + 7. Kiosk und Kundenhaus (Teil des Goal-Prefabs) frei.
-        // Ihre Rückseiten säumen die rechte Seite der Querstraße, deshalb reicht sie so weit nach hinten wie die Querstraße
-        float rowStart = CornerU + CornerLength + 7f;
-        next = FillBuildingRow(rowStart, 170f, new List<(float, float)> { (77, 83), (142, 150) }, next);
-        BuildSideStreet(next);
-
-        // Skyline-Gruppen sind je 42 m breit. Vor der Kurve nur links der Querstraße (bis u = 43),
-        // nach der Kurve erst weit hinten, damit sie sich nicht mit der ersten Skyline überschneiden
-        foreach (int u in new[] { -20, 22, 135, 172 })
-        {
-            Place("Skyline", u, 0, buildingParent);
-        }
         (int u, int y)[] clouds = { (-10, 28), (25, 33), (55, 26), (100, 34), (130, 29), (165, 31) };
         foreach (var cloud in clouds)
         {
             Place("Cloud", cloud.u, cloud.y, buildingParent);
         }
-        return pizzeria;
-    }
-
-    private static int FillBuildingRow(float from, float to, List<(float from, float to)> reserved, int next)
-    {
-        var widths = new Dictionary<string, float>();
-        foreach (var type in CityPropsSetup.BuildingTypes)
-        {
-            widths[type.name] = type.width;
-        }
-
-        float cursor = from;
-        while (cursor < to)
-        {
-            string name = BuildingOrder[next % BuildingOrder.Length];
-            float width = widths[name];
-            float start = cursor;
-            float end = cursor + width;
-            if (end > to)
-            {
-                break;
-            }
-
-            int blocked = reserved.FindIndex(zone => start < zone.to && end > zone.from);
-            if (blocked >= 0)
-            {
-                // Passt nicht davor: hinter dem reservierten Bereich weitermachen (die Lücke wird eine Gasse)
-                cursor = reserved[blocked].to;
-                continue;
-            }
-
-            Place(name, Mathf.RoundToInt(start + width / 2f), 0, buildingParent);
-            cursor = end;
-            next++;
-        }
-        return next;
-    }
-
-    // Häuser und Boden entlang der Querstraße (in deren Rahmen: lokal +X = Laufrichtung, +Z = nach hinten die Straße entlang).
-    // Links eine eigene Häuserzeile mit Fassaden zur Straße, hinter dem Eckhaus der Hauptzeile beginnend. Rechts stehen
-    // schon die Rückseiten der Zeile nach der Kurve (Café, Kiosk, ...), dort nur den Streifen bis zu deren Rückwand pflastern.
-    // Die Häuser werden ausgepackt (keine Prefab-Instanzen): Sonst würde der PrefabGridEnforcer jede Prefab-Wurzel
-    // wieder in den Lane-Rahmen zurückdrehen, und sie sollen ja um 90° gedreht zur Querstraße schauen
-    private static void BuildSideStreet(int next)
-    {
-        const float houseDepth = 8f;
-        float halfGap = StreetSetup.OuterHalfWidth;
-        Vector3 origin = lane.PointAt(StreetU);
-        Quaternion frame = Frame(StreetU);
-        Vector3 ToWorld(Vector3 local) => origin + frame * local;
-
-        var widths = new Dictionary<string, float>();
-        foreach (var type in CityPropsSetup.BuildingTypes)
-        {
-            widths[type.name] = type.width;
-        }
-
-        Transform row = new GameObject("Side Street Houses").transform;
-        row.SetParent(buildingParent, false);
-        // -90° um Y: Die Hausfront (im Prefab lokal -Z) zeigt dann nach +X, also zur Straße. Die Fassade (Prefab-Z = 3)
-        // landet bei x = Wurzel - 3, also muss die Wurzel 3 m innerhalb der Lücke stehen, damit die Fassade genau an der Kante ist
-        Quaternion facing = frame * Quaternion.Euler(0f, -90f, 0f);
-        float cursor = CityPropsSetup.FacadeZ + houseDepth;
-        while (true)
-        {
-            string name = BuildingOrder[next % BuildingOrder.Length];
-            float width = widths[name];
-            if (cursor + width > StreetSetup.RoadEndZ)
-            {
-                break;
-            }
-
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{CityPropsSetup.PrefabFolder}/{name}.prefab");
-            var house = (GameObject)PrefabUtility.InstantiatePrefab(prefab, row.gameObject.scene);
-            PrefabUtility.UnpackPrefabInstance(house, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
-            house.transform.SetParent(row, false);
-            house.transform.SetPositionAndRotation(ToWorld(new Vector3(-halfGap + CityPropsSetup.FacadeZ, 0f, cursor + width / 2f)), facing);
-            cursor += width;
-            next++;
-        }
-
-        // Boden neben den Gehwegen der Querstraße: links die Ecke zwischen Eckhaus und Straße (bis hinter das Eckhaus),
-        // rechts der Streifen bis zu den Rückwänden der Zeile nach der Kurve. Was in Hauswände ragt, sieht man nicht
-        const string materials = "Assets/Materials/City";
-        Material concrete = AssetDatabase.LoadAssetAtPath<Material>($"{materials}/Sidewalk.mat");
-        Material foundation = AssetDatabase.LoadAssetAtPath<Material>($"{materials}/Foundation.mat");
-        Transform ground = new GameObject("Side Street Ground").transform;
-        ground.SetParent(groundParent, false);
-        ground.SetPositionAndRotation(origin, frame);
-
-        void Paving(string name, float x0, float x1, float z0, float z1)
-        {
-            var center = new Vector3((x0 + x1) / 2f, 0f, (z0 + z1) / 2f);
-            var size = new Vector3(x1 - x0, 1f, z1 - z0);
-            PrimitiveKit.Box(name, ground, center, size, concrete);
-            PrimitiveKit.Box(name + " Foundation", ground, center + Vector3.down * 3.25f, new Vector3(size.x, 5.5f, size.z), foundation);
-        }
-        float rowFront = CityPropsSetup.FacadeZ;
-        Paving("Corner Left", -halfGap - 5f, -halfGap, rowFront, rowFront + houseDepth);
-        // Rechts: Die Rückwände der Zeile nach der Kurve stehen bei Welt-X = Kurvenende - Fassade - Haustiefe
-        float backWallX = (CornerU + CornerRadius) - (CityPropsSetup.FacadeZ + houseDepth) - StreetU;
-        Paving("Strip Right", halfGap, backWallX, rowFront, StreetSetup.RoadEndZ);
     }
 
     // ---------- Spiel-Elemente ----------
@@ -380,27 +262,60 @@ public static class CityLevelBuilder
         }
     }
 
+    // ---------- Verbindung zur Stadt ----------
+
+    // LevelCity lädt die Stadt dazu und richtet Pizzeria (Start), Café (Checkpoint) und Kiosk (Mikrowelle) ein.
+    // Die CityCutouts schneiden die Stadt dort aus, wo Level 1 eigenen Boden hat (Gehwege mit Baugruben, Eckplatz,
+    // Querstraße mit Zebrastreifen) und wo sein Kundenhaus (Teil des Goal-Prefabs) steht
+    private static void SetupCityLink()
+    {
+        Transform link = new GameObject("City Link").transform;
+        link.gameObject.AddComponent<LevelCity>();
+
+        // Rechteck in Welt-X/Z (von, bis)
+        void Cutout(string name, float x0, float x1, float z0, float z1)
+        {
+            Transform cutout = new GameObject("Cutout " + name).transform;
+            cutout.SetParent(link, false);
+            cutout.position = new Vector3((x0 + x1) / 2f, 0f, (z0 + z1) / 2f);
+            cutout.localScale = new Vector3(x1 - x0, 1f, z1 - z0);
+            cutout.gameObject.AddComponent<CityCutout>();
+        }
+        // Gehweg + Straße davor (Sidewalk-Prefab reicht von Z -14 bis 3) ab dem ersten Gehwegstück bei u = -18
+        Cutout("Main Street", -18f, 66f, -14f, 3f);
+        // Nach der Kurve bis zum Ende des letzten Gehwegstücks (u = 154 → z 87.7), Straße bis 14 m davor
+        Cutout("After Bend", 64f, 82f, -14f, 88f);
+        // Querstraße (Street Crossing): eigene Fahrbahn und Gehwege bis z 104
+        Cutout("Cross Street", 45f, 55f, -14f, 104f);
+        Rect customer = CityLayout.CustomerHouseLot;
+        Cutout("Customer House", customer.xMin, customer.xMax + 1f, customer.yMin - 0.2f, customer.yMax + 0.2f);
+    }
+
     // ---------- Grundausstattung ----------
 
-    private static void SetupEssentials(GameObject pizzeria)
+    private static void SetupEssentials()
     {
-        SpawnDoor door = pizzeria.GetComponent<SpawnDoor>();
+        // Die Pizzeria steht in der Stadt: Ihre Tür-Position aus dem Prefab plus ihrem Platz in der Stadt berechnen
+        var landmark = System.Array.Find(CityLayout.Landmarks, entry => entry.prefab == "Pizzeria");
+        var pizzeriaPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{CityPropsSetup.PrefabFolder}/Pizzeria.prefab");
+        Vector3 doorOutside = landmark.position + Quaternion.Euler(0f, landmark.yaw, 0f) * pizzeriaPrefab.GetComponent<SpawnDoor>().OutsidePosition;
 
         GameObject startPoint = GameObject.Find("StartPoint");
         if (startPoint != null)
         {
-            startPoint.transform.position = door.OutsidePosition;
+            startPoint.transform.position = doorOutside;
         }
 
         GameObject player = GameObject.Find("Player");
         if (player != null)
         {
-            player.transform.position = door.OutsidePosition;
+            player.transform.position = doorOutside;
         }
 
+        // Die Start-Tür setzt LevelCity zur Laufzeit (liegt in der Stadt-Szene, das kann man nicht im Inspector verknüpfen)
         var gameManager = Object.FindAnyObjectByType<GameManager>();
         var serialized = new SerializedObject(gameManager);
-        serialized.FindProperty("startDoor").objectReferenceValue = door;
+        serialized.FindProperty("startDoor").objectReferenceValue = null;
         serialized.FindProperty("levelTime").floatValue = KeepWarmTime;
         serialized.ApplyModifiedPropertiesWithoutUndo();
 
@@ -425,16 +340,6 @@ public static class CityLevelBuilder
                 killRenderer.enabled = false;
             }
         }
-    }
-
-    // Leichter Dunst: Skyline und Wolken werden blasser, das gibt Tiefe
-    private static void SetupAtmosphere()
-    {
-        RenderSettings.fog = true;
-        RenderSettings.fogMode = FogMode.Linear;
-        RenderSettings.fogColor = new Color(0.74f, 0.81f, 0.9f);
-        RenderSettings.fogStartDistance = 35f;
-        RenderSettings.fogEndDistance = 130f;
     }
 
     // ---------- Hilfen ----------
