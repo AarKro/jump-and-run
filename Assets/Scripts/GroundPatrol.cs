@@ -8,8 +8,8 @@ using UnityEngine;
 public class GroundPatrol : MonoBehaviour
 {
     [Header("Laufen")]
-    [SerializeField] private float patrolSpeed = 2f;
-    [SerializeField] private float chaseSpeed = 6f;
+    [SerializeField] private float patrolSpeed = 1.7f;
+    [SerializeField] private float chaseSpeed = 5f;
     [Tooltip("Blickrichtung beim Start: 1 = rechts (+X), -1 = links")]
     [SerializeField] private float startDirection = 1f;
     [Tooltip("Näher als das läuft er beim Verfolgen nicht mehr weiter (verhindert Zittern direkt unter dem Spieler)")]

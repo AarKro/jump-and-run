@@ -14,7 +14,8 @@ public static class DogSetup
     private const string EyeMaterialPath = "Assets/Materials/Dog Eye.mat";
     private const string BubbleMaterialPath = "Assets/Materials/Speech Bubble.mat";
     private const string StarMaterialPath = "Assets/Materials/Dizzy Star.mat";
-    private const float ChargeSpeed = 6f;
+    private const float ChargeSpeed = 5f;
+    private const float PatrolSpeed = 1.7f;
     // Das Modell (Rumpf -0.4 bis Nasenspitze 0.87) wird um diesen Wert nach hinten verschoben, damit es mittig
     // um die Wurzel liegt. Sonst passt beim Umdrehen (Spiegeln um die Wurzel) die Box nicht mehr zur Optik
     private const float ModelCenterOffset = 0.23f;
@@ -115,10 +116,12 @@ public static class DogSetup
             serializedDog.FindProperty("dizzyStars").objectReferenceValue = stars;
             serializedDog.ApplyModifiedPropertiesWithoutUndo();
 
-            // Nur die Optik spiegeln, und beim Losrennen 6 m/s (Spieler läuft 7, man kann also entkommen)
+            // Nur die Optik spiegeln. Beim Losrennen 5 m/s: deutlich langsamer als der Spieler (7), sonst läuft er beim
+            // Drüberspringen unter einem durch und man landet fast immer auf seinem Kopf
             var serializedPatrol = new SerializedObject(patrol);
             serializedPatrol.FindProperty("flipTarget").objectReferenceValue = parts.body;
             serializedPatrol.FindProperty("chaseSpeed").floatValue = ChargeSpeed;
+            serializedPatrol.FindProperty("patrolSpeed").floatValue = PatrolSpeed;
             serializedPatrol.ApplyModifiedPropertiesWithoutUndo();
 
             PrefabUtility.SaveAsPrefabAsset(root, DogPrefabPath);
