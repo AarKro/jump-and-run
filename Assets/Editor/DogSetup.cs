@@ -4,7 +4,7 @@ using UnityEngine;
 
 // Macht aus dem roten Enemy-Prefab den Hund: benennt Enemy.prefab in Dog.prefab um (GUID bleibt, alle Instanzen
 // in den Levels werden automatisch zu Hunden), ersetzt die Kugel-Optik durch einen Hund aus Grundformen
-// und hängt das Dog-Skript an. Physik (SphereCollider r = 0.5, kinematischer Rigidbody) bleibt unverändert.
+// und hängt Dog + GroundPatrol an. Physik: BoxCollider in Körpergröße, kinematischer Rigidbody.
 // Menü: Tools > Jump and Run > Build Dog Prefab. Mehrfach ausführbar, vorhandene Optik wird ersetzt.
 public static class DogSetup
 {
@@ -15,6 +15,11 @@ public static class DogSetup
     private const string BubbleMaterialPath = "Assets/Materials/Speech Bubble.mat";
     private const string StarMaterialPath = "Assets/Materials/Dizzy Star.mat";
     private const float ChargeSpeed = 6f;
+    // Das Modell (Rumpf -0.4 bis Nasenspitze 0.87) wird um diesen Wert nach hinten verschoben, damit es mittig
+    // um die Wurzel liegt. Sonst passt beim Umdrehen (Spiegeln um die Wurzel) die Box nicht mehr zur Optik
+    private const float ModelCenterOffset = 0.23f;
+    private static readonly Vector3 ColliderCenter = new Vector3(0f, -0.055f, 0f);
+    private static readonly Vector3 ColliderSize = new Vector3(1.25f, 0.89f, 0.45f);
 
     [MenuItem("Tools/Jump and Run/Build Dog Prefab")]
     public static void BuildDog()
@@ -60,6 +65,33 @@ public static class DogSetup
                 Object.DestroyImmediate(oldFilter);
             }
 
+            // Kugel-Collider durch eine Box in Körpergröße ersetzen
+            if (root.TryGetComponent(out SphereCollider oldSphere))
+            {
+                Object.DestroyImmediate(oldSphere);
+            }
+            if (!root.TryGetComponent(out BoxCollider box))
+            {
+                box = root.AddComponent<BoxCollider>();
+            }
+            box.center = ColliderCenter;
+            box.size = ColliderSize;
+
+            // Alte Wegpunkt-Patrouille entfernen. Über den Namen (bzw. fehlendes Skript), damit dieses Tool
+            // auch noch kompiliert, wenn EnemyPlatformPatrol.cs gelöscht ist
+            foreach (MonoBehaviour behaviour in root.GetComponents<MonoBehaviour>())
+            {
+                if (behaviour != null && behaviour.GetType().Name == "EnemyPlatformPatrol")
+                {
+                    Object.DestroyImmediate(behaviour);
+                }
+            }
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(root);
+            if (!root.TryGetComponent(out GroundPatrol patrol))
+            {
+                patrol = root.AddComponent<GroundPatrol>();
+            }
+
             var parts = BuildBody(root.transform, dogMaterial, eyeMaterial);
             GameObject bubble = BuildWoofBubble(root.transform, bubbleMaterial);
             Transform stars = BuildDizzyStars(root.transform, starMaterial);
@@ -84,7 +116,7 @@ public static class DogSetup
             serializedDog.ApplyModifiedPropertiesWithoutUndo();
 
             // Nur die Optik spiegeln, und beim Losrennen 6 m/s (Spieler läuft 7, man kann also entkommen)
-            var serializedPatrol = new SerializedObject(root.GetComponent<EnemyPlatformPatrol>());
+            var serializedPatrol = new SerializedObject(patrol);
             serializedPatrol.FindProperty("flipTarget").objectReferenceValue = parts.body;
             serializedPatrol.FindProperty("chaseSpeed").floatValue = ChargeSpeed;
             serializedPatrol.ApplyModifiedPropertiesWithoutUndo();
@@ -111,18 +143,20 @@ public static class DogSetup
     private static BodyParts BuildBody(Transform root, Material dogMaterial, Material eyeMaterial)
     {
         Transform body = CreatePivot("Body", root, Vector3.zero);
+        // Body wird gespiegelt, Model darin nur verschoben, damit der Hund mittig um die Wurzel liegt
+        Transform model = CreatePivot("Model", body, new Vector3(-ModelCenterOffset, 0f, 0f));
 
-        Renderer torso = CreatePart("Torso", PrimitiveType.Cube, body, new Vector3(0f, -0.05f, 0f), new Vector3(0.8f, 0.4f, 0.4f), dogMaterial);
-        Renderer head = CreatePart("Head", PrimitiveType.Sphere, body, new Vector3(0.48f, 0.2f, 0f), Vector3.one * 0.38f, dogMaterial);
-        Renderer snout = CreatePart("Snout", PrimitiveType.Cube, body, new Vector3(0.68f, 0.14f, 0f), new Vector3(0.2f, 0.14f, 0.2f), dogMaterial);
-        Renderer nose = CreatePart("Nose", PrimitiveType.Sphere, body, new Vector3(0.79f, 0.17f, 0f), Vector3.one * 0.08f, eyeMaterial);
+        Renderer torso = CreatePart("Torso", PrimitiveType.Cube, model, new Vector3(0f, -0.05f, 0f), new Vector3(0.8f, 0.4f, 0.4f), dogMaterial);
+        Renderer head = CreatePart("Head", PrimitiveType.Sphere, model, new Vector3(0.48f, 0.2f, 0f), Vector3.one * 0.38f, dogMaterial);
+        Renderer snout = CreatePart("Snout", PrimitiveType.Cube, model, new Vector3(0.68f, 0.14f, 0f), new Vector3(0.2f, 0.14f, 0.2f), dogMaterial);
+        Renderer nose = CreatePart("Nose", PrimitiveType.Sphere, model, new Vector3(0.79f, 0.17f, 0f), Vector3.one * 0.08f, eyeMaterial);
         // Augen auf beiden Seiten, das vordere (-Z) sieht die Kamera
-        CreatePart("Eye Front", PrimitiveType.Sphere, body, new Vector3(0.6f, 0.27f, -0.15f), Vector3.one * 0.07f, eyeMaterial);
-        CreatePart("Eye Back", PrimitiveType.Sphere, body, new Vector3(0.6f, 0.27f, 0.15f), Vector3.one * 0.07f, eyeMaterial);
+        CreatePart("Eye Front", PrimitiveType.Sphere, model, new Vector3(0.6f, 0.27f, -0.15f), Vector3.one * 0.07f, eyeMaterial);
+        CreatePart("Eye Back", PrimitiveType.Sphere, model, new Vector3(0.6f, 0.27f, 0.15f), Vector3.one * 0.07f, eyeMaterial);
 
         // Schlappohren seitlich am Kopf
-        Renderer earFront = CreatePart("Ear Front", PrimitiveType.Cube, body, new Vector3(0.42f, 0.24f, -0.19f), new Vector3(0.12f, 0.22f, 0.04f), dogMaterial);
-        Renderer earBack = CreatePart("Ear Back", PrimitiveType.Cube, body, new Vector3(0.42f, 0.24f, 0.19f), new Vector3(0.12f, 0.22f, 0.04f), dogMaterial);
+        Renderer earFront = CreatePart("Ear Front", PrimitiveType.Cube, model, new Vector3(0.42f, 0.24f, -0.19f), new Vector3(0.12f, 0.22f, 0.04f), dogMaterial);
+        Renderer earBack = CreatePart("Ear Back", PrimitiveType.Cube, model, new Vector3(0.42f, 0.24f, 0.19f), new Vector3(0.12f, 0.22f, 0.04f), dogMaterial);
 
         // Beine mit Drehpunkt an der Hüfte, damit sie vor und zurück schwingen
         var legs = new Transform[4];
@@ -134,12 +168,12 @@ public static class DogSetup
         };
         for (int i = 0; i < 4; i++)
         {
-            legs[i] = CreatePivot("Leg Pivot " + (i + 1), body, hips[i]);
+            legs[i] = CreatePivot("Leg Pivot " + (i + 1), model, hips[i]);
             legRenderers[i] = CreatePart("Leg", PrimitiveType.Cube, legs[i], new Vector3(0f, -0.15f, 0f), new Vector3(0.1f, 0.3f, 0.1f), dogMaterial);
         }
 
         // Schwanz schräg nach oben, wedelt um Z (in der Bildebene, damit man es von vorne sieht)
-        Transform tail = CreatePivot("Tail Pivot", body, new Vector3(-0.4f, 0.05f, 0f));
+        Transform tail = CreatePivot("Tail Pivot", model, new Vector3(-0.4f, 0.05f, 0f));
         GameObject tailMesh = CreatePart("Tail", PrimitiveType.Capsule, tail, new Vector3(-0.08f, 0.1f, 0f), new Vector3(0.08f, 0.14f, 0.08f), dogMaterial).gameObject;
         tailMesh.transform.localRotation = Quaternion.Euler(0f, 0f, 40f);
 
@@ -181,7 +215,8 @@ public static class DogSetup
 
     private static Transform BuildDizzyStars(Transform root, Material material)
     {
-        Transform stars = CreatePivot("Dizzy Stars", root, new Vector3(0.45f, 0.6f, 0f));
+        // Über der Körpermitte: Die Sterne hängen am ungespiegelten Root, der Kopf wechselt beim Umdrehen die Seite
+        Transform stars = CreatePivot("Dizzy Stars", root, new Vector3(0f, 0.6f, 0f));
         for (int i = 0; i < 3; i++)
         {
             float angle = i * 120f * Mathf.Deg2Rad;

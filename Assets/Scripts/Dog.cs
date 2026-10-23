@@ -1,10 +1,10 @@
 using System.Collections;
 using UnityEngine;
 
-// Hund: ergänzt EnemyPlatformPatrol um Bellen vor dem Losrennen und reagiert auf Draufspringen
+// Hund: ergänzt GroundPatrol um Bellen vor dem Losrennen und reagiert auf Draufspringen
 // (benommen mit Sternchen, dann rennt er in den Hintergrund davon). Die Bewegung selbst macht weiterhin die Patrouille.
 // Aufgebaut von Tools > Jump and Run > Build Dog Prefab.
-[RequireComponent(typeof(EnemyPlatformPatrol))]
+[RequireComponent(typeof(GroundPatrol))]
 public class Dog : MonoBehaviour, IStompHandler
 {
     [Header("Farben")]
@@ -40,7 +40,7 @@ public class Dog : MonoBehaviour, IStompHandler
     [Tooltip("So weit läuft der Hund in den Hintergrund (+Z), bevor er verschwindet")]
     [SerializeField] private float runAwayDistance = 12f;
 
-    private EnemyPlatformPatrol patrol;
+    private GroundPatrol patrol;
     private bool wasChasing;
     private bool stomped;
     private Vector3 bodyStartPosition;
@@ -50,7 +50,7 @@ public class Dog : MonoBehaviour, IStompHandler
 
     private void Awake()
     {
-        patrol = GetComponent<EnemyPlatformPatrol>();
+        patrol = GetComponent<GroundPatrol>();
         bodyStartPosition = body.localPosition;
         bodyStartRotation = body.localRotation;
         lastX = transform.position.x;
@@ -105,7 +105,7 @@ public class Dog : MonoBehaviour, IStompHandler
             return;
         }
 
-        // Spieler ist gerade auf die Plattform gekommen: erst bellen, dann darf die Patrouille losrennen
+        // Hat den Spieler gerade entdeckt: erst bellen, dann darf die Patrouille losrennen
         bool chasing = patrol.IsChasing;
         if (chasing && !wasChasing)
         {

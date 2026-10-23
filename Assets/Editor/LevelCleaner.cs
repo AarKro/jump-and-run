@@ -77,7 +77,7 @@ public static class LevelCleaner
                     go.GetComponent<PointToPointMover>() != null ||
                     go.GetComponent<Checkpoint>() != null ||
                     go.GetComponent<PowerUp>() != null ||
-                    go.GetComponent<EnemyPlatformPatrol>() != null ||
+                    go.GetComponent<GroundPatrol>() != null ||
                     go.GetComponent<EnemyDamage>() != null;
 
                 if (isCourseObject)

@@ -13,9 +13,9 @@ public interface IStompHandler
 public class EnemyDamage : MonoBehaviour
 {
     [Header("Draufspringen")]
-    [Tooltip("Wie weit oben der Player den Gegner treffen muss. 1 = genau von oben, 0 = auch seitlich. 0.5 ≈ obere 60°")]
-    [Range(0f, 1f)]
-    [SerializeField] private float stompDirectionThreshold = 0.5f;
+    [Tooltip("Draufgesprungen = Unterkante des Spielers liegt höchstens so viel unter der Oberkante des Gegners. " +
+             "Etwas Spielraum, weil die Physik die Körper beim Aufprall leicht ineinanderschiebt")]
+    [SerializeField] private float stompHeightTolerance = 0.2f;
     [SerializeField] private float squashDuration = 0.1f;
     [Tooltip("So lange bleibt der plattgedrückte Gegner sichtbar, bevor er verschwindet")]
     [SerializeField] private float squashedLingerTime = 0.3f;
@@ -125,13 +125,21 @@ public class EnemyDamage : MonoBehaviour
         }
     }
 
-    // Von oben getroffen und der Player ist nicht gerade im Aufsteigen
+    // Von oben getroffen (Höhenvergleich der Collider-Kanten) und der Player ist nicht gerade im Aufsteigen.
+    // Der Höhenvergleich funktioniert für jede Gegnerform; ein Winkel zur Mitte wäre bei langen Gegnern (Hund) ungenau
     private bool IsStomp(PlayerController player)
     {
-        Vector3 toPlayer = (player.transform.position - transform.position).normalized;
+        Collider playerCollider = player.GetComponent<Collider>();
+        Collider enemyCollider = GetComponent<Collider>();
+        if (playerCollider == null || enemyCollider == null)
+        {
+            return false;
+        }
+
         Rigidbody playerBody = player.GetComponent<Rigidbody>();
         bool notRising = playerBody == null || playerBody.linearVelocity.y <= 1f;
-        return toPlayer.y >= stompDirectionThreshold && notRising;
+        bool fromAbove = playerCollider.bounds.min.y >= enemyCollider.bounds.max.y - stompHeightTolerance;
+        return fromAbove && notRising;
     }
 
     // Sofort harmlos machen. "keepEnabled" (der Stomp-Handler) läuft weiter, damit er seine Reaktion abspielen kann
