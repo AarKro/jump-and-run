@@ -1,0 +1,327 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+[RequireComponent(typeof(Rigidbody))]
+public class PlayerController : MonoBehaviour
+{
+    [Header("Bewegung")]
+    [SerializeField] private float moveSpeed = 7f;
+    [SerializeField] private float acceleration = 30f;
+    [Tooltip("Abbremsen beim Loslassen der Taste in m/s². Hoch = sofortiger Stopp, kaum Nachrutschen")]
+    [SerializeField] private float deceleration = 150f;
+    [Tooltip("Anteil der Maximalgeschwindigkeit, der beim Loslaufen sofort erreicht wird (0 = normal beschleunigen, 1 = sofort volle Geschwindigkeit)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float startSpeedFraction = 0.8f;
+    [SerializeField] private Transform cameraTransform;
+
+    [Header("Sprung")]
+    [Tooltip("Maximale Sprunghöhe in Metern bei gehaltener Taste")]
+    [SerializeField] private float jumpHeight = 3.2f;
+    [Tooltip("Sekunden bis zum höchsten Punkt. Kleiner = knackiger, größer = schwebender")]
+    [SerializeField] private float timeToApex = 0.4f;
+    [Tooltip("Schwerkraft-Faktor beim Fallen: schneller runter als rauf")]
+    [SerializeField] private float fallGravityMultiplier = 1.6f;
+    [Tooltip("Schwerkraft-Faktor, wenn die Taste beim Aufsteigen losgelassen wird (kurzer Hüpfer)")]
+    [SerializeField] private float jumpCutGravityMultiplier = 3f;
+    [Tooltip("Unterhalb dieser vertikalen Geschwindigkeit gilt der Player als am Scheitelpunkt")]
+    [SerializeField] private float apexThreshold = 2f;
+    [Tooltip("Schwerkraft-Faktor am Scheitelpunkt bei gehaltener Taste: kurzer Hang-Moment zum Zielen")]
+    [SerializeField] private float apexGravityMultiplier = 0.5f;
+    [SerializeField] private float maxFallSpeed = 20f;
+    [Tooltip("Nach dem Verlassen einer Kante darf noch so lange gesprungen werden")]
+    [SerializeField] private float coyoteTime = 0.1f;
+    [Tooltip("Ein zu früh gedrückter Sprung wird so lange gemerkt und bei der Landung ausgeführt")]
+    [SerializeField] private float jumpBufferTime = 0.12f;
+    [Tooltip("Abprall beim Draufspringen auf Gegner, als Anteil der Sprunggeschwindigkeit. Sprungtaste halten = hoher Abprall")]
+    [SerializeField] private float stompBounceFraction = 0.75f;
+
+    [Header("Bodenprüfung")]
+    [SerializeField] private Transform groundCheck;
+    [SerializeField] private float groundCheckRadius = 0.25f;
+    [SerializeField] private LayerMask groundLayer;
+
+    private Rigidbody body;
+    private Vector2 moveInput;
+    private bool jumpHeld;
+    private bool isGrounded;
+    private readonly Collider[] groundHits = new Collider[4];
+    private MovingPlatform currentPlatform;
+    // Horizontaler Schwung von einer beweglichen Plattform. Bleibt in der Luft erhalten,
+    // damit ein Sprung von der Plattform deren Bewegung mitnimmt
+    private Vector3 carryVelocity;
+    private float groundVerticalVelocity;
+    private float groundLockTimer;
+
+    // So lange nach einem Sprung zählt der Boden nicht, weil die Bodenprüfung direkt nach dem Absprung noch kurz anschlägt
+    private const float GroundLockAfterJump = 0.1f;
+    private float coyoteTimer;
+    private float jumpBufferTimer;
+    private float currentSpeedMultiplier = 1f;
+    private float currentJumpMultiplier = 1f;
+    private Coroutine speedBoostRoutine;
+    private Coroutine jumpBoostRoutine;
+    private PowerUpShine shine;
+
+    private void Awake()
+    {
+        body = GetComponent<Rigidbody>();
+        shine = GetComponent<PowerUpShine>();
+        GameManager.LevelReset += ResetState;
+        // Schwerkraft kommt aus FixedUpdate, damit Steigen und Fallen unterschiedlich stark sein können
+        body.useGravity = false;
+
+        // Reibungsfrei: Die Geschwindigkeit wird im Code gesetzt, Reibung würde nur dagegen bremsen
+        // (und mit der stärkeren Sprung-Schwerkraft entsprechend stärker). Verhindert auch Hängenbleiben an Wänden.
+        PhysicsMaterial noFriction = new PhysicsMaterial("PlayerNoFriction")
+        {
+            dynamicFriction = 0f,
+            staticFriction = 0f,
+            frictionCombine = PhysicsMaterialCombine.Minimum
+        };
+        GetComponent<Collider>().material = noFriction;
+    }
+
+    private void OnDestroy()
+    {
+        GameManager.LevelReset -= ResetState;
+    }
+
+    // Beim Respawn: Boosts beenden (die Power-Ups tauchen ja wieder auf) und Plattform-Schwung vergessen
+    private void ResetState()
+    {
+        if (speedBoostRoutine != null)
+        {
+            StopCoroutine(speedBoostRoutine);
+            speedBoostRoutine = null;
+        }
+        if (jumpBoostRoutine != null)
+        {
+            StopCoroutine(jumpBoostRoutine);
+            jumpBoostRoutine = null;
+        }
+        currentSpeedMultiplier = 1f;
+        currentJumpMultiplier = 1f;
+        if (shine != null)
+        {
+            shine.Clear();
+        }
+
+        carryVelocity = Vector3.zero;
+        jumpBufferTimer = 0f;
+        coyoteTimer = 0f;
+    }
+
+    // Aus Höhe und Steigzeit abgeleitet, damit man im Inspector in verständlichen Größen tunen kann
+    private float Gravity => 2f * jumpHeight / (timeToApex * timeToApex);
+    private float JumpVelocity => 2f * jumpHeight / timeToApex;
+
+    private void Update()
+    {
+        moveInput = Vector2.zero;
+        bool jumpPressed = false;
+        bool held = false;
+
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            float x = (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed ? 1f : 0f)
+                    - (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed ? 1f : 0f);
+            float y = (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed ? 1f : 0f)
+                    - (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed ? 1f : 0f);
+            moveInput = new Vector2(x, y);
+            jumpPressed = keyboard.spaceKey.wasPressedThisFrame;
+            held = keyboard.spaceKey.isPressed;
+        }
+
+        Gamepad gamepad = Gamepad.current;
+        if (gamepad != null)
+        {
+            Vector2 stick = gamepad.leftStick.ReadValue();
+            if (stick.sqrMagnitude > moveInput.sqrMagnitude)
+            {
+                moveInput = stick;
+            }
+            jumpPressed |= gamepad.buttonSouth.wasPressedThisFrame;
+            held |= gamepad.buttonSouth.isPressed;
+        }
+
+        jumpHeld = held;
+        if (jumpPressed)
+        {
+            jumpBufferTimer = jumpBufferTime;
+        }
+    }
+
+    private void FixedUpdate()
+    {
+        int hitCount = Physics.OverlapSphereNonAlloc(
+            groundCheck.position,
+            groundCheckRadius,
+            groundHits,
+            groundLayer,
+            QueryTriggerInteraction.Ignore
+        );
+        isGrounded = hitCount > 0;
+
+        currentPlatform = null;
+        for (int i = 0; i < hitCount && currentPlatform == null; i++)
+        {
+            currentPlatform = groundHits[i].GetComponentInParent<MovingPlatform>();
+        }
+        Vector3 platformVelocity = currentPlatform != null ? currentPlatform.Velocity : Vector3.zero;
+
+        Vector3 forward = cameraTransform != null ? cameraTransform.forward : Vector3.forward;
+        Vector3 right = cameraTransform != null ? cameraTransform.right : Vector3.right;
+
+        forward.y = 0f;
+        right.y = 0f;
+        forward.Normalize();
+        right.Normalize();
+
+        Vector3 desiredDirection = (forward * moveInput.y + right * moveInput.x).normalized;
+        Vector3 desiredVelocity = desiredDirection * moveSpeed * currentSpeedMultiplier;
+        // Nur die eigene Bewegung steuern, der Plattform-Anteil kommt am Ende obendrauf
+        Vector3 horizontalVelocity = new Vector3(body.linearVelocity.x, 0f, body.linearVelocity.z) - carryVelocity;
+
+        // Beim Loslaufen (oder Umdrehen) direkt auf einen Großteil der Maximalgeschwindigkeit springen
+        float startSpeed = desiredVelocity.magnitude * startSpeedFraction;
+        float speedInDirection = Vector3.Dot(horizontalVelocity, desiredDirection);
+        if (startSpeed > 0f && speedInDirection < startSpeed)
+        {
+            horizontalVelocity += desiredDirection * (startSpeed - speedInDirection);
+        }
+        // Langsamer werden (Taste losgelassen oder Boost vorbei) geht deutlich schneller als Beschleunigen
+        float rate = desiredVelocity.sqrMagnitude < horizontalVelocity.sqrMagnitude ? deceleration : acceleration;
+        Vector3 newHorizontalVelocity = Vector3.MoveTowards(
+            horizontalVelocity,
+            desiredVelocity,
+            rate * Time.fixedDeltaTime
+        );
+
+        // Am Boden übernimmt der Player die Geschwindigkeit des Untergrunds (fester Boden = 0).
+        // In der Luft bleibt der letzte Plattform-Schwung erhalten
+        if (isGrounded)
+        {
+            carryVelocity = new Vector3(platformVelocity.x, 0f, platformVelocity.z);
+        }
+        newHorizontalVelocity += carryVelocity;
+
+        body.linearVelocity = new Vector3(newHorizontalVelocity.x, body.linearVelocity.y, newHorizontalVelocity.z);
+
+        UpdateJump(platformVelocity.y);
+    }
+
+    private void UpdateJump(float platformVerticalVelocity)
+    {
+        float dt = Time.fixedDeltaTime;
+        Vector3 velocity = body.linearVelocity;
+
+        // Nur beim Stehen auffüllen, nicht direkt nach dem Absprung.
+        // Bewusst ohne Geschwindigkeitsvergleich: auf beweglichen Plattformen weicht die Geschwindigkeit
+        // des Players immer leicht von der Plattform ab, und der Sprung würde verschluckt
+        groundLockTimer -= dt;
+        if (isGrounded && groundLockTimer <= 0f)
+        {
+            coyoteTimer = coyoteTime;
+            groundVerticalVelocity = platformVerticalVelocity;
+        }
+        else
+        {
+            coyoteTimer -= dt;
+        }
+        jumpBufferTimer -= dt;
+
+        if (jumpBufferTimer > 0f && coyoteTimer > 0f)
+        {
+            // Eine aufsteigende Plattform gibt dem Sprung zusätzlichen Schwung mit
+            velocity.y = JumpVelocity * currentJumpMultiplier + Mathf.Max(groundVerticalVelocity, 0f);
+            jumpBufferTimer = 0f;
+            coyoteTimer = 0f;
+            groundLockTimer = GroundLockAfterJump;
+        }
+
+        float gravityMultiplier = 1f;
+        if (velocity.y < 0f)
+        {
+            gravityMultiplier = fallGravityMultiplier;
+        }
+        else if (velocity.y > 0f && !jumpHeld)
+        {
+            gravityMultiplier = jumpCutGravityMultiplier;
+        }
+        if (jumpHeld && Mathf.Abs(velocity.y) < apexThreshold && !isGrounded)
+        {
+            gravityMultiplier = apexGravityMultiplier;
+        }
+
+        velocity.y -= Gravity * gravityMultiplier * dt;
+        velocity.y = Mathf.Max(velocity.y, -maxFallSpeed);
+        body.linearVelocity = velocity;
+    }
+
+    // Abprallen nach dem Draufspringen auf einen Gegner. Wie beim Sprung entscheidet die gehaltene
+    // Sprungtaste über die Höhe (ohne Taste greift die Jump-Cut-Schwerkraft und es wird ein kleiner Hüpfer)
+    public void StompBounce()
+    {
+        Vector3 velocity = body.linearVelocity;
+        velocity.y = JumpVelocity * stompBounceFraction;
+        body.linearVelocity = velocity;
+
+        coyoteTimer = 0f;
+        groundLockTimer = GroundLockAfterJump;
+    }
+
+    // Ein laufender Boost wird beim erneuten Einsammeln neu gestartet, sonst würde
+    // der alte Timer den neuen Boost vorzeitig beenden
+    public void ApplySpeedBoost(float multiplier, float duration)
+    {
+        if (speedBoostRoutine != null)
+        {
+            StopCoroutine(speedBoostRoutine);
+        }
+        speedBoostRoutine = StartCoroutine(SpeedBoostRoutine(multiplier, duration));
+        if (shine != null)
+        {
+            shine.Play(PowerUp.PowerUpType.Speed, duration);
+        }
+    }
+
+    public void ApplyJumpBoost(float multiplier, float duration)
+    {
+        if (jumpBoostRoutine != null)
+        {
+            StopCoroutine(jumpBoostRoutine);
+        }
+        jumpBoostRoutine = StartCoroutine(JumpBoostRoutine(multiplier, duration));
+        if (shine != null)
+        {
+            shine.Play(PowerUp.PowerUpType.Jump, duration);
+        }
+    }
+
+    private IEnumerator SpeedBoostRoutine(float multiplier, float duration)
+    {
+        currentSpeedMultiplier = multiplier;
+        yield return new WaitForSeconds(duration);
+        currentSpeedMultiplier = 1f;
+    }
+
+    private IEnumerator JumpBoostRoutine(float multiplier, float duration)
+    {
+        currentJumpMultiplier = multiplier;
+        yield return new WaitForSeconds(duration);
+        currentJumpMultiplier = 1f;
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        if (groundCheck == null)
+        {
+            return;
+        }
+
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(groundCheck.position, groundCheckRadius);
+    }
+}
