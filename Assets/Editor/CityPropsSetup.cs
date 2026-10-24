@@ -139,9 +139,11 @@ public static class CityPropsSetup
         PrimitiveKit.Box("Top", t, new Vector3(0f, 0f, 0.5f), new Vector3(1f, 1f, 5f), concrete);
         PrimitiveKit.Box("Curb", t, new Vector3(0f, 0.38f, -1.9f), new Vector3(1f, 0.25f, 0.25f), curb);
         PrimitiveKit.Box("Foundation", t, new Vector3(0f, -3.25f, 0.5f), new Vector3(1f, 5.5f, 5f), foundation);
-        PrimitiveKit.Box("Road", t, new Vector3(0f, 0.15f, -8f), new Vector3(1f, 0.3f, 12f), asphalt);
-        PrimitiveKit.Box("Road Line", t, new Vector3(0f, 0.305f, -8f), new Vector3(1f, 0.01f, 0.15f), roadLine);
-        PrimitiveKit.Box("Road Foundation", t, new Vector3(0f, -3.1f, -8f), new Vector3(1f, 6.2f, 12f), foundation);
+        // Straße wie die Ringstraße der Stadt (CityLayout.RingOffset): Bordstein bei -2, 10 m Fahrbahn bis -12, Mittellinie
+        // bei -7. Sonst springen Fahrbahnrand und Mittellinie dort, wo Level-Boden an die Stadt-Straße stößt
+        PrimitiveKit.Box("Road", t, new Vector3(0f, 0.15f, -7f), new Vector3(1f, 0.3f, 10f), asphalt);
+        PrimitiveKit.Box("Road Line", t, new Vector3(0f, 0.305f, -7f), new Vector3(1f, 0.01f, 0.15f), roadLine);
+        PrimitiveKit.Box("Road Foundation", t, new Vector3(0f, -3.1f, -7f), new Vector3(1f, 6.2f, 10f), foundation);
         // Nur die Gehweg-Platte ist begehbar. Collider an der Wurzel, damit er mit scale.x mitwächst
         PrimitiveKit.AddBoxCollider(root, new Vector3(0f, 0f, 0.5f), new Vector3(1f, 1f, 5f));
         PrimitiveKit.SavePrefab(root, PathFor("Sidewalk"));

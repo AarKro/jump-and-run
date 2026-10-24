@@ -133,9 +133,10 @@ public static class CityLevelBuilder
         PrimitiveKit.Box("Curb Front", plaza, new Vector3(slabCenter.x, 0.38f, z0 + 0.1f), new Vector3(slabSize.x, 0.25f, 0.25f), curb);
         PrimitiveKit.Box("Curb Side", plaza, new Vector3(x1 - 0.1f, 0.38f, slabCenter.z), new Vector3(0.25f, 0.25f, slabSize.z), curb);
 
-        // Asphalt außen herum: vorne die Straße von vor der Kurve, rechts die Straße nach der Kurve
-        var roadCenter = new Vector3(CornerU + 9f, 0.15f, -4f);
-        var roadSize = new Vector3(18f, 0.3f, 20f);
+        // Asphalt außen herum: vorne die Straße von vor der Kurve, rechts die Straße nach der Kurve.
+        // Beide 10 m breit wie die Stadt-Straßen (bis z -12 bzw. x CornerU + 16)
+        var roadCenter = new Vector3(CornerU + 8f, 0.15f, -3f);
+        var roadSize = new Vector3(16f, 0.3f, 18f);
         PrimitiveKit.Box("Road", plaza, roadCenter, roadSize, asphalt);
         PrimitiveKit.Box("Road Foundation", plaza, new Vector3(roadCenter.x, -3.1f, roadCenter.z), new Vector3(roadSize.x, 6.2f, roadSize.z), foundation);
     }
@@ -242,10 +243,13 @@ public static class CityLevelBuilder
     private static void SetupCityLink()
     {
         Transform link = LevelBuildKit.CityLink("Pizzeria", "Coffee Shop");
-        // Gehweg + Straße davor (Sidewalk-Prefab reicht von Z -14 bis 3) ab dem ersten Gehwegstück bei u = -18
-        LevelBuildKit.Cutout(link, "Main Street", -18f, 66f, -14f, 3f);
-        // Nach der Kurve bis zum Ende des letzten Gehwegstücks (u = 154 → z 87.7), Straße bis 14 m davor
-        LevelBuildKit.Cutout(link, "After Bend", 64f, 82f, -14f, 88f);
+        // Gehweg + Straße davor (Sidewalk-Prefab reicht von Z -12 bis 3, wie die Ringstraße der Stadt) ab dem ersten
+        // Gehwegstück bei u = -18
+        LevelBuildKit.Cutout(link, "Main Street", -18f, 66f, -12f, 3f);
+        // Nach der Kurve bis genau zum Ende des letzten Gehwegstücks (u = 154 → z 87.72), Straße bis 12 m davor.
+        // Exakt ausgerechnet: Geht der Ausschnitt weiter als der Level-Boden, sieht man durch den Spalt die Wiese darunter
+        float lastSidewalkEndZ = CornerRadius + (154f - (CornerU + Mathf.PI / 2f * CornerRadius));
+        LevelBuildKit.Cutout(link, "After Bend", 64f, 80f, -12f, lastSidewalkEndZ);
         // Querstraße (Street Crossing): eigene Fahrbahn und Gehwege bis z 104
         LevelBuildKit.Cutout(link, "Cross Street", 45f, 55f, -14f, 104f);
         Rect customer = CityLayout.CustomerHouseLot;

@@ -29,11 +29,12 @@ public static class StreetSetup
     private const float RoadHalfWidth = LaneWidth + 0.2f;
     // Halbe Breite der ganzen Querstraße mit Gehwegen = halbe Lücke in der Häuserzeile
     public const float OuterHalfWidth = 5f;
-    // Vorne läuft sie noch ein Stück über die Hauptstraße hinaus (die endet bei Z = -14), hinten bis in den Nebel
+    // Vorne läuft sie noch ein Stück über die Hauptstraße hinaus (die endet bei Z = -12), hinten bis in den Nebel
     private const float RoadStartZ = -16f;
     public const float RoadEndZ = 104f;
-    private const float MainRoadFrontZ = -14f;
-    private const float MainRoadLineZ = -8f;
+    // Hauptstraße wie die Ringstraße der Stadt: 10 m Fahrbahn bis z -12, Mittellinie bei -7
+    private const float MainRoadFrontZ = -12f;
+    private const float MainRoadLineZ = -7f;
     // Gehweg der Laufbahn (aus dem Sidewalk-Prefab): von Z = -2 bis 3, Oberkante 0.5. Die Straße liegt 0.2 tiefer
     private const float WalkFrontZ = -2f;
     private const float WalkBackZ = 3f;
