@@ -8,7 +8,7 @@ using UnityEngine;
 //
 // Route (der Spieler läuft nach LINKS, also Richtung -u): aus der Pizzeria nach Westen die Margherita Avenue entlang,
 // über den Mozzarella Blvd, dann die Strandpromenade (die Stadt hat dort statt Fahrbahn Sand und Meer, Kamera über dem
-// Wasser), Gelateria-Checkpoint an der Ecke, rechts in die Basil Street, dann links über die Straße auf die Piazza Pisa
+// Wasser), Gelateria-Checkpoint nach dem dritten Chili, rechts in die Basil Street, dann links über die Straße auf die Piazza Pisa
 // zum Kunden am Turm.
 // Die Bahn ist in +u-Richtung definiert (Häuser links davon): Sie beginnt auf der Piazza und endet hinter der Pizzeria.
 // Auf der Margherita Avenue ist u = Welt-X (wie in Level 1).
@@ -19,24 +19,25 @@ using UnityEngine;
 //   -46..-34    Überweg Mozzarella Blvd mit Autos
 //   ab -46      Strandpromenade
 //   -60..-56    Bachmündung 1, danach Hund zwischen Container und Bank, Balkon-Kletterei mit Chili
-//  -110         Rettungsturm (Plattform 3 m hoch) mit Chili, wo früher die Oregano Street kreuzte
-//  -126..-130   federnder Sonnenschirm → Balkon mit Chili, Bachmündung 2, Gelateria-Checkpoint (Tür bei -165.5)
+//  -110         Rettungsturm (Plattform 3 m hoch), wo früher die Oregano Street kreuzte
+//  -126..-130   federnder Sonnenschirm → Balkon mit Chili (das dritte), Gelateria-Checkpoint (Tür bei -137.5)
+//  -146..-142   Bachmündung 2, danach Hund zwischen Bank und Container bis zur Ecke
 //   Ecke        rechts in die Basil Street (Ostseite, x -173), Bank, links über die Straße auf die Piazza
 //   Piazza      Hund zwischen zwei Bänken, Kunde westlich des Turms (x ≈ -228)
-// Möwen kreisen über dem ganzen Strand-Stück (u -165 bis -45).
+// Möwen über dem Strand-Stück: zwei vor dem Checkpoint (u -138 bis -45), eine danach (u -170 bis -138).
 public static class Level2Builder
 {
     private const string ScenePath = "Assets/Scenes/levels/level02.unity";
     private const float KeepWarmTime = 100f;
 
     // Bahn: Piazza (Start bei x -236, z 37, Richtung Osten) → Rechtskurve über die Basil Street → nach Süden → Linkskurve
-    // an der Gelateria-Ecke → Margherita Avenue nach Osten bis hinter die Pizzeria
+    // an der Basil-Ecke → Margherita Avenue nach Osten bis hinter die Pizzeria
     private const float PiazzaStartX = -236f;
     private const float PiazzaZ = 37f;
     private const float PiazzaStraight = 51f;          // bis x -185
     private const float CrossRadius = 12f;             // über die Basil Street, Kamera schwenkt innen über die Straße
     private const float BasilStraight = 21f;           // z 25 → 4 auf der Ostseite der Basil Street (x -173)
-    private const float CornerRadius = 4f;             // um die Gelateria-Ecke, Kamera schwenkt außen
+    private const float CornerRadius = 4f;             // um die Basil-Ecke, Kamera schwenkt außen
     private const float MainStartX = -169f;
     private const float MainEndX = 16f;
 
@@ -200,24 +201,24 @@ public static class Level2Builder
         // Zwischen Mozzarella und Oregano: Hund zwischen Container und Bank (schaut dem Spieler entgegen, also +u),
         // dann zwei Balkone als Kletterpartie mit Chili oben
         LevelBuildKit.Place("Dumpster", -66, 0, gameplayParent);
-        GameObject dog = LevelBuildKit.Dog(-76, 1f, gameplayParent);
-        // Draufgesprungen läuft er zum Meer: von der Promenade 0.3 m hinunter auf den Sand (statt 0.2 auf die Straße)
-        var dogSettings = new SerializedObject(dog.GetComponent<Dog>());
-        dogSettings.FindProperty("curbDrop").floatValue = 0.5f - CityLayout.SandTop;
-        dogSettings.ApplyModifiedPropertiesWithoutUndo();
+        BeachDog(-76);
         LevelBuildKit.Place("Bench", -86, 0, gameplayParent);
         LevelBuildKit.Place("Balcony", -92, 3, gameplayParent);
         LevelBuildKit.Place("Balcony", -96, 6, gameplayParent);
         LevelBuildKit.HeatPickup(-96, 8, gameplayParent);
 
-        // Wo früher die Oregano Street kreuzte: Rettungsturm (Plattform-Oberkante 3.5) mit Chili
+        // Wo früher die Oregano Street kreuzte: Rettungsturm (Plattform-Oberkante 3.5), ohne Chili (sonst zu viele im Level)
         LevelBuildKit.Place("Lifeguard Tower", -110, 3, gameplayParent);
-        LevelBuildKit.HeatPickup(-110, 5, gameplayParent);
 
         // Federnder Sonnenschirm (Oberkante 2.5) → Balkon (Oberkante 6.5) mit Chili
         LevelBuildKit.Place("Bouncy Umbrella", -126, 2, gameplayParent);
         LevelBuildKit.Place("Balcony", -130, 6, gameplayParent);
         LevelBuildKit.HeatPickup(-130, 8, gameplayParent);
+
+        // Nach dem Gelateria-Checkpoint und Bachmündung 2: noch ein Hund zwischen Bank und Container bis zur Ecke
+        LevelBuildKit.Place("Bench", -152, 0, gameplayParent);
+        BeachDog(-158);
+        LevelBuildKit.Place("Dumpster", -165, 0, gameplayParent);
 
         // Basil Street: eine Bank als kleines Hindernis
         LevelBuildKit.Place("Bench", Mathf.Round(BasilU(14f)), 0, gameplayParent);
@@ -242,7 +243,7 @@ public static class Level2Builder
         ((CameraZone)zone.targetObject).transform.SetParent(gameplayParent, false);
 
         // Strandpromenade: Kamera weiter weg und höher über dem Wasser, damit Sand und Brandung vor dem Spieler ins Bild passen.
-        // Voll vom Ende des Überwegs (x -54) bis kurz vor die Gelateria-Ecke, dort zurück auf die normale Kamera
+        // Voll vom Ende des Überwegs (x -54) bis kurz vor die Basil-Ecke, dort zurück auf die normale Kamera
         var beachZone = new SerializedObject(new GameObject("Beach Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
         beachZone.FindProperty("fromU").floatValue = -158f;
         beachZone.FindProperty("toU").floatValue = -54f;
@@ -252,17 +253,29 @@ public static class Level2Builder
         beachZone.ApplyModifiedPropertiesWithoutUndo();
         ((CameraZone)beachZone.targetObject).transform.SetParent(gameplayParent, false);
 
-        // Möwen über dem Strand-Stück, zeitversetzt
-        Seagull(-100, 2f);
-        Seagull(-140, 4.5f);
+        // Möwen über dem Strand-Stück, zeitversetzt: zwei bis zum Gelateria-Checkpoint, eine danach bis zur Ecke.
+        // So greift nach einem Respawn an der Gelateria nur die dritte an
+        Seagull(-100, 2f, -138f, -45f);
+        Seagull(-120, 4.5f, -138f, -45f);
+        Seagull(-155, 2f, -170f, -138f);
     }
 
-    private static void Seagull(float u, float firstDelay)
+    // Hund auf der Promenade: Draufgesprungen läuft er zum Meer, von der Promenade 0.3 m hinunter auf den Sand
+    // (statt 0.2 auf die Straße)
+    private static void BeachDog(float u)
+    {
+        GameObject dog = LevelBuildKit.Dog(u, 1f, gameplayParent);
+        var dogSettings = new SerializedObject(dog.GetComponent<Dog>());
+        dogSettings.FindProperty("curbDrop").floatValue = 0.5f - CityLayout.SandTop;
+        dogSettings.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    private static void Seagull(float u, float firstDelay, float territoryFrom, float territoryTo)
     {
         GameObject gull = LevelBuildKit.PlaceAsset("Assets/Prefabs/Seagull.prefab", u, 10, gameplayParent);
         var serialized = new SerializedObject(gull.GetComponent<Seagull>());
-        serialized.FindProperty("territoryFrom").floatValue = -165f;
-        serialized.FindProperty("territoryTo").floatValue = -45f;
+        serialized.FindProperty("territoryFrom").floatValue = territoryFrom;
+        serialized.FindProperty("territoryTo").floatValue = territoryTo;
         serialized.FindProperty("firstDelay").floatValue = firstDelay;
         serialized.FindProperty("cooldown").floatValue = 5f;
         serialized.ApplyModifiedPropertiesWithoutUndo();
@@ -276,7 +289,7 @@ public static class Level2Builder
         var blocked = new List<(float from, float to)>
         {
             (-30f, -20f), (-48f, -32f), (-63f, -53f), (-114f, -106f), (-149f, -139f),
-            (-11f, -4f), (-170f, -160f), (-100f, -88f), (-134f, -122f)
+            (-11f, -4f), (-143f, -133f), (-100f, -88f), (-134f, -122f)
         };
         bool Free(float u) => blocked.TrueForAll(zone => u < zone.from || u > zone.to);
 
@@ -285,7 +298,7 @@ public static class Level2Builder
             if (Free(u)) LevelBuildKit.Place("Street Lamp", u, 0, propParent);
             if (Free(u - 6)) LevelBuildKit.Place("Tree", u - 6, 0, propParent);
         }
-        foreach (int u in new[] { -52, -114, -152 })
+        foreach (int u in new[] { -52, -114, -161 })
         {
             if (Free(u)) LevelBuildKit.Place("Hydrant", u, 0, propParent);
         }

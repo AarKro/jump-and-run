@@ -154,8 +154,8 @@ public static class CityLayout
     {
         ("Pizzeria", new Vector3(-8f, 0f, 0f), 0f),
         ("Coffee Shop", new Vector3(61f, 0f, 0f), 0f),
-        // Ecke Margherita Avenue / Basil Street: Checkpoint von Level 2, die Seitenwand bildet die Hausecke
-        ("Gelato Shop", new Vector3(-166f, 0f, 0f), 0f),
+        // Strandpromenade, kurz vor der Basil Street: Checkpoint von Level 2 (nach dem dritten Chili)
+        ("Gelato Shop", new Vector3(-138f, 0f, 0f), 0f),
     };
 
     // Grundstücke, auf denen der Generator keine zufälligen Häuser baut: unter den festen Gebäuden, und ein Haus mit fester
@@ -164,7 +164,7 @@ public static class CityLayout
     {
         Rect.MinMaxRect(-13f, 3f, -3f, 11f),       // Pizzeria
         Rect.MinMaxRect(57f, 3f, 65f, 11f),        // Café
-        Rect.MinMaxRect(-170f, 3f, -162f, 11f),    // Gelateria
+        Rect.MinMaxRect(-142f, 3f, -134f, 11f),    // Gelateria
     };
 
     // Piazza Pisa ist auch zur Margherita Avenue hin offen: ab hier bis zur Basil Street keine Häuser in der Südreihe
