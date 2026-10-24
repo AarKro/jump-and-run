@@ -183,14 +183,14 @@ public static class CityLayout
     // Punkt auf dem Südwest-Weg im Abstand s von der Brunnenmitte
     public static Vector2 ParkPathSW(float s) => ParkCenter + ParkDirSW * s;
 
-    // Ententeich: Oval mit der langen Achse entlang des Südwest-Wegs, nordwestlich davon. Seine Südostkante reicht über
-    // den Weg hinaus (bis ~2 m vor die Bahn), dort führt ein Holzsteg (Boardwalk) übers Wasser. Alles als Abstand s
-    // entlang des Südwest-Wegs
+    // Ententeich: Oval mit der langen Achse entlang des Südwest-Wegs, südöstlich davon (die Kamera von Level 3 steht dort auf
+    // der Nordwestseite des Wegs und schaut über den Spieler aufs Wasser). Seine Nordwestkante reicht über den Weg hinaus
+    // (bis ~2 m hinter die Bahn), dort führt ein Holzsteg (Boardwalk) übers Wasser. Alles als Abstand s entlang des Südwest-Wegs
     public const float PondAlongPath = 35f;
     public const float PondOffPath = 4f;
     public const float PondHalfLength = 12f;
     public const float PondHalfWidth = 7f;
-    public static Vector2 PondCenter => ParkPathSW(PondAlongPath) + ParkNormalNW * PondOffPath;
+    public static Vector2 PondCenter => ParkPathSW(PondAlongPath) - ParkNormalNW * PondOffPath;
     // Steg: deckt den Weg ab, wo er übers Wasser und über den Steinrand des Teichs läuft. Oberkante knapp über dem Wasser
     public const float BoardwalkFrom = PondAlongPath - 12.5f;
     public const float BoardwalkTo = PondAlongPath + 12.5f;

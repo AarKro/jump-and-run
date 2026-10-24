@@ -12,7 +12,8 @@ using UnityEngine;
 // (Ostseite, x -33, Baustelle mit Gruben), über die Crust Street (Autos), in einer S-Kurve südlich und westlich um die
 // Gründer-Statue herum (sie bleibt rechts, die Kamera also außen über der Straße), dann den diagonalen Parkweg hinauf
 // zum Brunnen, gegen den Uhrzeigersinn nördlich um den Brunnen (die Südhälfte des Rings ist ein Heckengarten) und den
-// Südwest-Weg hinunter, über den Holzsteg am Ententeich zum Kunden (Picknick).
+// Südwest-Weg hinunter, über den Holzsteg am Ententeich zum Kunden (Picknick). Ab dem Ring steht die Kamera auf der anderen
+// Seite der Bahn (Teich und Brunnen liegen dahinter).
 // Die Bahn ist in +u-Richtung definiert (Häuser bzw. Brunnen links davon): Sie beginnt beim Kunden und endet hinter
 // der Pizzeria. Auf der Margherita Avenue ist u = Welt-X, auf dem Mozzarella Blvd u = -31 - z.
 //
@@ -137,6 +138,7 @@ public static class Level3Builder
         LevelBuildKit.SetupEssentials(goalU, "", KeepWarmTime,
             new Vector3(MozzarellaX - 5f, -3f, 55f), new Vector3(30f, 1f, 110f),
             "Picnic at the Duck Pond, Pesto Park", new Vector3(20f, 90f, -110f));
+        FacePicnicToCamera();
         LevelBuildKit.Save(scene);
         Debug.Log($"Level3Builder: Level 3 (Pesto Park) gebaut. Bahn u {startU:F2} bis {LevelBuildKit.Lane.EndU:F2}.");
     }
@@ -157,6 +159,26 @@ public static class Level3Builder
         }
         var goal = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(picnicPath));
         goal.name = "Goal";
+    }
+
+    // Die Kamera steht am Teich hinter der Bahn (Fountain Camera Zone reicht bis zum Ende): Das Picknick wird darum um seine
+    // Wurzel umgedreht, Decke zum Wasser (lokal -Z), Kunde und Freundin schauen zur Kamera. Die Wurzel selbst muss im
+    // Lane-Rahmen bleiben (PrefabGridEnforcer), also werden ihre Kinder gedreht, ausgehend von den Werten im Prefab
+    // (so dreht ein erneuter Aufruf nicht wieder zurück). Die Intro-Nahaufnahme richtet sich nach der Drehung des Kunden
+    private static void FacePicnicToCamera()
+    {
+        Transform goal = GameObject.Find("Goal").transform;
+        Quaternion turn = Quaternion.Euler(0f, 180f, 0f);
+        foreach (Transform child in goal)
+        {
+            Transform original = PrefabUtility.GetCorrespondingObjectFromSource(child);
+            if (original == null)
+            {
+                continue;
+            }
+            child.localPosition = turn * original.localPosition;
+            child.localRotation = turn * original.localRotation;
+        }
     }
 
     // Neue Szene als Kopie von Level 2 (bringt die festen Objekte mit), hinter Level 2 in die Build Settings
@@ -509,8 +531,9 @@ public static class Level3Builder
     // ---------- Park (Laufrichtung = -u) ----------
     // Diagonalweg (Bahn-Stück 4): drei Frisbee-Paare (das mittlere wirft quer über den Weg), über dem letzten Chili 3 (nur
     // vom Kopf eines Spielers erreichbar). Brunnenring (Stück 2, der Spieler läuft vom Südost- zum Südwest-Ende): erst ein
-    // Skater, der auf einem festen Stück hin und her fährt, dann ein Hund zwischen zwei Bänken. Die Kamera steht dort außen
-    // und schaut über den Spieler auf den Brunnen. Südwest-Weg: Entenfamilie auf dem Holzsteg mit den drei Lücken
+    // Skater, der auf einem festen Stück hin und her fährt, dann ein Hund zwischen zwei Bänken. Ab dort bis zum Kunden steht
+    // die Kamera außen bzw. nordwestlich und schaut über den Spieler auf Brunnen und Teich. Südwest-Weg: Entenfamilie auf
+    // dem Holzsteg mit den drei Lücken am Nordwestrand des Teichs
     private static void BuildParkGameplay()
     {
         float diagonalStart = pieceStartU[5];   // am Founder's Circle (dort kommt der Spieler her)
@@ -536,10 +559,11 @@ public static class Level3Builder
         dogSettings.ApplyModifiedPropertiesWithoutUndo();
         LevelBuildKit.Place("Bench", benchB, 0, gameplayParent);
 
-        // Kamera steht auf dem Ring auf der anderen Seite der Bahn (außen) und schaut auf den Brunnen; rechts/links folgt
-        // dort dem Bildschirm (PlayerController.inputSign)
+        // Kamera steht ab dem Ring bis zum Kunden auf der anderen Seite der Bahn (außen bzw. nordwestlich des Wegs) und
+        // schaut über den Spieler auf Brunnen und Teich; rechts/links folgt dort dem Bildschirm (PlayerController.inputSign).
+        // Am Teich geht es also nicht zurück auf die normale Kamera (fühlte sich beim Testen komisch an)
         var zone = new SerializedObject(new GameObject("Fountain Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
-        zone.FindProperty("fromU").floatValue = ringStart;
+        zone.FindProperty("fromU").floatValue = startU - 5f;
         zone.FindProperty("toU").floatValue = ringEnd;
         zone.FindProperty("blend").floatValue = FountainCameraBlend;
         zone.FindProperty("offset").vector3Value = FountainCameraOffset;

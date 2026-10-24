@@ -262,7 +262,8 @@ public static partial class CityBuilder
         }
 
         // Entlang der vier Wege: Laternen, Bänke und Blumenbeete im festen Abstand. Auf den südlichen Wegen (Level 3) nur auf
-        // der Seite hinter der Bahn und nicht dort, wo Level 3 etwas hinstellt
+        // der Seite, die von der Kamera aus hinter der Bahn liegt (Südost-Weg: Nordseite; Südwest-Weg: Südseite, dort steht
+        // die Kamera von Level 3 im Norden), und nicht dort, wo Level 3 etwas hinstellt
         foreach (Vector2 corner in corners)
         {
             Vector2 dir = (corner - center).normalized;
@@ -270,6 +271,10 @@ public static partial class CityBuilder
             Vector2 left = new Vector2(-dir.y, dir.x), right = -left;
             bool south = corner.y < center.y;
             Vector2 far = left.y > 0f ? left : right;
+            if (corner == corners[0])
+            {
+                far = -far;
+            }
             float[] keepClear = !south ? new float[0] : corner.x > center.x ? CityLayout.ParkDecorKeepClearSE : CityLayout.ParkDecorKeepClearSW;
             int index = 0;
             for (float s = ring + 5f; s < length - 4f; s += 6f, index++)
@@ -345,7 +350,8 @@ public static partial class CityBuilder
         {
             float angle = 0.3f + i * Mathf.PI * 2f / 7f;
             Vector2 local = new Vector2(Mathf.Cos(angle) * (CityLayout.PondHalfLength + 1.3f), Mathf.Sin(angle) * (CityLayout.PondHalfWidth + 1.3f));
-            if (local.y < 0f)
+            // Nur am Ufer weg vom Weg (Südosten)
+            if (local.y > 0f)
             {
                 continue;
             }
@@ -355,11 +361,12 @@ public static partial class CityBuilder
 
     }
 
-    // Wo die Kamera von Level 3 steht: auf der Südseite der beiden südlichen Diagonalen (8 m vor der Bahn, 10 m bleiben frei)
-    // und außen um den Rundweg (Nordhälfte, ohne den Heckengarten), dort steht sie 9 m hinter der Bahn und schaut nach innen
+    // Wo die Kamera von Level 3 steht: auf der Südseite des Südost-Wegs (8 m vor der Bahn), außen um den Rundweg (Nordhälfte,
+    // ohne den Heckengarten) und auf der Nordwestseite des Südwest-Wegs (dort steht sie 9 m hinter der Bahn und schaut über
+    // den Spieler auf Brunnen bzw. Teich). Jeweils 12 m bleiben frei
     private static bool InCameraStrip(Vector2 offset, Vector2 center, float ring, Vector2[] corners)
     {
-        const float strip = 10f;
+        const float strip = 12f;
         foreach (Vector2 corner in corners)
         {
             if (corner.y > center.y)
@@ -368,7 +375,9 @@ public static partial class CityBuilder
             }
             Vector2 dir = (corner - center).normalized;
             Vector2 normal = new Vector2(-dir.y, dir.x);
-            if (normal.y > 0f)
+            // Südost-Weg: Kamera im Süden; Südwest-Weg (corners[0]): Kamera im Norden
+            bool cameraNorth = corner == corners[0];
+            if ((normal.y > 0f) != cameraNorth)
             {
                 normal = -normal;
             }
@@ -498,7 +507,7 @@ public static partial class CityBuilder
         return along * along + across * across < 1f;
     }
 
-    // Ententeich (Oval) mit Steinrand, Schilf, Seerosen und einem kleinen Steg am Nordufer. Seine Südostkante liegt unter
+    // Ententeich (Oval) mit Steinrand, Schilf, Seerosen und einem kleinen Steg am Südufer. Seine Nordwestkante liegt unter
     // dem Holzsteg des Südwest-Wegs. Wasser etwas über dem Rasen, damit nichts flackert
     private static void BuildPond(Transform parent, System.Random random)
     {
@@ -506,13 +515,13 @@ public static partial class CityBuilder
         float waterTop = CityLayout.ParkLawnTop + 0.04f;
         float a = CityLayout.PondHalfLength, b = CityLayout.PondHalfWidth;
 
-        // Weg-Seite ist lokal -Z
-        Transform pond = PondBasin(parent, "Duck Pond", CityLayout.PondCenter, a, b, 9, 10, -1f, random);
-        // Holzsteg vom Nordufer ins Wasser
-        PrimitiveKit.Box("Jetty", pond, new Vector3(a * 0.3f, waterTop + 0.15f, b - 1.5f), new Vector3(1.4f, 0.1f, 4f), wood);
+        // Weg-Seite ist lokal +Z (Nordwesten)
+        Transform pond = PondBasin(parent, "Duck Pond", CityLayout.PondCenter, a, b, 9, 10, 1f, random);
+        // Holzsteg vom Südufer ins Wasser
+        PrimitiveKit.Box("Jetty", pond, new Vector3(a * 0.3f, waterTop + 0.15f, -(b - 1.5f)), new Vector3(1.4f, 0.1f, 4f), wood);
         foreach (float x in new[] { -0.6f, 0.6f })
         {
-            PrimitiveKit.Box("Jetty Post", pond, new Vector3(a * 0.3f + x, waterTop - 0.1f, b - 3.3f), new Vector3(0.12f, 0.6f, 0.12f), wood);
+            PrimitiveKit.Box("Jetty Post", pond, new Vector3(a * 0.3f + x, waterTop - 0.1f, -(b - 3.3f)), new Vector3(0.12f, 0.6f, 0.12f), wood);
         }
     }
 
