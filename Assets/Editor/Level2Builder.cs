@@ -6,9 +6,10 @@ using UnityEngine;
 // der Stadt-Szene, das Level bringt Laufbahn, Baugruben (mit CityCutouts), Überwege mit Autos, Spiel-Elemente, Möwen und Deko.
 // Menü: Tools > Jump and Run > City > Rebuild Level 2 (Leaning Tower). Erneut ausführen überschreibt Handänderungen.
 //
-// Route (der Spieler läuft nach LINKS, also Richtung -u): aus der Pizzeria nach Westen die Margherita Avenue entlang
-// (Strand hinter der Kamera), über Mozzarella Blvd und Oregano Street, Gelateria-Checkpoint an der Ecke, rechts in die
-// Basil Street, dann links über die Straße auf die Piazza Pisa zum Kunden am Turm.
+// Route (der Spieler läuft nach LINKS, also Richtung -u): aus der Pizzeria nach Westen die Margherita Avenue entlang,
+// über den Mozzarella Blvd, dann die Strandpromenade (die Stadt hat dort statt Fahrbahn Sand und Meer, Kamera über dem
+// Wasser), Gelateria-Checkpoint an der Ecke, rechts in die Basil Street, dann links über die Straße auf die Piazza Pisa
+// zum Kunden am Turm.
 // Die Bahn ist in +u-Richtung definiert (Häuser links davon): Sie beginnt auf der Piazza und endet hinter der Pizzeria.
 // Auf der Margherita Avenue ist u = Welt-X (wie in Level 1).
 //
@@ -16,9 +17,10 @@ using UnityEngine;
 //   -7.5        Start aus der Pizzeria
 //   -27..-23    Baugrube 1
 //   -46..-34    Überweg Mozzarella Blvd mit Autos
-//   -60..-56    Baugrube 2, danach Hund zwischen Container und Bank, Balkon-Kletterei mit Speed-Boost
-//  -116..-104   Überweg Oregano Street mit Autos
-//  -126..-130   federnde Markise → Balkon mit Wärme-Bonus, Baugrube 3, Gelateria-Checkpoint (Tür bei -165.5)
+//   ab -46      Strandpromenade
+//   -60..-56    Bachmündung 1, danach Hund zwischen Container und Bank, Balkon-Kletterei mit Speed-Boost
+//  -110         Rettungsturm (Plattform 3 m hoch) mit Sprung-Boost, wo früher die Oregano Street kreuzte
+//  -126..-130   federnder Sonnenschirm → Balkon mit Wärme-Bonus, Bachmündung 2, Gelateria-Checkpoint (Tür bei -165.5)
 //   Ecke        rechts in die Basil Street (Ostseite, x -173), Bank, links über die Straße auf die Piazza
 //   Piazza      Hund zwischen zwei Bänken, Kunde westlich des Turms (x ≈ -228)
 // Möwen kreisen über dem ganzen Strand-Stück (u -165 bis -45).
@@ -44,6 +46,10 @@ public static class Level2Builder
     private static float StartU => MainStartX - (PiazzaStraight + CrossLength + BasilStraight + CornerLength);
     private static float PiazzaU(float x) => StartU + (x - PiazzaStartX);
     private static float BasilU(float z) => StartU + PiazzaStraight + CrossLength + (25f - z);
+
+    // Kamera auf der Strandpromenade (CameraZone): weiter hinten und höher als normal (0, 5, -8)
+    private static readonly Vector3 BeachCameraOffset = new Vector3(0f, 9f, -18f);
+    private const float BeachCameraLookHeight = 1f;
 
     private static Transform groundParent, gameplayParent, propParent;
 
@@ -89,15 +95,16 @@ public static class Level2Builder
 
     private static void BuildGround(Transform link)
     {
-        // Baugruben: Lücke von/bis in Welt-X. Das Prefab ist 1 m länger und steckt unter den Gehwegkanten;
+        // Baugrube vor dem Strand: Lücke von/bis in Welt-X. Das Prefab ist 1 m länger und steckt unter den Gehwegkanten;
         // der Cutout schneidet Gehweg, Straße und alles darunter genau in der Lücke aus
         Pit(link, -26.75f, -23.25f);
-        Pit(link, -59.75f, -56.25f);
-        Pit(link, -145.75f, -142.25f);
+        // Auf der Promenade: Bachmündungen statt Baugruben (gleiche Lücken)
+        Creek(link, -59.75f, -56.25f);
+        Creek(link, -145.75f, -142.25f);
 
-        // Überwege mit Verkehr: Die Autos kommen die Avenue herunter von der nächsten Kreuzung dahinter
-        Crossing(-40, 118f);   // Mozzarella Blvd, hinter der Kreuzung mit der Crust Street
-        Crossing(-110, 124f);  // Oregano Street, endet an der Crust Street
+        // Überweg mit Verkehr: Die Autos kommen den Mozzarella Blvd herunter, von hinter der Kreuzung mit der Crust Street.
+        // Die Oregano Street endet an der Promenade, dort fahren keine Autos mehr
+        Crossing(-40, 118f);
 
         // Über die Basil Street auf die Piazza: begehbare Platte auf Gehweghöhe über der Fahrbahn (dort fahren keine Autos)
         Material asphalt = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Asphalt.mat");
@@ -131,6 +138,48 @@ public static class Level2Builder
         }
     }
 
+    // Bach, der unter der Häuserreihe hervorkommt und über den Strand ins Meer fließt. Die Lücke im Plattenweg ist so breit
+    // wie eine Baugrube; wer hineinfällt, landet im Wasser (Respawn). Der Cutout nimmt Weg, Kante, Sand und alles darunter
+    // (auch das Meer) heraus, das Wasser füllt das Loch wieder auf
+    private static void Creek(Transform link, float fromX, float toX)
+    {
+        float center = (fromX + toX) / 2f;
+        float width = toX - fromX;
+        const float front = CityLayout.SandFrontZ, back = CityLayout.PromenadeBackZ;
+        const float waterTop = 0.05f;
+        LevelBuildKit.Cutout(link, $"Creek {center:F0}", fromX, toX, front, back);
+
+        Material water = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Sea.mat");
+        Material stone = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Curb.mat");
+        Material dark = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Interior Dark.mat");
+
+        // Wasser knapp unter dem Sand: Zum Strand hin sieht es aus, als flösse der Bach einfach hinaus
+        PrimitiveKit.Box("Creek Water", groundParent, new Vector3(center, (waterTop - 3f) / 2f, (front + back) / 2f), new Vector3(width, waterTop + 3f, back - front), water);
+        // Ufermauern unter dem Plattenweg, 0.1 m in der Lücke (lägen sie genau auf der Schnittkante, flackerten beide)
+        foreach (float x in new[] { fromX + 0.1f, toX - 0.1f })
+        {
+            PrimitiveKit.Box("Creek Wall", groundParent, new Vector3(x, 0f, (CityLayout.PromenadeFrontZ + back) / 2f), new Vector3(0.2f, 1f, back - CityLayout.PromenadeFrontZ), stone);
+        }
+        // Auslass unter der Häuserreihe: dunkle Öffnung mit Steinrahmen
+        PrimitiveKit.Box("Culvert", groundParent, new Vector3(center, 0.27f, back + 0.02f), new Vector3(width - 0.8f, 0.44f, 0.04f), dark);
+        PrimitiveKit.Box("Culvert Lintel", groundParent, new Vector3(center, 0.53f, back - 0.05f), new Vector3(width - 0.4f, 0.12f, 0.12f), stone);
+
+        // Rinnsal den Abhang hinunter bis ins Meer, knapp über der Schräge
+        CityLayout.BeachSlope(out Vector3 surfaceCenter, out Quaternion rotation, out float length, out float waterlineZ);
+        float stripLength = length / 2f - waterlineZ + 0.3f;
+        Vector3 local = new Vector3(0f, 0.02f, length / 2f - stripLength / 2f);
+        surfaceCenter.x = center;
+        Renderer stream = PrimitiveKit.Box("Creek Stream", groundParent, surfaceCenter + rotation * local, new Vector3(width - 0.8f, 0.02f, stripLength), water);
+        stream.transform.rotation = rotation;
+
+        // Ins Wasser fallen = Respawn: Auslöser knapp über der Wasseroberfläche, nur unter dem Plattenweg
+        var trap = new GameObject("Creek Kill");
+        trap.transform.SetParent(groundParent, false);
+        trap.transform.position = new Vector3(center, waterTop - 0.5f, (CityLayout.PromenadeFrontZ + back) / 2f);
+        PrimitiveKit.AddBoxCollider(trap, Vector3.zero, new Vector3(width, 1.1f, back - CityLayout.PromenadeFrontZ), isTrigger: true);
+        trap.AddComponent<KillZone>();
+    }
+
     private static void Crossing(float u, float spawnZ)
     {
         GameObject crossing = LevelBuildKit.PlaceAsset("Assets/Prefabs/Avenue Crossing.prefab", u, 0, groundParent);
@@ -149,14 +198,22 @@ public static class Level2Builder
         // Zwischen Mozzarella und Oregano: Hund zwischen Container und Bank (schaut dem Spieler entgegen, also +u),
         // dann zwei Balkone als Kletterpartie mit Speed-Boost oben
         LevelBuildKit.Place("Dumpster", -66, 0, gameplayParent);
-        LevelBuildKit.Dog(-76, 1f, gameplayParent);
+        GameObject dog = LevelBuildKit.Dog(-76, 1f, gameplayParent);
+        // Draufgesprungen läuft er zum Meer: von der Promenade 0.3 m hinunter auf den Sand (statt 0.2 auf die Straße)
+        var dogSettings = new SerializedObject(dog.GetComponent<Dog>());
+        dogSettings.FindProperty("curbDrop").floatValue = 0.5f - CityLayout.SandTop;
+        dogSettings.ApplyModifiedPropertiesWithoutUndo();
         LevelBuildKit.Place("Bench", -86, 0, gameplayParent);
         LevelBuildKit.Place("Balcony", -92, 3, gameplayParent);
         LevelBuildKit.Place("Balcony", -96, 6, gameplayParent);
         LevelBuildKit.PowerUp(-96, 8, LevelBuildKit.PowerUpKind.Speed, true, gameplayParent);
 
-        // Hinter der Oregano Street: federnde Markise (Oberkante 2.5) → Balkon (Oberkante 6.5) mit Wärme-Bonus
-        LevelBuildKit.Place("Bouncy Awning", -126, 2, gameplayParent);
+        // Wo früher die Oregano Street kreuzte: Rettungsturm (Plattform-Oberkante 3.5) mit Sprung-Boost
+        LevelBuildKit.Place("Lifeguard Tower", -110, 3, gameplayParent);
+        LevelBuildKit.PowerUp(-110, 5, LevelBuildKit.PowerUpKind.Jump, true, gameplayParent);
+
+        // Federnder Sonnenschirm (Oberkante 2.5) → Balkon (Oberkante 6.5) mit Wärme-Bonus
+        LevelBuildKit.Place("Bouncy Umbrella", -126, 2, gameplayParent);
         LevelBuildKit.Place("Balcony", -130, 6, gameplayParent);
         LevelBuildKit.PowerUp(-130, 8, LevelBuildKit.PowerUpKind.TimeBonus, false, gameplayParent);
 
@@ -182,6 +239,17 @@ public static class Level2Builder
         zone.ApplyModifiedPropertiesWithoutUndo();
         ((CameraZone)zone.targetObject).transform.SetParent(gameplayParent, false);
 
+        // Strandpromenade: Kamera weiter weg und höher über dem Wasser, damit Sand und Brandung vor dem Spieler ins Bild passen.
+        // Voll vom Ende des Überwegs (x -54) bis kurz vor die Gelateria-Ecke, dort zurück auf die normale Kamera
+        var beachZone = new SerializedObject(new GameObject("Beach Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
+        beachZone.FindProperty("fromU").floatValue = -158f;
+        beachZone.FindProperty("toU").floatValue = -54f;
+        beachZone.FindProperty("blend").floatValue = 8f;
+        beachZone.FindProperty("offset").vector3Value = BeachCameraOffset;
+        beachZone.FindProperty("lookHeight").floatValue = BeachCameraLookHeight;
+        beachZone.ApplyModifiedPropertiesWithoutUndo();
+        ((CameraZone)beachZone.targetObject).transform.SetParent(gameplayParent, false);
+
         // Möwen über dem Strand-Stück, zeitversetzt
         Seagull(-100, 2f);
         Seagull(-140, 4.5f);
@@ -205,7 +273,7 @@ public static class Level2Builder
         // Nicht in Baugruben, nicht auf Überwegen, nicht vor Türen und nicht unter Balkonen/Markise
         var blocked = new List<(float from, float to)>
         {
-            (-30f, -20f), (-48f, -32f), (-63f, -53f), (-118f, -102f), (-149f, -139f),
+            (-30f, -20f), (-48f, -32f), (-63f, -53f), (-114f, -106f), (-149f, -139f),
             (-11f, -4f), (-170f, -160f), (-100f, -88f), (-134f, -122f)
         };
         bool Free(float u) => blocked.TrueForAll(zone => u < zone.from || u > zone.to);

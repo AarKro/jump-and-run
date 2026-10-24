@@ -64,6 +64,7 @@ public static partial class CityBuilder
         BuildGround();
         BuildStreets();
         BuildBlocks();
+        BuildBeach();
         Transform landmarks = Group("Landmarks");
         PlaceLandmarks(landmarks);
         BuildFoundersCircle(landmarks);
@@ -139,7 +140,11 @@ public static partial class CityBuilder
         // Ein Straßenbelag unter der ganzen Stadt samt Ringstraße (Oberkante 0.3). Darauf liegen die Gehweg-Platten der Blöcke,
         // was dazwischen frei bleibt, ist Fahrbahn. Bis y = -3 hinunter, damit der Rand zum Strand/Wasser massiv aussieht
         // CityGround: Level können hier Löcher hineinschneiden (CityCutout)
-        Slab("Road Base", ground, W - 12f, -12f, E + 12f, N + 12f, -3f, RoadTop, Mat("Road")).gameObject.AddComponent<CityGround>();
+        // Vor der Strandpromenade fehlt die Fahrbahn: dort liegen Sand und Wasser (CityBuilder.Beach)
+        foreach (Renderer piece in SlabAround("Road Base", ground, W - 12f, -12f, E + 12f, N + 12f, -3f, RoadTop, Mat("Road"), BeachHole(-12f)))
+        {
+            piece.gameObject.AddComponent<CityGround>();
+        }
     }
 
     private static void BuildStreets()
@@ -176,6 +181,11 @@ public static partial class CityBuilder
 
             // Begehbare Gehweg-Platte über den ganzen Block, 1 m dick wie die Gehweg-Prefabs (Mitte y = 0)
             Rect walk = block.Sidewalk;
+            // An der Strandpromenade beginnt der Gehweg erst an den Fassaden, davor liegt der Plattenweg
+            if (walk.xMin >= CityLayout.BeachFromX - 0.1f && walk.xMax <= CityLayout.BeachToX + 0.1f && walk.yMin < CityLayout.PromenadeBackZ)
+            {
+                walk.yMin = CityLayout.PromenadeBackZ;
+            }
             GameObject slab = Slab("Sidewalk", parent, walk.xMin, walk.yMin, walk.xMax, walk.yMax, Surface - 1f, Surface, sidewalk).gameObject;
             slab.layer = GroundLayer;
             slab.AddComponent<BoxCollider>();
@@ -331,6 +341,36 @@ public static partial class CityBuilder
         var size = new Vector3(Mathf.Abs(x1 - x0), top - bottom, Mathf.Abs(z1 - z0));
         return PrimitiveKit.Box(name, parent, center, size, material);
     }
+
+    // Quader mit rechteckigem Loch (X/Z): bis zu vier Teilstücke drumherum (West und Ost in voller Tiefe, dazwischen Süd und Nord)
+    private static List<Renderer> SlabAround(string name, Transform parent, float x0, float z0, float x1, float z1, float bottom, float top,
+        Material material, Rect hole)
+    {
+        var pieces = new List<Renderer>();
+        void Piece(float a0, float b0, float a1, float b1)
+        {
+            if (a1 - a0 > 0.01f && b1 - b0 > 0.01f)
+            {
+                pieces.Add(Slab(name, parent, a0, b0, a1, b1, bottom, top, material));
+            }
+        }
+
+        float hx0 = Mathf.Max(x0, hole.xMin), hx1 = Mathf.Min(x1, hole.xMax);
+        float hz0 = Mathf.Max(z0, hole.yMin), hz1 = Mathf.Min(z1, hole.yMax);
+        if (hx0 >= hx1 || hz0 >= hz1)
+        {
+            Piece(x0, z0, x1, z1);
+            return pieces;
+        }
+        Piece(x0, z0, hx0, z1);
+        Piece(hx1, z0, x1, z1);
+        Piece(hx0, z0, hx1, hz0);
+        Piece(hx0, hz1, hx1, z1);
+        return pieces;
+    }
+
+    // Bereich vor der Strandpromenade, von südlich (fromZ) bis zur Steinkante: dort fehlen Fahrbahn, Wiese und der alte breite Strand
+    private static Rect BeachHole(float fromZ) => Rect.MinMaxRect(CityLayout.BeachFromX, fromZ - Far, CityLayout.BeachToX, CityLayout.PromenadeFrontZ);
 
     private static float Pick(System.Random random, params float[] values) => values[random.Next(values.Length)];
 

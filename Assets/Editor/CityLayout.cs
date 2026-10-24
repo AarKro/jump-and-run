@@ -46,16 +46,48 @@ public static class CityLayout
 
     private const float RW = West - RingOffset, RE = East + RingOffset, RS = -RingOffset, RN = North + RingOffset;
 
+    // Strandpromenade (Level 2): Zwischen Basil Street und Mozzarella Blvd hat die Margherita Avenue keine Fahrbahn. Stattdessen
+    // ein Plattenweg (Laufbahn bei z 0, bis zu den Fassaden bei z 3), davor eine Steinkante, ein Streifen Sand, ein flacher
+    // Abhang mit Brandung ins Wasser. Die Kamera steht dort über dem Meer und schaut über den Strand auf die Häuser.
+    // Die Oregano Street endet an der Promenade (Poller), Autos gibt es nur noch am Mozzarella Blvd
+    public const float BeachFromX = -174f;      // Ostkante der Basil Street
+    public const float BeachToX = -46f;         // Westkante des Mozzarella Blvd
+    public const float PromenadeFrontZ = -2f;   // Steinkante zum Sand
+    public const float PromenadeBackZ = 3f;     // Fassaden
+    public const float SandTop = 0.2f;
+    public const float SandFrontZ = -5.5f;      // hier beginnt der Abhang
+    public const float SlopeEndZ = -9.5f;
+    public const float SlopeEndY = -0.8f;
+    public const float SeaLevel = -0.5f;
+    // Spiel-Elemente von Level 2 auf dem Strand (Bachmündungen, Rettungsturm, Schirm): dort keine Strand-Deko
+    public static readonly float[] BeachKeepClearX = { -58f, -110f, -126f, -144f };
+
+    // Abhang vom Sand ins Wasser als Ebene: Mitte der Oberfläche (x = 0, vom Aufrufer gesetzt), Drehung (lokal Z = hangaufwärts,
+    // lokal Y = Oberflächen-Normale), Länge entlang des Hangs, und wo darauf (lokal Z) die Wasserlinie liegt
+    public static void BeachSlope(out Vector3 surfaceCenter, out Quaternion rotation, out float length, out float waterlineZ)
+    {
+        var top = new Vector3(0f, SandTop, SandFrontZ);
+        var bottom = new Vector3(0f, SlopeEndY, SlopeEndZ);
+        Vector3 uphill = top - bottom;
+        length = uphill.magnitude;
+        surfaceCenter = (top + bottom) / 2f;
+        // Kreuzprodukt hangaufwärts × rechts = Normale, die nach oben (und leicht zum Meer) zeigt
+        rotation = Quaternion.LookRotation(uphill.normalized, Vector3.Cross(uphill, Vector3.right).normalized);
+        waterlineZ = -length / 2f + length * (SeaLevel - SlopeEndY) / (SandTop - SlopeEndY);
+    }
+
     public static readonly Street[] Streets =
     {
         // Außenring
-        new Street("Margherita Avenue", false, RS, RW, RE, Side.Ring),
+        // Unterbrochen von der Strandpromenade (siehe BeachFromX)
+        new Street("Margherita Avenue", false, RS, RW, BeachFromX, Side.Ring),
+        new Street("Margherita Avenue", false, RS, BeachToX, RE, Side.Ring),
         new Street("Pepperoni Parkway", true, RE, RS, RN, Side.Ring),
         new Street("Calzone Road", false, RN, RW, RE, Side.Ring),
         new Street("Marinara Promenade", true, RW, RS, RN, Side.Ring),
         // Nord-Süd
         new Street("Basil Street", true, -180f, RS, RN, Side.Avenue),
-        new Street("Oregano Street", true, -110f, RS, 130f, Side.Avenue),
+        new Street("Oregano Street", true, -110f, PromenadeBackZ, 130f, Side.Avenue),
         new Street("Oregano Street", true, -110f, 215f, RN, Side.Avenue),
         new Street("Mozzarella Blvd", true, -40f, RS, RN, Side.Avenue),
         new Street("Anchovy Alley", true, 50f, RS, RN, Side.Narrow),
