@@ -5,8 +5,10 @@ using UnityEngine;
 // Richtung Kamera (-Z) durch die Laufbahn des Spielers (Z = 0). Die Warnung ist, dass man sie kommen sieht.
 //
 // Der Takt ist deterministisch: Aus der Spur-Uhr wird für jedes Auto direkt ausgerechnet, wo es gerade ist.
-// Auto Nummer n startet zur Zeit n * interval am hinteren Ende. Beim Respawn springt die Uhr auf 0,
+// Auto Nummer n startet zur Zeit n * interval am hinteren Ende. Beim Respawn springt die Uhr zurück auf den Startwert,
 // dadurch sieht man nach jedem Respawn genau dieselbe Verkehrssituation.
+// Die Uhr startet nicht bei 0, sondern bei der ganzen Fahrzeit: Die Straße ist also schon voller Autos, als wäre
+// der Verkehr seit Ewigkeiten unterwegs. Sonst bräuchte das erste Auto von weit hinten (z 310) ~26 s bis zum Überweg.
 public class TrafficLane : MonoBehaviour
 {
     [Header("Takt")]
@@ -39,6 +41,7 @@ public class TrafficLane : MonoBehaviour
     private void Awake()
     {
         GameManager.LevelReset += ResetLane;
+        laneTime = TravelTime;
 
         // Object Pool: Einmal genug Autos für die längste Situation anlegen und dann immer wiederverwenden.
         // Kein Instantiate/Destroy im laufenden Spiel, also auch keine Ruckler durch den Garbage Collector
@@ -61,7 +64,7 @@ public class TrafficLane : MonoBehaviour
 
     private void ResetLane()
     {
-        laneTime = 0f;
+        laneTime = TravelTime;
         for (int i = 0; i < pool.Count; i++)
         {
             pool[i].gameObject.SetActive(false);
