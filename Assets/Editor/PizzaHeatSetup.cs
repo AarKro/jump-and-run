@@ -122,7 +122,7 @@ public static class PizzaHeatSetup
         var hud = root.AddComponent<PizzaHud>();
         var serializedHud = new SerializedObject(hud);
 
-        // Wärmebalken und Stoppuhr in einer eigenen Gruppe: Das Intro blendet sie zusammen aus und ein
+        // Wärmebalken in einer eigenen Gruppe: Das Intro blendet sie zusammen aus und ein
         RectTransform gameplay = CreateRect("Gameplay", root.transform);
         Stretch(gameplay, 0f);
         var gameplayGroup = gameplay.gameObject.AddComponent<CanvasGroup>();
@@ -183,26 +183,91 @@ public static class PizzaHeatSetup
         hud.FindProperty("heatColors").gradientValue = gradient;
         hud.FindProperty("overheatFill").objectReferenceValue = overheat;
 
-        // Stoppuhr rechts neben dem Balken (Balken ist 640 breit, mittig: rechte Kante bei +320)
-        var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
-        RectTransform stopwatch = CreateRect("Stopwatch", parent);
-        stopwatch.anchorMin = stopwatch.anchorMax = new Vector2(0.5f, 1f);
-        stopwatch.pivot = new Vector2(0f, 1f);
-        stopwatch.sizeDelta = new Vector2(220f, 44f);
-        stopwatch.anchoredPosition = new Vector2(340f, -36f);
-        var stopwatchLabel = stopwatch.gameObject.AddComponent<TextMeshProUGUI>();
-        stopwatchLabel.text = "0:00.0";
-        stopwatchLabel.fontSize = 38f;
-        stopwatchLabel.color = Color.white;
-        stopwatchLabel.alignment = TextAlignmentOptions.Left;
-        stopwatchLabel.fontStyle = FontStyles.Bold;
-        stopwatchLabel.raycastTarget = false;
-        if (outline != null)
-        {
-            stopwatchLabel.fontSharedMaterial = outline;
-        }
-        hud.FindProperty("stopwatchText").objectReferenceValue = stopwatchLabel;
         hud.FindProperty("overheatImage").objectReferenceValue = overheat.GetComponent<Image>();
+        hud.FindProperty("heatBar").objectReferenceValue = bar;
+
+        BuildPizzaIcon(parent);
+        BuildTipGroups(parent, hud);
+        BuildFlame(parent, hud);
+        BuildHeatHint(parent, hud);
+    }
+
+    // Draufsicht einer Pizza links neben dem Balken (Rand, Käse, drei Salami): "dieser Balken ist die Pizza"
+    private static void BuildPizzaIcon(Transform parent)
+    {
+        Sprite circle = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+        RectTransform pizza = CreateRect("Pizza Icon", parent);
+        pizza.anchorMin = pizza.anchorMax = new Vector2(0.5f, 1f);
+        pizza.sizeDelta = new Vector2(56f, 56f);
+        // Balken: 640 breit, mittig, y -40 bis -76. Das Symbol sitzt links daneben, auf halber Höhe
+        pizza.anchoredPosition = new Vector2(-362f, -58f);
+        Circle("Crust", pizza, Vector2.zero, 56f, new Color(0.8f, 0.5f, 0.22f), circle);
+        Circle("Cheese", pizza, Vector2.zero, 44f, new Color(1f, 0.8f, 0.3f), circle);
+        Color salami = new Color(0.78f, 0.16f, 0.1f);
+        Circle("Salami 1", pizza, new Vector2(-9f, 8f), 12f, salami, circle);
+        Circle("Salami 2", pizza, new Vector2(10f, 4f), 12f, salami, circle);
+        Circle("Salami 3", pizza, new Vector2(0f, -11f), 12f, salami, circle);
+    }
+
+    // Unter jedem Drittel des Balkens die Münzen, die es in diesem Bereich als Trinkgeld gibt (1, 2, 3)
+    private static void BuildTipGroups(Transform parent, SerializedObject hud)
+    {
+        Sprite circle = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+        SerializedProperty groups = hud.FindProperty("tipGroups");
+        groups.arraySize = 3;
+        // Innere Balkenbreite 632 (4 px Rand), Drittel-Mitten bei -210.7, 0, +210.7
+        const float third = 632f / 3f;
+        for (int i = 0; i < 3; i++)
+        {
+            RectTransform group = CreateRect($"Tip {i + 1}", parent);
+            group.anchorMin = group.anchorMax = new Vector2(0.5f, 1f);
+            group.sizeDelta = new Vector2(90f, 26f);
+            group.anchoredPosition = new Vector2((i - 1) * third, -98f);
+            int count = i + 1;
+            for (int c = 0; c < count; c++)
+            {
+                // Münzen nebeneinander, die Gruppe mittig unter dem Drittel
+                Circle($"Coin {c + 1}", group, new Vector2((c - (count - 1) / 2f) * 22f, 0f), 22f, new Color(1f, 0.8f, 0.15f), circle);
+            }
+            groups.GetArrayElementAtIndex(i).objectReferenceValue = group;
+        }
+    }
+
+    // Vorlage der Chili-Flamme (orange mit gelbem Kern). PizzaHud kopiert sie pro eingesammelter Chili
+    private static void BuildFlame(Transform parent, SerializedObject hud)
+    {
+        Sprite circle = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+        RectTransform flame = CreateRect("Flame Template", parent);
+        flame.sizeDelta = new Vector2(40f, 40f);
+        Circle("Glow", flame, Vector2.zero, 40f, new Color(1f, 0.4f, 0.05f, 0.9f), circle);
+        Circle("Core", flame, Vector2.zero, 20f, new Color(1f, 0.9f, 0.4f), circle);
+        flame.gameObject.SetActive(false);
+        hud.FindProperty("flameTemplate").objectReferenceValue = flame;
+    }
+
+    // "Keep the pizza hot!" unter den Münzen, nur kurz zu Levelbeginn (PizzaHud blendet ein und aus)
+    private static void BuildHeatHint(Transform parent, SerializedObject hud)
+    {
+        var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
+        RectTransform hint = CreateRect("Heat Hint", parent);
+        hint.anchorMin = hint.anchorMax = new Vector2(0.5f, 1f);
+        hint.sizeDelta = new Vector2(900f, 60f);
+        hint.anchoredPosition = new Vector2(0f, -150f);
+        var group = hint.gameObject.AddComponent<CanvasGroup>();
+        group.alpha = 0f;
+        group.interactable = false;
+        group.blocksRaycasts = false;
+        TextMeshProUGUI text = CreateText("Text", hint, "Keep the pizza hot!", 46f, new Color(1f, 0.85f, 0.35f), Vector2.zero, outline);
+        text.rectTransform.sizeDelta = new Vector2(900f, 60f);
+        hud.FindProperty("heatHint").objectReferenceValue = group;
+    }
+
+    private static void Circle(string name, Transform parent, Vector2 position, float size, Color color, Sprite sprite)
+    {
+        RectTransform rect = CreateImage(name, parent, color);
+        rect.GetComponent<Image>().sprite = sprite;
+        rect.sizeDelta = new Vector2(size, size);
+        rect.anchoredPosition = position;
     }
 
     private static void CreateTick(RectTransform area, float heat)
@@ -242,10 +307,7 @@ public static class PizzaHeatSetup
             coins.GetArrayElementAtIndex(i).objectReferenceValue = coin.GetComponent<Image>();
         }
 
-        // Lieferzeit unter den Münzen, der Hinweis rutscht dafür etwas nach unten
-        TextMeshProUGUI time = CreateText("Delivery Time", panel, "Time  0:00.0", 34f, new Color(1f, 0.93f, 0.6f), new Vector2(0f, -85f), outline);
-        hud.FindProperty("deliveredTimeText").objectReferenceValue = time;
-        CreateText("Continue Hint", panel, "Press Jump to continue", 30f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, -140f), outline);
+        CreateText("Continue Hint", panel, "Press Jump to continue", 30f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, -95f), outline);
 
         hud.FindProperty("deliveredPanel").objectReferenceValue = panel.gameObject;
         // Im Prefab ausgeschaltet speichern, sonst verdeckt das Panel im Edit Mode die Game-Ansicht

@@ -41,8 +41,6 @@ public class GameManager : MonoBehaviour
     public bool IsRespawning { get; private set; }
     // Eine kurze Szene mit dem Spieler läuft (z.B. Mikrowelle). Respawns werden solange ignoriert
     public bool InCutscene { get; set; }
-    // Stoppuhr: Lieferzeit seit Levelstart, bleibt beim Abliefern stehen
-    public float ElapsedTime { get; private set; }
 
     private PlayerController playerController;
     private PlayerLife playerLife;
@@ -68,7 +66,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // Der Spieler ist draußen und spielt. Vorher (Stadt laden, Kamerafahrt, aus der Tür laufen) laufen weder Wärme noch Stoppuhr
+    // Der Spieler ist draußen und spielt. Vorher (Stadt laden, Kamerafahrt, aus der Tür laufen) läuft die Wärme nicht
     private bool started;
 
     // Start als Coroutine: Unity wartet dann einfach mit dem Rest (Stadt laden, Kamerafahrt, Tür), Frame für Frame
@@ -135,7 +133,6 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        ElapsedTime += Time.deltaTime;
         RemainingTime = Mathf.Max(0f, RemainingTime - Time.deltaTime);
 
         if (RemainingTime <= 0f)

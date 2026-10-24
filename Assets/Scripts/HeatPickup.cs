@@ -5,6 +5,9 @@ using UnityEngine;
 // Schwebt und schaukelt, damit sie auffällt. Beim Einsammeln ploppt sie auf, sprüht Glut und der Karton dampft kurz.
 public class HeatPickup : MonoBehaviour
 {
+    // Eine Chili wurde eingesammelt: Weltposition und Wärme-Anteil. Das HUD lässt daraus eine Flamme zum Balken fliegen
+    public static event System.Action<Vector3, float> Collected;
+
     [Header("Wärme")]
     [Tooltip("Anteil des ganzen Wärmebalkens. 1/6 = eine halbe Münz-Stufe (die Stufen liegen bei 1/3 und 2/3)")]
     [SerializeField] private float heatFraction = 1f / 6f;
@@ -89,6 +92,7 @@ public class HeatPickup : MonoBehaviour
         {
             GameManager.Instance.AddHeat(heatFraction);
         }
+        Collected?.Invoke(model.position, heatFraction);
         PizzaCarton carton = other.GetComponentInChildren<PizzaCarton>();
         if (carton != null)
         {

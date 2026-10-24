@@ -4,8 +4,7 @@ using UnityEngine;
 
 // Mikrowellen-Station im 24/7-Kiosk: Läuft der Spieler in den Trigger, geht er zur Theke, schiebt den Pizzakarton
 // in die Mikrowelle, "DING!", nimmt ihn wieder heraus und läuft weiter, mit wieder ofenfrischer Pizza (100%).
-// Einmal pro Leben: Danach "USED", nach einem Respawn wieder frei (wie die Power-Ups). Die Stoppuhr läuft weiter,
-// der Stopp kostet also Zeit: heiße Pizza (mehr Trinkgeld) gegen schnellere Lieferung.
+// Einmal pro Leben: Danach "USED", nach einem Respawn wieder frei . Der Stopp dauert ein paar Sekunden.
 public class MicrowaveStation : MonoBehaviour
 {
     [Header("Wege (Spieler-Mitte)")]
