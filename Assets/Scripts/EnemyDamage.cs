@@ -129,8 +129,13 @@ public class EnemyDamage : MonoBehaviour
     // Der Höhenvergleich funktioniert für jede Gegnerform; ein Winkel zur Mitte wäre bei langen Gegnern (Hund) ungenau
     private bool IsStomp(PlayerController player)
     {
+        return IsStomp(player, GetComponent<Collider>(), stompHeightTolerance);
+    }
+
+    // Auch für Gegner mit eigener Kontakt-Logik (Skater)
+    public static bool IsStomp(PlayerController player, Collider enemyCollider, float stompHeightTolerance)
+    {
         Collider playerCollider = player.GetComponent<Collider>();
-        Collider enemyCollider = GetComponent<Collider>();
         if (playerCollider == null || enemyCollider == null)
         {
             return false;

@@ -11,6 +11,8 @@ using UnityEngine;
 //    (Timing wie bei den Autos, die Leute stehen nicht im Weg)
 //  - "Duck Family": weiße Entenmutter (GroundPatrol + EnemyDamage + Duck) und fünf gelbe Küken (Duckling), die ihre Spur
 //    mit Verzögerung nachlaufen. Wurzel 1 m über der Plattform-Mitte wie beim Hund
+//  - "Skater": Rollschuhfahrer (GroundPatrol ohne Sicht + Skater) für den Brunnenring, fährt hin und her. Draufspringen
+//    = abfedern, er rudert und fährt weiter. Wurzel 1 m über der Plattform-Mitte wie beim Hund
 //  - "Picnic Goal": Ziel von Level 3 ohne Haus: Picknickdecke mit Korb, der Kunde (Customer, sitzt) und eine Freundin
 //    (PicnicFriend). Level 3 setzt es statt des Goal-Prefabs mit Kundenhaus ein (Name bleibt "Goal")
 public static class ParkSetup
@@ -32,6 +34,7 @@ public static class ParkSetup
         BuildFrisbeePlayers(false);
         BuildFrisbeePlayers(true);
         BuildDuckFamily();
+        BuildSkater();
         BuildPicnicGoal();
         AssetDatabase.SaveAssets();
         Debug.Log("ParkSetup: Park-Prefabs gespeichert.");
@@ -268,6 +271,70 @@ public static class ParkSetup
             PrimitiveKit.Box("Foot", legs[i], new Vector3(0.04f * scale, -hipY + 0.01f, 0f), new Vector3(0.13f * scale, 0.02f, 0.09f * scale), duckOrange);
         }
         return legs;
+    }
+
+    // ---------- Skater ----------
+
+    private static void BuildSkater()
+    {
+        // Füße bei -0.46 (Parkweg 0.54, Wurzel 1 m über der Plattform-Mitte), die Figur steht 0.14 höher auf den Rollschuhen
+        const float feet = -0.46f, skateHeight = 0.14f;
+        var root = new GameObject("Skater");
+        Transform t = root.transform;
+        PrimitiveKit.AddBoxCollider(root, new Vector3(0f, feet + 0.9f, 0f), new Vector3(0.6f, 1.8f, 0.6f));
+        var rigidbody = root.AddComponent<Rigidbody>();
+        rigidbody.isKinematic = true;
+        rigidbody.useGravity = false;
+        rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+
+        // Körper (wird zum Umdrehen gespiegelt), darin die Figur im Profil: Sie schaut bei Drehung 0 nach -Z, -90° = nach +X
+        Transform body = PrimitiveKit.Pivot("Body", t, Vector3.zero);
+        Figure f = BuildFigure(body, "Figure", new Vector3(0f, feet + skateHeight, 0f), -90f);
+        Renderer helmet = PrimitiveKit.Part("Helmet", PrimitiveType.Sphere, f.rig, new Vector3(0f, 1.45f, 0.02f), new Vector3(0.5f, 0.36f, 0.52f), figure);
+        Renderer visor = PrimitiveKit.Part("Visor", PrimitiveType.Sphere, f.rig, new Vector3(0f, 1.42f, -0.22f), new Vector3(0.36f, 0.06f, 0.16f), figure);
+
+        // Rollschuhe unter der Figur (nicht am Rig, damit sie beim Vorlehnen auf dem Boden bleiben)
+        var skates = new Transform[2];
+        for (int i = 0; i < 2; i++)
+        {
+            float side = i == 0 ? -1f : 1f;
+            skates[i] = PrimitiveKit.Pivot(i == 0 ? "Skate L" : "Skate R", f.root, new Vector3(side * 0.13f, -skateHeight, 0f));
+            PrimitiveKit.Box("Boot", skates[i], new Vector3(0f, 0.1f, 0f), new Vector3(0.15f, 0.13f, 0.3f), eyeBlack);
+            foreach (float z in new[] { -0.11f, -0.04f, 0.04f, 0.11f })
+            {
+                PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, skates[i], new Vector3(0f, 0.035f, z), new Vector3(0.07f, 0.015f, 0.07f), ducklingYellow)
+                    .transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            }
+        }
+
+        // Sprechblase an der Wurzel (nicht am gespiegelten Körper), zur Kamera
+        GameObject whoa = SpeechBubble(t, new Vector3(0.4f, feet + 2.25f, -0.3f), "WHOA!");
+
+        var patrol = new SerializedObject(root.AddComponent<GroundPatrol>());
+        patrol.FindProperty("patrolSpeed").floatValue = 6f;
+        patrol.FindProperty("chaseSpeed").floatValue = 6f;
+        patrol.FindProperty("acceleration").floatValue = 8f;
+        patrol.FindProperty("deceleration").floatValue = 10f;
+        patrol.FindProperty("turnDuration").floatValue = 0.35f;
+        // Sieht niemanden: fährt nur seine Runde
+        patrol.FindProperty("sightRange").floatValue = 0f;
+        patrol.FindProperty("usePatrolLimits").boolValue = true;
+        patrol.FindProperty("flipTarget").objectReferenceValue = body;
+        patrol.ApplyModifiedPropertiesWithoutUndo();
+
+        var skater = new SerializedObject(root.AddComponent<Skater>());
+        skater.FindProperty("rig").objectReferenceValue = f.rig;
+        skater.FindProperty("leftArm").objectReferenceValue = f.leftArm;
+        skater.FindProperty("rightArm").objectReferenceValue = f.rightArm;
+        skater.FindProperty("leftSkate").objectReferenceValue = skates[0];
+        skater.FindProperty("rightSkate").objectReferenceValue = skates[1];
+        skater.FindProperty("whoaBubble").objectReferenceValue = whoa;
+        PrimitiveKit.SetReferences(skater, "shirtRenderers", f.body);
+        PrimitiveKit.SetReferences(skater, "skinRenderers", f.head, f.leftArmMesh, f.rightArmMesh);
+        PrimitiveKit.SetReferences(skater, "helmetRenderers", helmet, visor);
+        skater.ApplyModifiedPropertiesWithoutUndo();
+
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Skater.prefab");
     }
 
     // ---------- Picknick (Ziel von Level 3) ----------
