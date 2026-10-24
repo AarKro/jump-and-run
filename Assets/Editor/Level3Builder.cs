@@ -58,8 +58,9 @@ public static class Level3Builder
     // ---------- Baustelle (Mozzarella Blvd, Welt-z in Laufrichtung, Gehweg-Oberkante 0.5, Sprung ~3.2 m hoch / ~5.5 m weit) ----------
     //   z   9        Straßensperre
     //   z  19        Grube 3.5 m zum Aufwärmen
-    //   z  36.5–51.5 Brücken-Bühne 1 mitten in 15 m Grube (je 6 m Lücke, zu weit für einen flachen Sprung): unten (-1.5)
-    //                aufspringen, hochfahren, oben (+2.5) abspringen. Chili 1 schwebt über ihrer oberen Stellung
+    //   z  36.5–51.5 15 m Grube mit zwei Brücken-Bühnen bei z 41 und 47 (je 3 m Lücke zu den Kanten und dazwischen),
+    //                gegenläufig: auf Bühne 1 unten (-1.5) aufspringen, hochfahren, auf Bühne 2 unten runterspringen, mit ihr
+    //                hochfahren und oben (+2.5) abspringen. Chili 1 schwebt über der oberen Stellung von Bühne 2
     //   z  58        Grube 3.5 m
     //   z  66 / 70   Aufzugs-Bühne auf dem Gehweg (1.5 → 6.5) neben einem Gerüst auf 6.5 mit Chili 2 (nur per Bühne erreichbar)
     //   z  79        Gerüst auf 3.5 an der Kante der zweiten Brücken-Grube: Von dort erreicht man die Bühne auch oben
@@ -462,8 +463,9 @@ public static class Level3Builder
         LevelBuildKit.Place("Car Crash", 4, 0, gameplayParent);
 
         // Baustelle (siehe Tabelle oben)
-        Lift(44f, BridgeLowY, BridgeHighY, PitFloorY, startHigh: false);
-        LevelBuildKit.HeatPickup(Mathf.Round(MozzarellaU(44f)), BridgeHighY + 2, gameplayParent);
+        Lift(41f, BridgeLowY, BridgeHighY, PitFloorY, startHigh: false);
+        Lift(47f, BridgeLowY, BridgeHighY, PitFloorY, startHigh: true);
+        LevelBuildKit.HeatPickup(Mathf.Round(MozzarellaU(47f)), BridgeHighY + 2, gameplayParent);
 
         Lift(66f, ElevatorLowY, ElevatorHighY, CityLayout.Surface, startHigh: false);
         LevelBuildKit.Place("Scaffold", Mathf.Round(MozzarellaU(70f)), ElevatorHighY, gameplayParent);
