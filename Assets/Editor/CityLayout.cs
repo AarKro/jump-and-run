@@ -171,6 +171,33 @@ public static class CityLayout
     public const float PiazzaSouthOpeningFrom = -236f;
     public static readonly Rect CustomerHouseLot = Rect.MinMaxRect(55f, 75.7f, 65f, 83.7f);
 
+    // Pesto Park (Level 3): Rasen und Wege. Die Wege liegen 4 cm über dem Gehweg-Niveau, damit Prefabs (für 0.5 gebaut,
+    // Wurzeln auf ganzen Metern) kaum sichtbar einsinken
+    public const float ParkLawnTop = Surface + 0.02f;
+    public const float ParkPathTop = Surface + 0.04f;
+    public static Rect ParkArea => System.Array.Find(Blocks, block => block.Kind == BlockKind.Park).Lots;
+    public static Vector2 ParkCenter => ParkArea.center;
+    // Richtung vom Brunnen zur Südwest-Ecke (dort entlang läuft Level 3 zum Kunden) und senkrecht dazu nach Nordwesten
+    public static Vector2 ParkDirSW => (new Vector2(ParkArea.xMin - 1f, ParkArea.yMin - 1f) - ParkCenter).normalized;
+    public static Vector2 ParkNormalNW => new Vector2(ParkDirSW.y, -ParkDirSW.x);
+    // Punkt auf dem Südwest-Weg im Abstand s von der Brunnenmitte
+    public static Vector2 ParkPathSW(float s) => ParkCenter + ParkDirSW * s;
+
+    // Ententeich: Oval mit der langen Achse entlang des Südwest-Wegs, nordwestlich davon. Zwei Bäche kommen von einer
+    // Quelle südöstlich des Wegs, kreuzen ihn (Fußgängerbrücken, die Level 3 ausschneidet: dort sind es Lücken) und
+    // fließen in den Teich. Alles als Abstand s entlang des Südwest-Wegs
+    public const float PondAlongPath = 36f;
+    public const float PondOffPath = 13f;
+    public const float PondHalfLength = 12f;
+    public const float PondHalfWidth = 7f;
+    public static Vector2 PondCenter => ParkPathSW(PondAlongPath) + ParkNormalNW * PondOffPath;
+    public static readonly float[] ParkStreamsAlongPath = { 27f, 37f };
+    public const float ParkStreamWidth = 3f;
+    public const float ParkStreamSpring = 6f;   // Quelle so weit südöstlich des Wegs
+    // Halbe Kantenlänge des Ausschnitts, mit dem Level 3 eine Brücke entfernt. Alle Brückenteile liegen mit ihrer Mitte
+    // innerhalb, Bachwasser und Ufer außerhalb
+    public const float ParkBridgeCutoutHalf = 1.6f;
+
     // Sehenswürdigkeiten
     public static readonly Vector2 LeaningTower = new Vector2(-200f, 50f);
     public static readonly Vector2 FoundersCircle = new Vector2(-40f, 130f);

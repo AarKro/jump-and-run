@@ -48,12 +48,12 @@ public static class Level3Builder
     // Kleine Bögen vom Diagonalweg auf den Brunnenring und vom Ring auf den Südwest-Weg
     private const float RingFilletRadius = 4f;
     // Bahn-Anfang auf dem Südwest-Weg (Abstand von der Brunnenmitte), Kunde 8 m davor
-    private const float LaneStartFromCenter = 63f;
-    private const float GoalFromCenter = 55f;
+    private const float LaneStartFromCenter = 58f;
+    private const float GoalFromCenter = 50f;
 
     // Laufboden: Pflaster des Founder's Circle bzw. Parkwege (beides ohne Collider in der Stadt)
     private const float PavingTop = CityLayout.Surface + 0.01f;
-    private const float ParkPathTop = CityLayout.Surface + 0.1f;
+    private const float ParkPathTop = CityLayout.ParkPathTop;
 
     // ---------- Baustelle (Mozzarella Blvd, Welt-z in Laufrichtung, Gehweg-Oberkante 0.5, Sprung ~3.2 m hoch / ~5.5 m weit) ----------
     //   z   9        Straßensperre
@@ -251,9 +251,22 @@ public static class Level3Builder
         // Founder's Circle liegt über der Kreuzung (nur Optik, die Fahrbahn darunter hat keinen Collider), die Parkwege
         // sind auch nur Optik: unsichtbarer Laufboden ab dem Überweg bis zum Bahn-Anfang. Auf dem Pflaster 0.51, auf den
         // Wegen 0.6; dazwischen steigt er während des Bogens auf den Diagonalweg langsam an
+        // An den Bächen auf dem Südwest-Weg hört er auf: Die Stadt hat dort Brücken, die der Ausschnitt entfernt
         float rampFrom = pieceStartU[5], rampTo = pieceStartU[6];
-        WalkGround(startU - 0.5f, MozzarellaU(CrustNorthCurb) + 0.5f,
-            u => Mathf.Lerp(ParkPathTop, PavingTop, Mathf.InverseLerp(rampFrom, rampTo, u)));
+        System.Func<float, float> top = u => Mathf.Lerp(ParkPathTop, PavingTop, Mathf.InverseLerp(rampFrom, rampTo, u));
+        float from = startU - 0.5f;
+        // Weiter weg vom Brunnen = kleineres u, also absteigend nach s durchgehen
+        var streams = new List<float>(CityLayout.ParkStreamsAlongPath);
+        streams.Sort((x, y) => y.CompareTo(x));
+        foreach (float s in streams)
+        {
+            float gapCenter = ParkU(s);
+            float half = CityLayout.ParkStreamWidth / 2f;
+            WalkGround(from, gapCenter - half, top);
+            from = gapCenter + half;
+            Stream(link, s);
+        }
+        WalkGround(from, MozzarellaU(CrustNorthCurb) + 0.5f, top);
     }
 
     // Höhenkurve der Autos (0 = Fahrbahn, 0.2 = Gehweghöhe) um die Rampe am westlichen Bordstein ergänzen: Vorn (Richtung
@@ -323,6 +336,26 @@ public static class Level3Builder
                 PrimitiveKit.Box("Stripe", arm, new Vector3(0f, 0f, -0.35f - i * 0.7f), new Vector3(0.08f, 0.08f, 0.7f), i % 2 == 0 ? red : white);
             }
         }
+    }
+
+    // Stelle u auf dem Südwest-Weg im Abstand s von der Brunnenmitte (das erste Bahn-Stück, u wächst zum Brunnen hin)
+    private static float ParkU(float s) => startU + (LaneStartFromCenter - s);
+
+    // Bach-Lücke im Südwest-Weg: Ausschnitt nimmt die Brücke der Stadt und den Boden darunter weg (sonst stünde man auf
+    // der Gehweg-Platte unter dem Park, und die Enten liefen darüber). Hineinfallen = Respawn, Auslöser knapp unter
+    // der Wasseroberfläche wie bei den Bachmündungen in Level 2
+    private static void Stream(Transform link, float s)
+    {
+        Vector2 at = CityLayout.ParkPathSW(s);
+        float half = CityLayout.ParkBridgeCutoutHalf;
+        LevelBuildKit.Cutout(link, $"Stream {s:F0}", at.x - half, at.x + half, at.y - half, at.y + half);
+
+        float u = ParkU(s);
+        var trap = new GameObject($"Stream Kill {s:F0}");
+        trap.transform.SetParent(groundParent, false);
+        trap.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + Vector3.up * (CityLayout.ParkLawnTop - 0.6f), LevelBuildKit.Frame(u));
+        PrimitiveKit.AddBoxCollider(trap, Vector3.zero, new Vector3(CityLayout.ParkStreamWidth - 0.2f, 1f, 3f), isTrigger: true);
+        trap.AddComponent<KillZone>();
     }
 
     // Baugrube auf dem Mozzarella Blvd, Lücke um z (Welt), quer über Gehweg und Fahrbahn bis zum gegenüberliegenden Bordstein.
@@ -427,6 +460,38 @@ public static class Level3Builder
         {
             RoadClosure(z);
         }
+
+        BuildParkGameplay();
+    }
+
+    // ---------- Park (Laufrichtung = -u) ----------
+    // Diagonalweg (Bahn-Stück 4): zwei Frisbee-Paare, das zweite mit versetztem Takt, darüber Chili 3 (nur vom Kopf
+    // eines Spielers erreichbar). Brunnenring (Stück 2): Hund zwischen zwei Bänken
+    private static void BuildParkGameplay()
+    {
+        float diagonalStart = pieceStartU[5];   // am Founder's Circle (dort kommt der Spieler her)
+        Frisbee(Mathf.Round(diagonalStart - 12f), 0f);
+        float secondPair = Mathf.Round(diagonalStart - 34f);
+        Frisbee(secondPair, 0.85f);
+        LevelBuildKit.HeatPickup(secondPair, 6, gameplayParent);
+
+        float ringStart = pieceStartU[2], ringEnd = pieceStartU[3];
+        LevelBuildKit.Place("Bench", Mathf.Round(ringEnd - 3.5f), 0, gameplayParent);
+        GameObject dog = LevelBuildKit.Dog(Mathf.Round((ringStart + ringEnd) / 2f), 1f, gameplayParent);
+        // Im Park gibt es keinen Bordstein: Draufgesprungen läuft er eben über den Rasen davon
+        var dogSettings = new SerializedObject(dog.GetComponent<Dog>());
+        dogSettings.FindProperty("curbDrop").floatValue = 0f;
+        dogSettings.FindProperty("curbHopHeight").floatValue = 0f;
+        dogSettings.ApplyModifiedPropertiesWithoutUndo();
+        LevelBuildKit.Place("Bench", Mathf.Round(ringStart + 3.5f), 0, gameplayParent);
+    }
+
+    private static void Frisbee(float u, float startOffset)
+    {
+        GameObject pair = LevelBuildKit.PlaceAsset($"{ParkSetup.PrefabFolder}/Frisbee Players.prefab", u, 0, gameplayParent);
+        var serialized = new SerializedObject(pair.GetComponent<FrisbeePlayers>());
+        serialized.FindProperty("startOffset").floatValue = startOffset;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
     }
 
     // Scherenbühne an der Stelle z auf dem Mozzarella Blvd. Fährt zwischen lowY und highY (Wurzel-Höhen), Sockel auf groundY.
