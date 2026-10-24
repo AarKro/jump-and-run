@@ -15,8 +15,8 @@ using UnityEngine;
 // Die Bahn ist in +u-Richtung definiert (Häuser bzw. Brunnen links davon): Sie beginnt beim Kunden und endet hinter
 // der Pizzeria. Auf der Margherita Avenue ist u = Welt-X, auf dem Mozzarella Blvd u = -31 - z.
 //
-// Grundgerüst: Gruben, Überweg, Laufboden im Park und Ziel. Scherenbühnen, Bauwagen-Checkpoint, Frisbee-Spieler,
-// Hund, Enten, Teich und Chilis kommen als eigene Arbeitsschritte dazu.
+// Fertig: Baustelle (Gruben, Scherenbühnen, Gerüste, 2 Chilis), Überweg, Laufboden im Park und Ziel. Bauwagen-Checkpoint,
+// Frisbee-Spieler, Hund, Enten, Teich und das dritte Chili kommen als eigene Arbeitsschritte dazu.
 public static class Level3Builder
 {
     private const string ScenePath = "Assets/Scenes/levels/level03.unity";
@@ -52,6 +52,26 @@ public static class Level3Builder
     // Laufboden: Pflaster des Founder's Circle bzw. Parkwege (beides ohne Collider in der Stadt)
     private const float PavingTop = CityLayout.Surface + 0.01f;
     private const float ParkPathTop = CityLayout.Surface + 0.1f;
+
+    // ---------- Baustelle (Mozzarella Blvd, Welt-z in Laufrichtung, Gehweg-Oberkante 0.5, Sprung ~3.2 m hoch / ~5.5 m weit) ----------
+    //   z   9        Straßensperre
+    //   z  19        Grube 3.5 m zum Aufwärmen
+    //   z  36.5–51.5 Brücken-Bühne 1 mitten in 15 m Grube (je 6 m Lücke, zu weit für einen flachen Sprung): unten (-1.5)
+    //                aufspringen, hochfahren, oben (+2.5) abspringen. Chili 1 schwebt über ihrer oberen Stellung
+    //   z  58        Grube 3.5 m
+    //   z  66 / 70   Aufzugs-Bühne auf dem Gehweg (1.5 → 6.5) neben einem Gerüst auf 6.5 mit Chili 2 (nur per Bühne erreichbar)
+    //   z  79        Gerüst auf 3.5 an der Kante der zweiten Brücken-Grube: Von dort erreicht man die Bühne auch oben
+    //   z  80.5–95.5 Brücken-Bühne 2, startet oben (gegenläufig zu Bühne 1)
+    //   z 103        Straßensperre
+    private static readonly (float z, float gap, bool barriers)[] Pits =
+    {
+        (19f, 3.5f, true), (44f, 15f, true), (58f, 3.5f, true), (88f, 15f, false),
+    };
+    // Höhe der Grubensohle (Oberkante "Dirt" im Construction Pit)
+    private const float PitFloorY = -3.9f;
+    private const float BridgeLowY = -2f, BridgeHighY = 2f;      // Wurzel; Oberkante je 0.5 höher
+    private const float ElevatorLowY = 1f, ElevatorHighY = 6f;
+    private static readonly float[] RoadClosureZ = { 9f, 103f };
 
     private static Transform groundParent, gameplayParent, propParent;
 
@@ -193,11 +213,10 @@ public static class Level3Builder
 
     private static void BuildGround(Transform link)
     {
-        // Baustelle auf dem Mozzarella Blvd: Gruben über Gehweg und Fahrbahn (die Straße ist gesperrt).
-        // Vorläufig normale 3.5-m-Gruben, die Scherenbühnen kommen als eigener Schritt dazu
-        foreach (float z in new[] { 30f, 55f, 80f })
+        // Baustelle auf dem Mozzarella Blvd: Gruben über Gehweg und Fahrbahn (die Straße ist gesperrt)
+        foreach (var pit in Pits)
         {
-            Pit(link, z, 3.5f);
+            Pit(link, pit.z, pit.gap, pit.barriers);
         }
 
         // Überweg über die Crust Street: Die Autos kommen von Osten (lokal +Z = Hausseite) die Crust Street entlang
@@ -217,15 +236,19 @@ public static class Level3Builder
             u => Mathf.Lerp(ParkPathTop, PavingTop, Mathf.InverseLerp(rampFrom, rampTo, u)));
     }
 
-    // Baugrube auf dem Mozzarella Blvd, Lücke um z (Welt), quer über Gehweg und Fahrbahn bis zum gegenüberliegenden Bordstein
-    private static void Pit(Transform link, float z, float gap)
+    // Baugrube auf dem Mozzarella Blvd, Lücke um z (Welt), quer über Gehweg und Fahrbahn bis zum gegenüberliegenden Bordstein.
+    // barriers: Absperrungen an beiden Kanten (nicht, wo ein Gerüst an der Kante steht)
+    private static void Pit(Transform link, float z, float gap, bool barriers)
     {
         float u = Mathf.Round(MozzarellaU(z));
         float from = u - gap / 2f, to = u + gap / 2f;
         // Das Prefab ist 1 m länger und steckt unter den Gehwegkanten
         LevelBuildKit.Stretched("Construction Pit", u, 0, gap + 1f, groundParent);
-        LevelBuildKit.Place("Barrier", Mathf.Round(to + 1f), 0, groundParent);
-        LevelBuildKit.Place("Barrier", Mathf.Round(from - 1f), 0, groundParent);
+        if (barriers)
+        {
+            LevelBuildKit.Place("Barrier", Mathf.Round(to + 1f), 0, groundParent);
+            LevelBuildKit.Place("Barrier", Mathf.Round(from - 1f), 0, groundParent);
+        }
         LevelBuildKit.Cutout(link, $"Pit z{z:F0}", MozzarellaX + AvenueRoadEndLocalZ, MozzarellaX + FacadeLocalZ, z - gap / 2f, z + gap / 2f);
 
         // Seitenwände 0.1 m in der Lücke (genau auf der Schnittkante flackerten sie mit dem Stadt-Boden): unter dem Gehweg
@@ -296,6 +319,75 @@ public static class Level3Builder
     {
         // Östlich der Pizzeria geht es nicht weiter: Unfall mit unsichtbarer Wand (wie in Level 2)
         LevelBuildKit.Place("Car Crash", 4, 0, gameplayParent);
+
+        // Baustelle (siehe Tabelle oben)
+        Lift(44f, BridgeLowY, BridgeHighY, PitFloorY, startHigh: false);
+        LevelBuildKit.HeatPickup(Mathf.Round(MozzarellaU(44f)), BridgeHighY + 2, gameplayParent);
+
+        Lift(66f, ElevatorLowY, ElevatorHighY, CityLayout.Surface, startHigh: false);
+        LevelBuildKit.Place("Scaffold", Mathf.Round(MozzarellaU(70f)), ElevatorHighY, gameplayParent);
+        LevelBuildKit.HeatPickup(Mathf.Round(MozzarellaU(70f)), ElevatorHighY + 2, gameplayParent);
+
+        LevelBuildKit.Place("Scaffold", Mathf.Round(MozzarellaU(79f)), 3, gameplayParent);
+        Lift(88f, BridgeLowY, BridgeHighY, PitFloorY, startHigh: true);
+
+        foreach (float z in RoadClosureZ)
+        {
+            RoadClosure(z);
+        }
+    }
+
+    // Scherenbühne an der Stelle z auf dem Mozzarella Blvd. Fährt zwischen lowY und highY (Wurzel-Höhen), Sockel auf groundY.
+    // startHigh: steht am Anfang oben (fährt zuerst runter), sonst unten
+    private static void Lift(float z, float lowY, float highY, float groundY, bool startHigh)
+    {
+        float u = Mathf.Round(MozzarellaU(z));
+        GameObject lift = LevelBuildKit.Place("Scissor Lift", u, startHigh ? highY : lowY, gameplayParent);
+        Vector3 bottom = LevelBuildKit.Lane.PointAt(u) + Vector3.up * lowY;
+        lift.transform.Find("moving platform start").position = bottom;
+        lift.transform.Find("moving platform end").position = bottom + Vector3.up * (highY - lowY);
+
+        var serialized = new SerializedObject(lift.GetComponent<ScissorLift>());
+        serialized.FindProperty("groundY").floatValue = groundY;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        lift.GetComponent<ScissorLift>().Arrange();
+    }
+
+    // Straßensperre quer über den Mozzarella Blvd (nur Optik, vor der Laufbahn): rot-weiße Baken und ein Schild
+    private static void RoadClosure(float z)
+    {
+        float u = Mathf.Round(MozzarellaU(z));
+        Quaternion frame = LevelBuildKit.Frame(u);
+        Vector3 at = LevelBuildKit.Lane.PointAt(u);
+        Transform closure = new GameObject($"Road Closure z{z:F0}").transform;
+        closure.SetParent(propParent, false);
+        closure.SetPositionAndRotation(at, frame);
+
+        Material orange = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Barrier Orange.mat");
+        Material white = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Awning White.mat");
+        Material iron = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Iron.mat");
+        const float road = CityLayout.RoadTop;
+        // Absperrgitter in einer Reihe quer über die Fahrbahn, schräg gestellt: Gerade quer zur Straße sähe die Kamera
+        // von der Seite nur ihre Kanten. Dazwischen Pylonen
+        for (float localZ = AvenueCurbLocalZ - 1.5f; localZ > AvenueRoadEndLocalZ; localZ -= 2.5f)
+        {
+            Transform panel = PrimitiveKit.Pivot("Barrier Panel", closure, new Vector3(0f, road, localZ));
+            panel.localRotation = Quaternion.Euler(0f, 40f, 0f);
+            foreach (float x in new[] { -0.6f, 0.6f })
+            {
+                PrimitiveKit.Box("Post", panel, new Vector3(x, 0.5f, 0f), new Vector3(0.08f, 1f, 0.08f), iron);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                PrimitiveKit.Box("Stripe", panel, new Vector3(-0.45f + i * 0.3f, 0.85f, 0f), new Vector3(0.3f, 0.25f, 0.04f), i % 2 == 0 ? orange : white);
+            }
+            PrimitiveKit.Part("Cone", PrimitiveType.Cylinder, closure, new Vector3(0f, road + 0.25f, localZ - 1.25f), new Vector3(0.3f, 0.25f, 0.3f), orange);
+        }
+        // Schild an der Bordsteinkante, Schrift zur Kamera
+        PrimitiveKit.Box("Sign Post", closure, new Vector3(0f, road + 0.9f, AvenueCurbLocalZ - 0.4f), new Vector3(0.08f, 1.8f, 0.08f), iron);
+        PrimitiveKit.Box("Sign", closure, new Vector3(0f, road + 1.9f, AvenueCurbLocalZ - 0.45f), new Vector3(1.6f, 0.6f, 0.04f), white);
+        var text = PrimitiveKit.Text("Sign Text", closure, new Vector3(0f, road + 1.9f, AvenueCurbLocalZ - 0.48f), new Vector2(1.5f, 0.5f), "ROAD CLOSED", new Color(0.8f, 0.13f, 0.1f));
+        text.fontSizeMax = 4f;
     }
 
     // ---------- Deko ----------
@@ -303,11 +395,14 @@ public static class Level3Builder
     private static void BuildProps()
     {
         // Straßenlaternen und Bäume am Mozzarella Blvd, nicht an Gruben und nicht auf dem Überweg
-        var blocked = new List<(float from, float to)>
+        var blocked = new List<(float from, float to)> { (MozzarellaU(120f), MozzarellaU(104f)) };
+        foreach (var pit in Pits)
         {
-            (MozzarellaU(34f), MozzarellaU(26f)), (MozzarellaU(59f), MozzarellaU(51f)), (MozzarellaU(84f), MozzarellaU(76f)),
-            (MozzarellaU(120f), MozzarellaU(104f)),
-        };
+            blocked.Add((MozzarellaU(pit.z + pit.gap / 2f + 2f), MozzarellaU(pit.z - pit.gap / 2f - 2f)));
+        }
+        // Aufzugs-Bühne und Gerüste (die Stangen stehen hinter der Laufbahn, wo sonst Laternen stehen)
+        blocked.Add((MozzarellaU(73f), MozzarellaU(63f)));
+        blocked.Add((MozzarellaU(82f), MozzarellaU(76f)));
         bool Free(float u) => blocked.TrueForAll(zone => u < zone.from || u > zone.to);
         for (float z = 12f; z < 104f; z += 12f)
         {
