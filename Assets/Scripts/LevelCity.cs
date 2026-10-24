@@ -17,7 +17,7 @@ public class LevelCity : MonoBehaviour
     [Tooltip("Gebäude der Stadt, aus dem der Spieler beim Levelstart läuft")]
     [SerializeField] private string startLandmark = "Pizzeria";
     [Tooltip("Gebäude, deren Spiel-Funktion dieses Level nutzt (Café = Checkpoint, Kiosk = Mikrowelle). Alle anderen sind nur Kulisse")]
-    [SerializeField] private string[] usedLandmarks = { "Coffee Shop", "Kiosk" };
+    [SerializeField] private string[] usedLandmarks = { "Coffee Shop" };
 
     // Stadt geladen und eingerichtet: Erst dann startet der GameManager das Level
     public bool Ready { get; private set; }

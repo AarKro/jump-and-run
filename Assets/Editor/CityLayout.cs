@@ -154,8 +154,6 @@ public static class CityLayout
     {
         ("Pizzeria", new Vector3(-8f, 0f, 0f), 0f),
         ("Coffee Shop", new Vector3(61f, 0f, 0f), 0f),
-        // Lane-Stelle u = 80 nach der Kurve: x 68, z = 4 + (80 - 70.28)
-        ("Kiosk", new Vector3(68f, 0f, 13.7168f), -90f),
         // Ecke Margherita Avenue / Basil Street: Checkpoint von Level 2, die Seitenwand bildet die Hausecke
         ("Gelato Shop", new Vector3(-166f, 0f, 0f), 0f),
     };
@@ -166,7 +164,6 @@ public static class CityLayout
     {
         Rect.MinMaxRect(-13f, 3f, -3f, 11f),       // Pizzeria
         Rect.MinMaxRect(57f, 3f, 65f, 11f),        // Café
-        Rect.MinMaxRect(55f, 10.7f, 65f, 16.7f),   // Kiosk
         Rect.MinMaxRect(-170f, 3f, -162f, 11f),    // Gelateria
     };
 

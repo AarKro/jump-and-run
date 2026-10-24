@@ -3,7 +3,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
-// Baut Level 1 komplett neu auf (aus den Prefabs von CityPropsSetup). Häuser, Pizzeria, Café und Kiosk stehen in der
+// Baut Level 1 komplett neu auf (aus den Prefabs von CityPropsSetup). Häuser, Pizzeria und Café stehen in der
 // gemeinsamen Stadt-Szene (CityBuilder), die das Level über "City Link" (LevelCity) dazulädt. Das Level bringt nur seine
 // Laufbahn, eigenen Boden (Gehwege mit Baugruben, Eckplatz, Querstraße), Spiel-Elemente und Deko mit und schneidet
 // die Stadt dort mit CityCutouts aus.
@@ -18,7 +18,7 @@ using UnityEngine;
 //   20..23.5  Baugrube (3.5 m)
 //  23.5..64   Hund zwischen zwei Containern, Querstraße bei u = 50, Café-Checkpoint bei u = 61
 //   64..70.3  Kurve (Radius 4 m) über einen Eckplatz, die Seitenwand des Cafés bildet die Hausecke
-//  71.5..86.5 federnde Markise bei u = 77 → hoher Balkon mit Chili (der Kiosk bei u = 80 ist hier nur Kulisse, die Mikrowelle kommt erst in Level 4)
+//  71.5..86.5 federnde Markise bei u = 77 → hoher Balkon mit Chili
 //  86.5..102  lange Baugrube: Fensterputzer-Gondel hoch, dann über zwei Balkone
 //  102..154   zwei Hunde (Bank/Container als Wände), Balkon mit Chili, Kunde bei u = 146
 public static class CityLevelBuilder
@@ -147,7 +147,7 @@ public static class CityLevelBuilder
 
     // ---------- Wolken ----------
 
-    // Häuser, Pizzeria, Café und Kiosk kommen jetzt aus der Stadt-Szene (CityBuilder). Hier nur noch die Wolken
+    // Häuser, Pizzeria und Café kommen jetzt aus der Stadt-Szene (CityBuilder). Hier nur noch die Wolken
     private static void BuildClouds()
     {
         (int u, int y)[] clouds = { (-10, 28), (25, 33), (55, 26), (100, 34), (130, 29), (165, 31) };
@@ -162,7 +162,8 @@ public static class CityLevelBuilder
     private static void BuildGameplay()
     {
         // Westlich der Pizzeria geht es nicht weiter: Lieferwagen lädt Kisten ab, mit unsichtbarer Wand (Spieler käme von +u)
-        Place("Delivery Truck", -22, 0, gameplayParent);
+        // Nah an der Pizzeria (Tür bei u = -8), damit Kisten und Wagen beim Start im Bild sind: Wand bei -10.4
+        Place("Delivery Truck", -12, 0, gameplayParent);
 
         // Start: zwei Balkone als Kletterpartie (je 3 m höher), oben eine Chili
         Place("Balcony", 9, 3, gameplayParent);   // Oberkante 3.5
@@ -212,7 +213,9 @@ public static class CityLevelBuilder
         var blocked = new List<(float from, float to)>
         {
             (19, 25), (46, 54), (84, 104), (-10, -6), (59, 63), (63, 73), (142, 150),
-            (6.5f, 15.5f), (74.5f, 83.5f), (119.5f, 124.5f)
+            (6.5f, 15.5f), (74.5f, 83.5f), (119.5f, 124.5f),
+            // Lieferwagen mit Kisten (Wurzel bei u = -12, Führerhaus bis -22)
+            (-24f, -10f)
         };
         bool Free(int u) => blocked.TrueForAll(zone => u < zone.from || u > zone.to);
 
@@ -233,7 +236,7 @@ public static class CityLevelBuilder
 
     // ---------- Verbindung zur Stadt ----------
 
-    // LevelCity lädt die Stadt dazu und richtet Pizzeria (Start) und Café (Checkpoint) ein. Der Kiosk ist unbenutzt (Mikrowelle aus).
+    // LevelCity lädt die Stadt dazu und richtet Pizzeria (Start) und Café (Checkpoint) ein.
     // Die CityCutouts schneiden die Stadt dort aus, wo Level 1 eigenen Boden hat (Gehwege mit Baugruben, Eckplatz,
     // Querstraße mit Zebrastreifen) und wo sein Kundenhaus (Teil des Goal-Prefabs) steht
     private static void SetupCityLink()
