@@ -172,6 +172,14 @@ public class LanePath : MonoBehaviour
                 float angle = Vector3.SignedAngle(startRadial, fromCenter, Vector3.up) * Mathf.Deg2Rad;
                 // SignedAngle um +Y ist im Uhrzeigersinn von oben positiv, ein Linksbogen (+Z) läuft andersherum
                 angle *= -segment.turnSign;
+                // SignedAngle liefert nur -180°..180°: Bei Bögen über 180° (Brunnenring in Level 3) auf 0..360° bringen.
+                // Liegt der Punkt außerhalb des Bogens, gilt das näher gelegene Ende
+                float sweep = segment.length / segment.radius;
+                angle = Mathf.Repeat(angle, 2f * Mathf.PI);
+                if (angle > sweep)
+                {
+                    angle = angle - sweep < 2f * Mathf.PI - angle ? sweep : 0f;
+                }
                 local = Mathf.Clamp(angle * segment.radius, 0f, segment.length);
                 closest = ArcPoint(segment, local);
             }
