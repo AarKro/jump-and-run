@@ -6,12 +6,10 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Bewegung")]
     [SerializeField] private float moveSpeed = 7f;
+    [Tooltip("Beschleunigen beim Loslaufen in m/s². 30 = in gut 0.2 s auf voller Geschwindigkeit")]
     [SerializeField] private float acceleration = 30f;
-    [Tooltip("Abbremsen beim Loslassen der Taste in m/s². Hoch = sofortiger Stopp, kaum Nachrutschen")]
+    [Tooltip("Abbremsen beim Loslassen oder Umdrehen in m/s². Hoch = sofortiger Stopp, kaum Nachrutschen")]
     [SerializeField] private float deceleration = 150f;
-    [Tooltip("Anteil der Maximalgeschwindigkeit, der beim Loslaufen sofort erreicht wird (0 = normal beschleunigen, 1 = sofort volle Geschwindigkeit)")]
-    [Range(0f, 1f)]
-    [SerializeField] private float startSpeedFraction = 0.8f;
 
     [Header("Sprung")]
     [Tooltip("Maximale Sprunghöhe in Metern bei gehaltener Taste")]
@@ -194,19 +192,16 @@ public class PlayerController : MonoBehaviour
         // Seitliche Anteile (quer zur Bahn) verwerfen, z.B. nach einer Kurve
         horizontalVelocity = tangent * Vector3.Dot(horizontalVelocity, tangent);
 
-        // Beim Loslaufen (oder Umdrehen) direkt auf einen Großteil der Maximalgeschwindigkeit springen
-        float startSpeed = desiredVelocity.magnitude * startSpeedFraction;
+        // Loslaufen geht gleichmäßig mit "acceleration" (kein Sprung auf Startgeschwindigkeit mehr, das wirkte hektisch).
+        // Bremsen geht deutlich schneller: Taste losgelassen, zu schnell, oder Umdrehen. Beim Umdrehen erst bis zum
+        // Stillstand bremsen, danach beschleunigt er normal in die neue Richtung, so fühlt sich die Wende nicht träge an
         float speedInDirection = Vector3.Dot(horizontalVelocity, desiredDirection);
-        if (startSpeed > 0f && speedInDirection < startSpeed)
-        {
-            horizontalVelocity += desiredDirection * (startSpeed - speedInDirection);
-        }
-        // Langsamer werden (Taste losgelassen) geht deutlich schneller als Beschleunigen
-        float rate = desiredVelocity.sqrMagnitude < horizontalVelocity.sqrMagnitude ? deceleration : acceleration;
+        bool turning = desiredDirection != Vector3.zero && speedInDirection < 0f;
+        bool braking = desiredDirection == Vector3.zero || turning || horizontalVelocity.sqrMagnitude > desiredVelocity.sqrMagnitude;
         Vector3 newHorizontalVelocity = Vector3.MoveTowards(
             horizontalVelocity,
-            desiredVelocity,
-            rate * Time.fixedDeltaTime
+            turning ? Vector3.zero : desiredVelocity,
+            (braking ? deceleration : acceleration) * Time.fixedDeltaTime
         );
 
         // Am Boden übernimmt der Player die Geschwindigkeit des Untergrunds (fester Boden = 0).
