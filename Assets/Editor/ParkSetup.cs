@@ -7,6 +7,8 @@ using UnityEngine;
 // das sieht man nicht). Menü: Tools > Jump and Run > City > Build Park Prefabs.
 //  - "Frisbee Players": zwei Leute 8 m auseinander auf der Bahn (feste Hindernisse, man kann auf ihnen stehen, "HEY!"),
 //    dazwischen die Frisbee (Trigger mit KillZone), gesteuert von FrisbeePlayers
+//  - "Duck Family": weiße Entenmutter (GroundPatrol + EnemyDamage + Duck) und drei gelbe Küken (Duckling), die ihre Spur
+//    mit Verzögerung nachlaufen. Wurzel 1 m über der Plattform-Mitte wie beim Hund
 public static class ParkSetup
 {
     private const int GroundLayer = 3;
@@ -14,7 +16,9 @@ public static class ParkSetup
     private const string MaterialFolder = "Assets/Materials/City";
     public const string PrefabFolder = "Assets/Prefabs/Park";
 
-    private static Material figure, frisbeeRed, bubbleWhite;
+    private static Material figure, frisbeeRed, bubbleWhite, duckWhite, duckOrange, ducklingYellow, eyeBlack;
+    public static readonly float[] DucklingSpacing = { 0.7f, 1.4f, 2.1f };
+    public const float DuckPatrolSpeed = 2.5f;
 
     [MenuItem("Tools/Jump and Run/City/Build Park Prefabs")]
     public static void BuildAll()
@@ -22,6 +26,7 @@ public static class ParkSetup
         PrimitiveKit.EnsureFolder("Assets/Prefabs", "Park");
         CreateMaterials();
         BuildFrisbeePlayers();
+        BuildDuckFamily();
         AssetDatabase.SaveAssets();
         Debug.Log("ParkSetup: Park-Prefabs gespeichert.");
     }
@@ -32,6 +37,10 @@ public static class ParkSetup
         figure = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Customer.mat");
         frisbeeRed = PrimitiveKit.Material($"{MaterialFolder}/Frisbee.mat", PrimitiveKit.LitShader, new Color(0.95f, 0.2f, 0.15f), 0.6f);
         bubbleWhite = PrimitiveKit.Material($"{MaterialFolder}/Sign White.mat", PrimitiveKit.LitShader, new Color(0.97f, 0.96f, 0.92f));
+        duckWhite = PrimitiveKit.Material($"{MaterialFolder}/Duck White.mat", PrimitiveKit.LitShader, new Color(0.96f, 0.96f, 0.93f), 0.3f);
+        duckOrange = PrimitiveKit.Material($"{MaterialFolder}/Duck Orange.mat", PrimitiveKit.LitShader, new Color(1f, 0.55f, 0.1f));
+        ducklingYellow = PrimitiveKit.Material($"{MaterialFolder}/Duckling Yellow.mat", PrimitiveKit.LitShader, new Color(1f, 0.85f, 0.25f));
+        eyeBlack = PrimitiveKit.Material($"{MaterialFolder}/Iron.mat", PrimitiveKit.LitShader, new Color(0.14f, 0.14f, 0.16f), 0.5f);
     }
 
     // ---------- Frisbee ----------
@@ -105,6 +114,131 @@ public static class ParkSetup
         text.fontSizeMax = 4f;
         bubble.gameObject.SetActive(false);
         return bubble.gameObject;
+    }
+
+    // ---------- Enten ----------
+
+    private static void BuildDuckFamily()
+    {
+        var root = new GameObject("Duck Family");
+        Transform t = root.transform;
+
+        // Mutter: Wurzel 1 m über der Plattform-Mitte, Füße also bei -0.46 (Parkweg 0.54). Optik schaut nach lokal +X
+        var motherObject = new GameObject("Mother Duck");
+        motherObject.transform.SetParent(t, false);
+        PrimitiveKit.AddBoxCollider(motherObject, new Vector3(0f, -0.2f, 0f), new Vector3(0.8f, 0.6f, 0.45f));
+        var motherBody = motherObject.AddComponent<Rigidbody>();
+        motherBody.isKinematic = true;
+        motherBody.useGravity = false;
+        motherBody.interpolation = RigidbodyInterpolation.Interpolate;
+
+        Transform body = PrimitiveKit.Pivot("Body", motherObject.transform, Vector3.zero);
+        Transform waddle = PrimitiveKit.Pivot("Waddle", body, new Vector3(0f, -0.45f, 0f));
+        PrimitiveKit.Part("Belly", PrimitiveType.Sphere, waddle, new Vector3(0f, 0.3f, 0f), new Vector3(0.75f, 0.4f, 0.45f), duckWhite);
+        PrimitiveKit.Part("Tail", PrimitiveType.Sphere, waddle, new Vector3(-0.36f, 0.4f, 0f), new Vector3(0.25f, 0.15f, 0.2f), duckWhite)
+            .transform.localRotation = Quaternion.Euler(0f, 0f, 25f);
+        Transform neck = PrimitiveKit.Pivot("Neck", waddle, new Vector3(0.24f, 0.42f, 0f));
+        PrimitiveKit.Part("Neck Mesh", PrimitiveType.Capsule, neck, new Vector3(0f, 0.12f, 0f), new Vector3(0.15f, 0.15f, 0.15f), duckWhite);
+        PrimitiveKit.Part("Head", PrimitiveType.Sphere, neck, new Vector3(0.04f, 0.3f, 0f), Vector3.one * 0.26f, duckWhite);
+        PrimitiveKit.Box("Beak", neck, new Vector3(0.2f, 0.28f, 0f), new Vector3(0.18f, 0.06f, 0.13f), duckOrange);
+        foreach (float z in new[] { -0.11f, 0.11f })
+        {
+            PrimitiveKit.Part("Eye", PrimitiveType.Sphere, neck, new Vector3(0.1f, 0.35f, z), Vector3.one * 0.05f, eyeBlack);
+        }
+        Transform wingLeft = PrimitiveKit.Pivot("Wing L", waddle, new Vector3(0f, 0.38f, 0.21f));
+        PrimitiveKit.Part("Wing", PrimitiveType.Sphere, wingLeft, new Vector3(-0.05f, -0.02f, 0.03f), new Vector3(0.45f, 0.14f, 0.08f), duckWhite);
+        Transform wingRight = PrimitiveKit.Pivot("Wing R", waddle, new Vector3(0f, 0.38f, -0.21f));
+        PrimitiveKit.Part("Wing", PrimitiveType.Sphere, wingRight, new Vector3(-0.05f, -0.02f, -0.03f), new Vector3(0.45f, 0.14f, 0.08f), duckWhite);
+        Transform[] legs = DuckLegs(waddle, 0.1f, 0.12f, 1f);
+
+        GameObject quack = SpeechBubble(motherObject.transform, new Vector3(0.4f, 0.75f, -0.3f), "QUACK!");
+        ParticleSystem feathers = CityPropsSetup.BuildSparkles(t);
+        feathers.name = "Feathers";
+        ParticleSystem.MainModule main = feathers.main;
+        main.startColor = new ParticleSystem.MinMaxGradient(Color.white, new Color(0.9f, 0.9f, 0.85f));
+        main.gravityModifier = 0.15f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.8f, 1.4f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.1f, 0.2f);
+
+        var patrol = new SerializedObject(motherObject.AddComponent<GroundPatrol>());
+        patrol.FindProperty("patrolSpeed").floatValue = DuckPatrolSpeed;
+        patrol.FindProperty("chaseSpeed").floatValue = 6f;
+        patrol.FindProperty("sightRange").floatValue = 4f;
+        patrol.FindProperty("loseSightTime").floatValue = 0.8f;
+        patrol.FindProperty("flapOverGaps").boolValue = true;
+        patrol.FindProperty("maxFlapGap").floatValue = 4f;
+        patrol.FindProperty("flipTarget").objectReferenceValue = body;
+        patrol.ApplyModifiedPropertiesWithoutUndo();
+        motherObject.AddComponent<EnemyDamage>();
+        var duck = motherObject.AddComponent<Duck>();
+
+        // Küken hinter der Mutter (Startrichtung +u), der Level-Generator setzt sie passend zur Blickrichtung
+        var ducklings = new Duckling[DucklingSpacing.Length];
+        for (int i = 0; i < ducklings.Length; i++)
+        {
+            ducklings[i] = BuildDuckling(t, i + 1, -DucklingSpacing[i], duck, DucklingSpacing[i]);
+        }
+
+        var serialized = new SerializedObject(duck);
+        serialized.FindProperty("body").objectReferenceValue = body;
+        serialized.FindProperty("waddle").objectReferenceValue = waddle;
+        serialized.FindProperty("neck").objectReferenceValue = neck;
+        serialized.FindProperty("wingLeft").objectReferenceValue = wingLeft;
+        serialized.FindProperty("wingRight").objectReferenceValue = wingRight;
+        PrimitiveKit.SetReferences(serialized, "legs", legs);
+        serialized.FindProperty("quackBubble").objectReferenceValue = quack;
+        serialized.FindProperty("feathers").objectReferenceValue = feathers;
+        PrimitiveKit.SetReferences(serialized, "ducklings", ducklings);
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Duck Family.prefab");
+    }
+
+    // Küken: gleiche Bauweise wie die Mutter, kleiner und gelb. Eigene Wurzel mit Rigidbody, Collider, EnemyDamage
+    private static Duckling BuildDuckling(Transform parent, int number, float x, Duck mother, float spacing)
+    {
+        var ducklingObject = new GameObject("Duckling " + number);
+        ducklingObject.transform.SetParent(parent, false);
+        ducklingObject.transform.localPosition = new Vector3(x, 0f, 0f);
+        PrimitiveKit.AddBoxCollider(ducklingObject, new Vector3(0f, -0.34f, 0f), new Vector3(0.4f, 0.32f, 0.3f));
+        var rigidbody = ducklingObject.AddComponent<Rigidbody>();
+        rigidbody.isKinematic = true;
+        rigidbody.useGravity = false;
+        rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+
+        Transform body = PrimitiveKit.Pivot("Body", ducklingObject.transform, new Vector3(0f, -0.46f, 0f));
+        PrimitiveKit.Part("Belly", PrimitiveType.Sphere, body, new Vector3(0f, 0.15f, 0f), new Vector3(0.34f, 0.22f, 0.24f), ducklingYellow);
+        PrimitiveKit.Part("Head", PrimitiveType.Sphere, body, new Vector3(0.12f, 0.3f, 0f), Vector3.one * 0.17f, ducklingYellow);
+        PrimitiveKit.Box("Beak", body, new Vector3(0.22f, 0.29f, 0f), new Vector3(0.09f, 0.03f, 0.07f), duckOrange);
+        foreach (float z in new[] { -0.06f, 0.06f })
+        {
+            PrimitiveKit.Part("Eye", PrimitiveType.Sphere, body, new Vector3(0.17f, 0.33f, z), Vector3.one * 0.03f, eyeBlack);
+        }
+        Transform[] legs = DuckLegs(body, 0.05f, 0.05f, 0.45f);
+
+        ducklingObject.AddComponent<EnemyDamage>();
+        var duckling = ducklingObject.AddComponent<Duckling>();
+        var serialized = new SerializedObject(duckling);
+        serialized.FindProperty("mother").objectReferenceValue = mother;
+        serialized.FindProperty("spacing").floatValue = spacing;
+        serialized.FindProperty("body").objectReferenceValue = body;
+        PrimitiveKit.SetReferences(serialized, "legs", legs);
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        return duckling;
+    }
+
+    // Zwei orange Beine mit Füßen, Drehpunkt an der Hüfte (schwingen um lokal Z). hipY über den Füßen
+    private static Transform[] DuckLegs(Transform parent, float sideZ, float hipY, float scale)
+    {
+        var legs = new Transform[2];
+        for (int i = 0; i < 2; i++)
+        {
+            float z = i == 0 ? -sideZ : sideZ;
+            legs[i] = PrimitiveKit.Pivot("Leg", parent, new Vector3(0.02f, hipY, z));
+            PrimitiveKit.Part("Shin", PrimitiveType.Cylinder, legs[i], new Vector3(0f, -hipY / 2f, 0f), new Vector3(0.04f * scale, hipY / 2f, 0.04f * scale), duckOrange);
+            PrimitiveKit.Box("Foot", legs[i], new Vector3(0.04f * scale, -hipY + 0.01f, 0f), new Vector3(0.13f * scale, 0.02f, 0.09f * scale), duckOrange);
+        }
+        return legs;
     }
 
     // ---------- Figur (wie der Kunde: Kapsel-Körper, Kugel-Kopf, Arme mit Drehpunkt an der Schulter) ----------

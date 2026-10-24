@@ -40,6 +40,16 @@ public class GroundPatrol : MonoBehaviour
     [Tooltip("So lange ohne Sichtkontakt, bis er die Verfolgung aufgibt")]
     [SerializeField] private float loseSightTime = 1.5f;
 
+    [Header("Flattern (Enten)")]
+    [Tooltip("Statt an einer Kante umzudrehen bzw. stehen zu bleiben, flattert er über die Lücke, wenn dahinter " +
+             "innerhalb von maxFlapGap wieder Boden kommt (auch beim Verfolgen: über einen Bach entkommt man nicht)")]
+    [SerializeField] private bool flapOverGaps;
+    [SerializeField] private float maxFlapGap = 4f;
+    [Tooltip("Höhe des Flatter-Bogens")]
+    [SerializeField] private float flapHeight = 0.8f;
+    [Tooltip("Mindesttempo beim Flattern (aus dem Stand hebt er nicht mit 0 m/s ab)")]
+    [SerializeField] private float flapSpeed = 4f;
+
     [Header("Optik")]
     [Tooltip("Dieses Objekt wird zum Umdrehen gespiegelt (scale.x). Leer = der Gegner selbst. " +
              "Besser ein Kind mit der Optik, dann bleiben Collider/Rigidbody ungespiegelt")]
@@ -50,6 +60,14 @@ public class GroundPatrol : MonoBehaviour
     // Solange true, bleibt er stehen (schaut aber zum Spieler), z.B. während der Hund bellt
     public bool HoldPosition { get; set; }
     public float FacingDirection { get; private set; }
+    // Für die Ente: flattert gerade über eine Lücke, und wie hoch über der normalen Höhe sie gerade ist
+    public bool IsFlapping { get; private set; }
+    public float HopOffset { get; private set; }
+    // Position entlang der Bahn und Startwerte (die Entenküken laufen dieselbe Spur nach)
+    public float U => u;
+    public float StartU => startU;
+    public float StartFacing => startDirection >= 0f ? 1f : -1f;
+    public float PatrolSpeed => patrolSpeed;
 
     private Rigidbody rb;
     private BoxCollider bodyCollider;
@@ -66,6 +84,8 @@ public class GroundPatrol : MonoBehaviour
     private float u;
     private float startU;
     private float height;
+    private float hopFromU;
+    private float hopToU;
 
     private void Awake()
     {
@@ -109,6 +129,8 @@ public class GroundPatrol : MonoBehaviour
         lostSightTimer = 0f;
         speed = 0f;
         turnTimer = -1f;
+        IsFlapping = false;
+        HopOffset = 0f;
         flipTarget.localRotation = flipStartRotation;
         SetFacing(startDirection >= 0f ? 1f : -1f);
     }
@@ -116,6 +138,12 @@ public class GroundPatrol : MonoBehaviour
     private void FixedUpdate()
     {
         UpdateSight();
+
+        if (IsFlapping)
+        {
+            Flap();
+            return;
+        }
 
         if (turnTimer >= 0f)
         {
@@ -171,6 +199,15 @@ public class GroundPatrol : MonoBehaviour
             return;
         }
 
+        if (flapOverGaps && !HasGroundAhead(FacingDirection) && !HasWallAhead(FacingDirection) && TryFindLanding(FacingDirection, out float landing))
+        {
+            // Über die Lücke flattern: Ziel so, dass der ganze Körper hinter der Kante landet
+            IsFlapping = true;
+            hopFromU = u;
+            hopToU = u + FacingDirection * (landing + HalfLength + 0.2f);
+            return;
+        }
+
         if (!HasGroundAhead(FacingDirection) || HasWallAhead(FacingDirection))
         {
             // Sofort stehen (sonst rutscht er über die Kante). Beim Patrouillieren umdrehen,
@@ -187,6 +224,39 @@ public class GroundPatrol : MonoBehaviour
         u += FacingDirection * speed * Time.fixedDeltaTime;
         rb.MovePosition(Lane.Point(u) + Vector3.up * height);
         rb.MoveRotation(Lane.Frame(u));
+    }
+
+    // Im Flattern: in Blickrichtung weiter (mindestens flapSpeed), Höhe als Parabel über die Strecke, kein Umdrehen und
+    // keine Kanten-Prüfung, bis er drüben ist
+    private void Flap()
+    {
+        speed = Mathf.Max(speed, flapSpeed);
+        u = Mathf.MoveTowards(u, hopToU, speed * Time.fixedDeltaTime);
+        float k = Mathf.InverseLerp(hopFromU, hopToU, u);
+        HopOffset = 4f * flapHeight * k * (1f - k);
+        if (k >= 1f)
+        {
+            IsFlapping = false;
+            HopOffset = 0f;
+        }
+        rb.MovePosition(Lane.Point(u) + Vector3.up * (height + HopOffset));
+        rb.MoveRotation(Lane.Frame(u));
+    }
+
+    // Kommt hinter der Kante (innerhalb von maxFlapGap) wieder Boden? landing = Abstand der vorderen Körperkante bis dorthin
+    private bool TryFindLanding(float direction, out float landing)
+    {
+        for (float d = ledgeLookAhead + 0.25f; d <= maxFlapGap; d += 0.25f)
+        {
+            Vector3 origin = Lane.Point(u + direction * (HalfLength + d)) + Vector3.up * (height + BottomOffset + 0.1f);
+            if (Physics.Raycast(origin, Vector3.down, 0.1f + ledgeCheckDepth, groundLayer, QueryTriggerInteraction.Ignore))
+            {
+                landing = d;
+                return true;
+            }
+        }
+        landing = 0f;
+        return false;
     }
 
     private void StartTurn()

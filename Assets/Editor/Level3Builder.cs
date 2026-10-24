@@ -484,6 +484,30 @@ public static class Level3Builder
         dogSettings.FindProperty("curbHopHeight").floatValue = 0f;
         dogSettings.ApplyModifiedPropertiesWithoutUndo();
         LevelBuildKit.Place("Bench", Mathf.Round(ringStart + 3.5f), 0, gameplayParent);
+
+        // Südwest-Weg (Abstand s vom Brunnen): zwei Entenfamilien, jede patrouilliert zwischen zwei Bänken über einen Bach
+        // (flattert drüber) und schaut am Anfang dem ankommenden Spieler entgegen (+u). Danach das Picknick
+        LevelBuildKit.Place("Bench", Mathf.Round(ParkU(22f)), 0, gameplayParent);
+        DuckFamily(29.5f, 1f);
+        LevelBuildKit.Place("Bench", Mathf.Round(ParkU(33f)), 0, gameplayParent);
+        DuckFamily(40f, 1f);
+        LevelBuildKit.Place("Bench", Mathf.Round(ParkU(44f)), 0, gameplayParent);
+    }
+
+    // Entenfamilie: Mutter bei s, Küken dahinter auf der Spur, die sie beim Start vorbelegt (Duck.ResetTrail).
+    // Dort stehen sie auch im Editor, damit EnemyDamage dieselbe Startposition kennt
+    private static void DuckFamily(float s, float startDirection)
+    {
+        float u = Mathf.Round(ParkU(s));
+        GameObject family = LevelBuildKit.PlaceAsset($"{ParkSetup.PrefabFolder}/Duck Family.prefab", u, 1, gameplayParent);
+        var patrol = new SerializedObject(family.GetComponentInChildren<GroundPatrol>());
+        patrol.FindProperty("startDirection").floatValue = startDirection;
+        patrol.ApplyModifiedPropertiesWithoutUndo();
+        Duckling[] ducklings = family.GetComponentsInChildren<Duckling>();
+        for (int i = 0; i < ducklings.Length; i++)
+        {
+            ducklings[i].transform.localPosition = new Vector3(-startDirection * ParkSetup.DucklingSpacing[i], 0f, 0f);
+        }
     }
 
     private static void Frisbee(float u, float startOffset)
