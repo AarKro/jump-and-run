@@ -21,9 +21,14 @@ public class CameraZone : MonoBehaviour
     [Header("Kamera in der Zone (wie bei ThirdPersonCamera, im Lane-Rahmen)")]
     [SerializeField] private Vector3 offset = new Vector3(0f, 10f, -35f);
     [SerializeField] private float lookHeight = 16.8f;
+    [Tooltip("Steht die Kamera in der Zone auf der anderen Seite der Bahn (offset.z > 0), kreist sie beim Überblenden " +
+             "um den Spieler herum statt durch ihn hindurch: +1 über die +u-Seite (hinter dem Spieler, wenn er Richtung -u " +
+             "läuft), -1 über die -u-Seite")]
+    [SerializeField] private float orbitSide = 1f;
 
     public Vector3 Offset => offset;
     public float LookHeight => lookHeight;
+    public float OrbitSide => orbitSide >= 0f ? 1f : -1f;
 
     private void OnEnable()
     {

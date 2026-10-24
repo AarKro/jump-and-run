@@ -68,6 +68,12 @@ public class PlayerController : MonoBehaviour
     // Nach Bounce(): solange er steigt, kein Jump Cut, damit die Höhe nicht von der Sprungtaste abhängt
     private bool ignoreJumpCut;
 
+    // Rechts/links folgt dem Bildschirm: Steht die Kamera auf der anderen Seite der Bahn (Brunnen in Level 3), zeigt +u
+    // nach links, dann ist inputSign -1. Festgelegt beim Drücken einer Richtung und behalten, solange sie gehalten wird
+    // (wie bei Mario 64): Kreist die Kamera mitten im Lauf um den Spieler, läuft er einfach weiter
+    private float inputSign = 1f;
+    private float heldDirection;
+
     private void Awake()
     {
         body = GetComponent<Rigidbody>();
@@ -98,6 +104,17 @@ public class PlayerController : MonoBehaviour
         jumpBufferTimer = 0f;
         coyoteTimer = 0f;
         ignoreJumpCut = false;
+    }
+
+    // +1, wenn +u auf dem Bildschirm nach rechts zeigt (normal), -1, wenn die Kamera von der anderen Seite schaut
+    private float ScreenSign()
+    {
+        Camera view = Camera.main;
+        if (view == null)
+        {
+            return 1f;
+        }
+        return Vector3.Dot(view.transform.right, Lane.Tangent(Lane.Project(transform.position))) < 0f ? -1f : 1f;
     }
 
     // Aus Höhe und Steigzeit abgeleitet, damit man im Inspector in verständlichen Größen tunen kann
@@ -140,6 +157,17 @@ public class PlayerController : MonoBehaviour
             held |= gamepad.buttonSouth.isPressed;
         }
 
+        float direction = Mathf.Abs(moveInput.x) > FacingInputThreshold ? Mathf.Sign(moveInput.x) : 0f;
+        if (direction != heldDirection)
+        {
+            heldDirection = direction;
+            if (direction != 0f)
+            {
+                inputSign = ScreenSign();
+            }
+        }
+        moveInput.x *= inputSign;
+
         jumpHeld = held;
         if (jumpPressed)
         {
@@ -178,8 +206,9 @@ public class PlayerController : MonoBehaviour
         Vector3 tangent = Lane.Tangent(u);
         SnapToLane(u);
 
-        // Rechts/links heißt in 2.5D immer "vorwärts/rückwärts entlang der Bahn", unabhängig davon, wohin die Kamera
-        // gerade schaut (in Kurven dreht sie nach). Hoch/runter (W/S) bewegt nicht, man kann nicht aus der Bahn laufen
+        // Rechts/links heißt in 2.5D "vorwärts/rückwärts entlang der Bahn" (in Kurven dreht die Kamera nach, das ändert
+        // nichts; nur wenn sie auf der anderen Seite steht, ist es gespiegelt, siehe inputSign). Hoch/runter (W/S) bewegt
+        // nicht, man kann nicht aus der Bahn laufen
         float along = moveInput.x;
         Vector3 desiredDirection = Mathf.Abs(along) > 0.01f ? tangent * Mathf.Sign(along) : Vector3.zero;
         if (Mathf.Abs(along) > FacingInputThreshold)

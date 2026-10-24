@@ -19,20 +19,41 @@ public class ThirdPersonCamera : MonoBehaviour
     public Vector3 Offset => offset;
     public float LookHeight => lookHeight;
 
-    // Abstand und Blickhöhe an der Stelle u, mit allen Kamera-Zonen eingerechnet (z.B. weiter weg vor dem Leaning Tower)
+    // Abstand und Blickhöhe an der Stelle u, mit allen Kamera-Zonen eingerechnet (z.B. weiter weg vor dem Leaning Tower).
+    // Überblendet wird auf einem Kreis um den Spieler (Winkel, waagerechter Abstand, Höhe) statt auf einer Geraden: Eine
+    // Zone mit der Kamera auf der anderen Seite der Bahn (Brunnen in Level 3) kreist so um ihn herum, statt durch ihn
+    // hindurchzufahren. Liegen beide Offsets vor der Bahn (x = 0, z < 0), ist das dasselbe wie das alte lineare Überblenden
     private void ViewAt(float u, out Vector3 viewOffset, out float viewLookHeight)
     {
-        viewOffset = offset;
+        ToOrbit(offset, out float yaw, out float distance);
+        float height = offset.y;
         viewLookHeight = lookHeight;
         foreach (CameraZone zone in CameraZone.Active)
         {
             float weight = zone.Weight(u);
             if (weight > 0f)
             {
-                viewOffset = Vector3.Lerp(viewOffset, zone.Offset, weight);
+                ToOrbit(zone.Offset, out float zoneYaw, out float zoneDistance);
+                // Genau gegenüber (180°) ist die Richtung offen: Die Zone legt fest, auf welcher Seite die Kamera vorbeikreist
+                if (Mathf.Abs(Mathf.Abs(zoneYaw) - 180f) < 0.01f)
+                {
+                    zoneYaw = 180f * zone.OrbitSide;
+                }
+                yaw = Mathf.Lerp(yaw, zoneYaw, weight);
+                distance = Mathf.Lerp(distance, zoneDistance, weight);
+                height = Mathf.Lerp(height, zone.Offset.y, weight);
                 viewLookHeight = Mathf.Lerp(viewLookHeight, zone.LookHeight, weight);
             }
         }
+        float radians = yaw * Mathf.Deg2Rad;
+        viewOffset = new Vector3(Mathf.Sin(radians) * distance, height, -Mathf.Cos(radians) * distance);
+    }
+
+    // Winkel 0 = vor der Bahn (-Z, Kameraseite), 90 = auf der +u-Seite, 180 = hinter der Bahn
+    private static void ToOrbit(Vector3 viewOffset, out float yaw, out float distance)
+    {
+        distance = new Vector2(viewOffset.x, viewOffset.z).magnitude;
+        yaw = Mathf.Atan2(viewOffset.x, -viewOffset.z) * Mathf.Rad2Deg;
     }
 
     private void Start()
