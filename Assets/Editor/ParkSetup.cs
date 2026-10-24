@@ -169,10 +169,15 @@ public static class ParkSetup
         {
             PrimitiveKit.Part("Eye", PrimitiveType.Sphere, neck, new Vector3(0.1f, 0.35f, z), Vector3.one * 0.05f, eyeBlack);
         }
-        Transform wingLeft = PrimitiveKit.Pivot("Wing L", waddle, new Vector3(0f, 0.38f, 0.21f));
-        PrimitiveKit.Part("Wing", PrimitiveType.Sphere, wingLeft, new Vector3(-0.05f, -0.02f, 0.03f), new Vector3(0.45f, 0.14f, 0.08f), duckWhite);
-        Transform wingRight = PrimitiveKit.Pivot("Wing R", waddle, new Vector3(0f, 0.38f, -0.21f));
-        PrimitiveKit.Part("Wing", PrimitiveType.Sphere, wingRight, new Vector3(-0.05f, -0.02f, -0.03f), new Vector3(0.45f, 0.14f, 0.08f), duckWhite);
+        // Flügel: flache Platte, die von der Schulter seitlich absteht (lokal ±Z). Duck klappt sie in Ruhe nach unten an den
+        // Körper (Drehung um X) und schlägt sie im Flug auf und ab
+        Transform wingLeft = PrimitiveKit.Pivot("Wing L", waddle, new Vector3(-0.02f, 0.42f, 0.2f));
+        PrimitiveKit.Part("Wing", PrimitiveType.Sphere, wingLeft, new Vector3(-0.06f, 0f, 0.2f), new Vector3(0.42f, 0.05f, 0.4f), duckWhite);
+        Transform wingRight = PrimitiveKit.Pivot("Wing R", waddle, new Vector3(-0.02f, 0.42f, -0.2f));
+        PrimitiveKit.Part("Wing", PrimitiveType.Sphere, wingRight, new Vector3(-0.06f, 0f, -0.2f), new Vector3(0.42f, 0.05f, 0.4f), duckWhite);
+        // In Ruhe angelegt (sonst stünden sie im Editor waagerecht ab)
+        wingLeft.localRotation = Quaternion.Euler(Duck.WingFoldAngle, 0f, 0f);
+        wingRight.localRotation = Quaternion.Euler(-Duck.WingFoldAngle, 0f, 0f);
         Transform[] legs = DuckLegs(waddle, 0.1f, 0.12f, 1f);
 
         GameObject quack = SpeechBubble(motherObject.transform, new Vector3(0.4f, 0.75f, -0.3f), "QUACK!");
