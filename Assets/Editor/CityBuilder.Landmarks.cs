@@ -631,9 +631,11 @@ public static partial class CityBuilder
 
         Cylinder("Paving", circle, new Vector3(0f, (RoadTop - 0.1f + Surface + 0.01f) / 2f, 0f), 15f, Surface + 0.01f - (RoadTop - 0.1f), Paving);
         Cylinder("Lawn", circle, new Vector3(0f, 0.6f, 0f), 7.5f, 0.3f, Grass);
-        PrimitiveKit.Box("Pedestal", circle, new Vector3(0f, 0.75f + 1.5f, 0f), new Vector3(3.2f, 3f, 3.2f), Marble);
+        // Sockel 1.5 m hoch auf dem Rasen (Oberkante 0.75)
+        const float pedestalHeight = 1.5f;
+        PrimitiveKit.Box("Pedestal", circle, new Vector3(0f, 0.75f + pedestalHeight / 2f, 0f), new Vector3(3.2f, pedestalHeight, 3.2f), Marble);
 
-        Transform statue = PrimitiveKit.Pivot("Founder Statue", circle, new Vector3(0f, 3.75f, 0f));
+        Transform statue = PrimitiveKit.Pivot("Founder Statue", circle, new Vector3(0f, 0.75f + pedestalHeight, 0f));
         Vector2 toPizzeria = new Vector2(-8f, 0f) - at;
         statue.localRotation = Quaternion.Euler(0f, Mathf.Atan2(toPizzeria.x, toPizzeria.y) * Mathf.Rad2Deg, 0f);
         PrimitiveKit.Part("Leg L", PrimitiveType.Capsule, statue, new Vector3(-0.4f, 1.3f, 0f), new Vector3(0.7f, 1.3f, 0.7f), bronze);
