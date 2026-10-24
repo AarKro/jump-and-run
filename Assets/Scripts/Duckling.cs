@@ -128,10 +128,12 @@ public class Duckling : MonoBehaviour, IStompHandler
     {
         fleeing = true;
         rb.interpolation = RigidbodyInterpolation.None;
-        Vector3 direction = Quaternion.Euler(0f, spread, 0f) * -transform.forward;
-        // Optik in Laufrichtung drehen: Sie schaut nach lokal +X, +90° um Y dreht +X nach -Z
+        // Zur Kamera: normal lokal -Z, steht sie hinter der Bahn (Level 3 am Teich), lokal +Z
+        float front = ThirdPersonCamera.FrontSign(transform);
+        Vector3 direction = Quaternion.Euler(0f, spread, 0f) * (-transform.forward * front);
+        // Optik in Laufrichtung drehen: Sie schaut nach lokal +X, +90° um Y dreht +X nach -Z (-90° nach +Z)
         body.localScale = new Vector3(Mathf.Abs(bodyScale.x), bodyScale.y, bodyScale.z);
-        body.localRotation = bodyStartRotation * Quaternion.Euler(0f, 90f - spread, 0f);
+        body.localRotation = bodyStartRotation * Quaternion.Euler(0f, front * 90f - spread, 0f);
         Vector3 start = transform.position;
         for (float run = 0f; run < runAwayDistance; run += runAwaySpeed * Time.deltaTime)
         {

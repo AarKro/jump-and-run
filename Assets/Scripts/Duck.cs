@@ -251,8 +251,9 @@ public class Duck : MonoBehaviour, IStompHandler
     {
         Vector3 start = transform.position;
         float facing = patrol.FacingDirection;
-        // Flugrichtung im Lane-Rahmen der Ente: in Blickrichtung weiter (lokal ±X) und nach hinten (lokal +Z)
-        Vector3 localDirection = new Vector3(facing, 0f, 1.3f).normalized;
+        // Flugrichtung im Lane-Rahmen der Ente: in Blickrichtung weiter (lokal ±X) und von der Kamera weg (normal lokal +Z,
+        // steht die Kamera hinter der Bahn wie in Level 3 am Teich, lokal -Z: übers Wasser)
+        Vector3 localDirection = new Vector3(facing, 0f, 1.3f * ThirdPersonCamera.FrontSign(transform)).normalized;
         Vector3 direction = transform.TransformDirection(localDirection);
 
         // Spiegelung aufheben: gespiegelt ohne Drehung sieht genauso aus wie ungespiegelt um 180° gedreht (die Ente ist

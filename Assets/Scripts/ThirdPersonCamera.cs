@@ -114,6 +114,18 @@ public class ThirdPersonCamera : MonoBehaviour
         return anchor;
     }
 
+    // +1, wenn die Kamera auf der lokalen -Z-Seite von target steht (normal: vor der Bahn), -1, wenn sie dahinter steht
+    // (CameraZone auf der anderen Seite, Level 3 am Brunnen). Für Gegner, die "zur Kamera" weglaufen oder davonfliegen
+    public static float FrontSign(Transform target)
+    {
+        Camera view = Camera.main;
+        if (view == null)
+        {
+            return 1f;
+        }
+        return Vector3.Dot(view.transform.position - target.position, target.forward) > 0f ? -1f : 1f;
+    }
+
     private static Quaternion FixedRotation(Vector3 viewOffset, float viewLookHeight)
     {
         // Blickrichtung von der Wunschposition auf den Punkt über dem Player

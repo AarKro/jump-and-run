@@ -121,7 +121,10 @@ public class IntroFlyover : MonoBehaviour
         // (vom Kunden weg), dadurch kommt die Kamera zum Schluss gerade und schräg von vorne herein.
         // Kontrollpunkt 1 liegt in Starthöhe darüber: erst oben bleiben und herumschwenken, dann hinunterstoßen.
         Vector3 start = focus + overviewOffset;
-        Vector3 end = focus + goal.rotation * closeOffset;
+        // Von vorne auf den Kunden, also in seiner Drehung (nicht der des Ziels: Level 3 dreht das Picknick um,
+        // die Wurzel des Ziels bleibt aber im Lane-Rahmen)
+        Quaternion facing = customer != null ? customer.transform.rotation : goal.rotation;
+        Vector3 end = focus + facing * closeOffset;
         Vector3 approach = end + (end - focus).normalized * approachLength;
         Vector3 high = new Vector3(approach.x, start.y, approach.z);
 

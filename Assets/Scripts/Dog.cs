@@ -186,18 +186,20 @@ public class Dog : MonoBehaviour, IStompHandler
         }
         dizzyStars.gameObject.SetActive(false);
 
-        // Zur Kamera drehen: Die Optik schaut nach lokal +X, +90° um Y dreht lokal +X nach lokal -Z.
-        // Spiegelung aufheben, sonst würde ein nach links schauender Hund rückwärts laufen
+        // Zur Kamera drehen: Die Optik schaut nach lokal +X, +90° um Y dreht lokal +X nach lokal -Z (-90° nach +Z, wenn die
+        // Kamera hinter der Bahn steht). Spiegelung aufheben, sonst würde ein nach links schauender Hund rückwärts laufen
+        float front = ThirdPersonCamera.FrontSign(transform);
         Vector3 scale = body.localScale;
         scale.x = Mathf.Abs(scale.x);
         body.localScale = scale;
-        body.localRotation = bodyStartRotation * Quaternion.Euler(0f, 90f, 0f);
+        body.localRotation = bodyStartRotation * Quaternion.Euler(0f, front * 90f, 0f);
 
         // Nach "vorne" im eigenen Lane-Rahmen (lokal -Z), also immer zur Kamera und unten aus dem Bild, auch nach der Kurve.
         // Position aus Startpunkt + gelaufener Strecke ausrechnen (statt jedes Frame etwas draufzuaddieren),
         // dann kann die Höhe für den Bordstein-Hüpfer einfach aus derselben Strecke kommen
         Vector3 start = transform.position;
-        Vector3 toCamera = -transform.forward;
+        // Normal ist das lokal -Z; steht die Kamera hinter der Bahn (Level 3 am Brunnen), andersherum
+        Vector3 toCamera = -transform.forward * front;
         for (float run = 0f; run < runAwayDistance; run += runAwaySpeed * Time.deltaTime)
         {
             transform.position = start + toCamera * run + Vector3.up * CurbHeight(run);
