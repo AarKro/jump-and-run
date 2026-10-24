@@ -52,10 +52,13 @@ public static class Level4Builder
     private const float BasilX = -180f;
     private const float FourCheeseZ = 215f;
 
-    // Kamera auf der Strandpromenade wie in Level 2: weiter hinten und höher über dem Wasser.
-    // Auf dem Markt genauso: Sie steht über dem Hafenbecken und schaut über die Promenade auf Stände und Häuser
+    // Kamera auf der Strandpromenade wie in Level 2: weiter hinten und höher über dem Wasser
     private static readonly Vector3 BeachCameraOffset = new Vector3(0f, 9f, -18f);
     private const float BeachCameraLookHeight = 1f;
+    // Auf dem Markt: etwas weiter weg als normal (bei 14 m/s sieht man so ~14 m voraus), aber nicht so weit wie am Strand,
+    // dort wäre die untere Bildhälfte leerer Plattenweg
+    private static readonly Vector3 MarketCameraOffset = new Vector3(0f, 7f, -14f);
+    private const float MarketCameraLookHeight = 2.5f;
 
     private static Transform groundParent, gameplayParent, propParent;
 
@@ -193,6 +196,87 @@ public static class Level4Builder
         }
     }
 
+    // ---------- Markt (Marinara Promenade, auf dem Board) ----------
+
+    // Hindernisse auf der Bahn, Welt-z in Fahrtrichtung (nach Norden). Abstand ~9–10 m: Ein Ollie bei 14 m/s geht ~10 m weit,
+    // dazwischen braucht man einen Moment zum Reagieren. Passanten laufen in ihrem Bereich (± range) hin und her
+    private enum MarketThing { Pedestrian, CratesLow, CratesHigh, Group, Cart, BouncyStall }
+    private static readonly (float z, MarketThing thing, float range)[] MarketLayout =
+    {
+        (146f, MarketThing.Pedestrian, 3f),
+        (156f, MarketThing.CratesLow, 0f),
+        (165f, MarketThing.Pedestrian, 3f),
+        (174f, MarketThing.Group, 0f),
+        (184f, MarketThing.Pedestrian, 4f),
+        (194f, MarketThing.CratesHigh, 0f),
+        (203f, MarketThing.Pedestrian, 3f),
+        (213f, MarketThing.BouncyStall, 0f),   // vor den Pollern der Four Cheese Avenue, Chili 2 darüber
+        (222f, MarketThing.Cart, 4f),
+        (232f, MarketThing.Group, 0f),
+        (241f, MarketThing.Pedestrian, 3f),
+        (248f, MarketThing.CratesLow, 0f),
+        (254f, MarketThing.Group, 0f),
+    };
+    // Chili 2 schwebt über dem federnden Stand: nur mit dessen Schwung (~5 m über der Markise) erreichbar
+    private const float MarketChiliHeight = 7f;
+    // Marktstände hinter der Bahn: alle 5 m, Sorte reihum (mit kleinen Unregelmäßigkeiten)
+    private const float StallSpacing = 5f;
+    private static readonly string[] StallTypes = { "Food", "Fish", "Flowers", "Food", "Flea", "Fish", "Flowers", "Flea" };
+
+    private static void BuildMarket()
+    {
+        Transform market = new GameObject("Market").transform;
+        market.SetParent(gameplayParent, false);
+        string folder = MarketSetup.PrefabFolder;
+        float direction = 1f;
+        float bouncyZ = 0f;
+        foreach (var entry in MarketLayout)
+        {
+            float u = Mathf.Round(MarinaraU(entry.z));
+            switch (entry.thing)
+            {
+                case MarketThing.Pedestrian:
+                case MarketThing.Cart:
+                    string prefab = entry.thing == MarketThing.Cart ? "Hand Cart" : "Pedestrian";
+                    GameObject walker = LevelBuildKit.PlaceAsset($"{folder}/{prefab}.prefab", u, 1, market);
+                    var patrol = new SerializedObject(walker.GetComponent<GroundPatrol>());
+                    patrol.FindProperty("startDirection").floatValue = direction;
+                    patrol.FindProperty("patrolLimits").vector2Value = new Vector2(-entry.range, entry.range);
+                    patrol.ApplyModifiedPropertiesWithoutUndo();
+                    // Abwechselnd: einer kommt entgegen, der nächste läuft mit
+                    direction = -direction;
+                    break;
+                case MarketThing.CratesLow:
+                    LevelBuildKit.PlaceAsset($"{folder}/Crate Stack Low.prefab", u, 0, market);
+                    break;
+                case MarketThing.CratesHigh:
+                    LevelBuildKit.PlaceAsset($"{folder}/Crate Stack High.prefab", u, 0, market);
+                    break;
+                case MarketThing.Group:
+                    LevelBuildKit.PlaceAsset($"{folder}/Market Group.prefab", u, 0, market);
+                    break;
+                case MarketThing.BouncyStall:
+                    LevelBuildKit.PlaceAsset($"{folder}/Bouncy Market Stall.prefab", u, 0, market);
+                    LevelBuildKit.HeatPickup(u, MarketChiliHeight, market);
+                    bouncyZ = entry.z;
+                    break;
+            }
+        }
+
+        // Stände hinter der Bahn, außer vor der Mündung der Four Cheese Avenue (Blick auf die Poller) und neben dem federnden Stand
+        int index = 0;
+        for (float z = CrustLaneZ + 7f; z <= CityLayout.MarketToZ - 3f; z += StallSpacing)
+        {
+            bool fourCheese = z > FourCheeseZ - 6f && z < FourCheeseZ + 6f;
+            if (fourCheese || Mathf.Abs(z - bouncyZ) < 4f)
+            {
+                continue;
+            }
+            string type = StallTypes[index++ % StallTypes.Length];
+            LevelBuildKit.PlaceAsset($"{folder}/Market Stall {type}.prefab", Mathf.Round(MarinaraU(z)), 0, market);
+        }
+    }
+
     // ---------- Spiel-Elemente ----------
 
     private static void BuildGameplay()
@@ -210,15 +294,17 @@ public static class Level4Builder
         beachZone.ApplyModifiedPropertiesWithoutUndo();
         ((CameraZone)beachZone.targetObject).transform.SetParent(gameplayParent, false);
 
-        // Marktpromenade: Kamera über dem Wasser, ab kurz nach der Ecke bis vor die Salami Street
+        // Marktpromenade: Kamera weiter weg (über der Kaimauer), ab kurz nach der Ecke bis vor die Salami Street
         var marketZone = new SerializedObject(new GameObject("Market Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
         marketZone.FindProperty("fromU").floatValue = MarinaraU(CityLayout.MarketToZ - 4f);
         marketZone.FindProperty("toU").floatValue = MarinaraU(CrustLaneZ + 8f);
         marketZone.FindProperty("blend").floatValue = 8f;
-        marketZone.FindProperty("offset").vector3Value = BeachCameraOffset;
-        marketZone.FindProperty("lookHeight").floatValue = BeachCameraLookHeight;
+        marketZone.FindProperty("offset").vector3Value = MarketCameraOffset;
+        marketZone.FindProperty("lookHeight").floatValue = MarketCameraLookHeight;
         marketZone.ApplyModifiedPropertiesWithoutUndo();
         ((CameraZone)marketZone.targetObject).transform.SetParent(gameplayParent, false);
+
+        BuildMarket();
 
         // Crust Street (auf dem Board): zwei Bänke zum Drüberspringen, damit man die Ollie-Weite ausprobieren kann.
         // Rampen über Baugruben, Poller und der Hund kommen mit dem Feinschliff dieses Stücks

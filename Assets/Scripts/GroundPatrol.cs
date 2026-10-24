@@ -31,6 +31,8 @@ public class GroundPatrol : MonoBehaviour
     [SerializeField] private bool usePatrolLimits;
     [Tooltip("Grenzen relativ zur Startposition entlang der Bahn (x = Richtung -u, y = Richtung +u), in Metern")]
     [SerializeField] private Vector2 patrolLimits = new Vector2(-10f, 10f);
+    [Tooltip("So lange bleibt er an einer Bereichsgrenze stehen, bevor er umdreht (Passanten schauen sich einen Stand an)")]
+    [SerializeField] private float waitAtLimits;
 
     [Header("Boden und Wände")]
     [SerializeField] private LayerMask groundLayer = 1 << 3;
@@ -93,6 +95,8 @@ public class GroundPatrol : MonoBehaviour
     private float height;
     private float hopFromU;
     private float hopToU;
+    // > 0 = steht gerade an einer Bereichsgrenze und wartet, danach dreht er um
+    private float waitTimer;
 
     private void Awake()
     {
@@ -136,6 +140,7 @@ public class GroundPatrol : MonoBehaviour
         lostSightTimer = 0f;
         speed = 0f;
         turnTimer = -1f;
+        waitTimer = 0f;
         IsFlapping = false;
         HopOffset = 0f;
         flipTarget.localRotation = flipStartRotation;
@@ -149,6 +154,16 @@ public class GroundPatrol : MonoBehaviour
         if (IsFlapping)
         {
             Flap();
+            return;
+        }
+
+        if (waitTimer > 0f)
+        {
+            waitTimer -= Time.fixedDeltaTime;
+            if (waitTimer <= 0f)
+            {
+                StartTurn();
+            }
             return;
         }
 
@@ -210,7 +225,14 @@ public class GroundPatrol : MonoBehaviour
         if (!IsChasing && OutsidePatrolLimits(FacingDirection))
         {
             speed = 0f;
-            StartTurn();
+            if (waitAtLimits > 0f)
+            {
+                waitTimer = waitAtLimits;
+            }
+            else
+            {
+                StartTurn();
+            }
             return;
         }
 

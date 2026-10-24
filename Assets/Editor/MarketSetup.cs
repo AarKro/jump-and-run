@@ -1,0 +1,443 @@
+using UnityEditor;
+using UnityEngine;
+
+// Baut die Prefabs für den Markt auf der Marinara Promenade (Level 4) aus Grundformen: Marktstände (Essen, Fisch,
+// Blumen, Flohmarkt), einen federnden Stand, Passanten, eine Gruppe, einen Handkarren und Kistenstapel.
+// Menü: Tools > Jump and Run > City > Build Market Prefabs. Mehrfach ausführbar, Prefabs werden ersetzt.
+//
+// Konvention wie bei den Stadt-Prefabs: Die Wurzel liegt auf der Laufbahn (lokal +X = Laufrichtung, +Z = Hausseite).
+// Feste Dinge (Stände, Gruppe, Kisten): Wurzel auf der Mitte der 1 m dicken Bodenplatte, Oberfläche bei +0.5.
+// Bewegte Dinge mit GroundPatrol (Passant, Karren): Wurzel 1 m darüber, Füße bei -0.5 (wie Hund und Skater).
+// Die Stände sind reine Kulisse ohne Collider und stehen hinter der Bahn (bis 8 m, dort sind die Fassaden).
+public static class MarketSetup
+{
+    public const string PrefabFolder = "Assets/Prefabs/Market";
+    private const string MaterialFolder = "Assets/Materials/City";
+    private const int GroundLayer = 3;
+    private const float Surface = 0.5f;
+
+    // Stand: Tischvorderkante 3 m hinter der Bahn, Tiefe des ganzen Stands gut 2 m
+    private const float StallFrontZ = 3f;
+    private const float StallWidth = 3f;
+
+    private static Material wood, darkWood, cloth, pole, white, terracotta, leaf, ice, silver, bag, iron;
+
+    [MenuItem("Tools/Jump and Run/City/Build Market Prefabs")]
+    public static void BuildAll()
+    {
+        PrimitiveKit.EnsureFolder("Assets/Prefabs", "Market");
+        CreateMaterials();
+        BuildStall("Market Stall Food", Lit("Market Red", new Color(0.82f, 0.16f, 0.12f)), FoodGoods);
+        BuildStall("Market Stall Fish", Lit("Market Blue", new Color(0.2f, 0.4f, 0.72f)), FishGoods);
+        BuildStall("Market Stall Flowers", Lit("Market Green", new Color(0.22f, 0.55f, 0.3f)), FlowerGoods);
+        BuildStall("Market Stall Flea", Lit("Market Brown", new Color(0.5f, 0.32f, 0.18f)), FleaGoods);
+        BuildBouncyStall();
+        BuildPedestrian();
+        BuildGroup();
+        BuildHandCart();
+        BuildCrates("Crate Stack Low", 1);
+        BuildCrates("Crate Stack High", 2);
+        AssetDatabase.SaveAssets();
+        Debug.Log("MarketSetup: Markt-Prefabs gebaut.");
+    }
+
+    private static Material Lit(string name, Color color, float smoothness = 0.2f) =>
+        PrimitiveKit.Material($"{MaterialFolder}/{name}.mat", PrimitiveKit.LitShader, color, smoothness);
+
+    private static void CreateMaterials()
+    {
+        wood = Lit("Crate Wood", new Color(0.72f, 0.55f, 0.33f));
+        darkWood = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/Door Wood.mat");
+        cloth = Lit("Market Cloth", new Color(0.93f, 0.9f, 0.82f));
+        pole = Lit("Market Pole", new Color(0.3f, 0.3f, 0.32f), 0.4f);
+        white = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/Awning White.mat");
+        iron = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/Iron.mat");
+        terracotta = Lit("Terracotta", new Color(0.78f, 0.42f, 0.25f));
+        leaf = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/Leaves.mat");
+        ice = Lit("Fish Ice", new Color(0.85f, 0.93f, 0.97f), 0.7f);
+        silver = Lit("Fish Silver", new Color(0.65f, 0.7f, 0.74f), 0.8f);
+        bag = Lit("Paper Bag", new Color(0.8f, 0.66f, 0.45f));
+    }
+
+    // ---------- Personen ----------
+
+    // Figur wie der Kunde, mit Haaren, als CrowdFigure (Farben und Animation zur Laufzeit). Füße bei localPosition
+    private static CrowdFigure Person(Transform parent, string name, Vector3 localPosition, float yaw, float gesture = 1f, float armsForward = 0f)
+    {
+        ParkSetup.Figure f = ParkSetup.BuildFigure(parent, name, localPosition, yaw);
+        Material figureMaterial = f.head.sharedMaterial;
+        Renderer hair = PrimitiveKit.Part("Hair", PrimitiveType.Sphere, f.rig, new Vector3(0f, 1.42f, 0.04f), new Vector3(0.47f, 0.34f, 0.47f), figureMaterial);
+        var figure = f.root.gameObject.AddComponent<CrowdFigure>();
+        var serialized = new SerializedObject(figure);
+        serialized.FindProperty("rig").objectReferenceValue = f.rig;
+        serialized.FindProperty("leftArm").objectReferenceValue = f.leftArm;
+        serialized.FindProperty("rightArm").objectReferenceValue = f.rightArm;
+        serialized.FindProperty("gesture").floatValue = gesture;
+        serialized.FindProperty("armsForward").floatValue = armsForward;
+        PrimitiveKit.SetReferences(serialized, "shirtRenderers", f.body);
+        PrimitiveKit.SetReferences(serialized, "skinRenderers", f.head, f.leftArmMesh, f.rightArmMesh);
+        PrimitiveKit.SetReferences(serialized, "hairRenderers", hair);
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        return figure;
+    }
+
+    // Passant: läuft mit GroundPatrol in seinem Abschnitt hin und her (Grenzen setzt der Level-Generator), bleibt an den
+    // Enden kurz stehen. Kinematischer Rigidbody + Box auf der Wurzel (Layer Default: kein Boden, Hunde/Passanten laufen
+    // nicht dagegen). Die Figur steht im Profil unter "Body", das GroundPatrol zum Umdrehen spiegelt
+    private static void BuildPedestrian()
+    {
+        const float feet = -0.5f;
+        var root = new GameObject("Pedestrian");
+        Transform t = root.transform;
+        PrimitiveKit.AddBoxCollider(root, new Vector3(0f, feet + 0.8f, 0f), new Vector3(0.6f, 1.6f, 0.6f));
+        AddKinematicBody(root);
+
+        Transform body = PrimitiveKit.Pivot("Body", t, Vector3.zero);
+        CrowdFigure figure = Person(body, "Figure", new Vector3(0f, feet, 0f), -90f);
+        // Einkaufstüte in der rechten Hand (hängt am Arm, schwingt also mit)
+        Transform rightArm = figure.transform.Find("Rig/Arm Pivot R");
+        PrimitiveKit.Box("Bag", rightArm, new Vector3(0f, -0.7f, 0f), new Vector3(0.12f, 0.3f, 0.28f), bag);
+
+        GameObject hey = ParkSetup.SpeechBubble(t, new Vector3(0.4f, feet + 2.2f, -0.3f), "HEY!");
+
+        var patrol = new SerializedObject(root.AddComponent<GroundPatrol>());
+        patrol.FindProperty("patrolSpeed").floatValue = 1.2f;
+        patrol.FindProperty("chaseSpeed").floatValue = 1.2f;
+        patrol.FindProperty("acceleration").floatValue = 4f;
+        patrol.FindProperty("deceleration").floatValue = 8f;
+        patrol.FindProperty("turnDuration").floatValue = 0.45f;
+        patrol.FindProperty("sightRange").floatValue = 0f;
+        patrol.FindProperty("usePatrolLimits").boolValue = true;
+        patrol.FindProperty("patrolLimits").vector2Value = new Vector2(-4f, 4f);
+        patrol.FindProperty("waitAtLimits").floatValue = 1f;
+        patrol.FindProperty("flipTarget").objectReferenceValue = body;
+        patrol.ApplyModifiedPropertiesWithoutUndo();
+
+        AddObstacle(root, bounceOnTop: true, passable: true, hey, null, figure);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Pedestrian.prefab");
+    }
+
+    // Drei Leute, die auf der Bahn stehen und sich unterhalten. Man muss drüber (sie ducken sich, "WHOA!")
+    private static void BuildGroup()
+    {
+        var root = new GameObject("Market Group");
+        Transform t = root.transform;
+        CrowdFigure a = Person(t, "Person A", new Vector3(-0.6f, Surface, -0.1f), -70f);
+        CrowdFigure b = Person(t, "Person B", new Vector3(0.6f, Surface, -0.05f), 70f);
+        CrowdFigure c = Person(t, "Person C", new Vector3(0f, Surface, 0.35f), 0f);
+        PrimitiveKit.AddBoxCollider(root, new Vector3(0f, Surface + 0.8f, 0.1f), new Vector3(1.9f, 1.6f, 1f));
+        GameObject hey = ParkSetup.SpeechBubble(t, new Vector3(0.5f, Surface + 2.2f, -0.4f), "HEY!");
+        GameObject whoa = ParkSetup.SpeechBubble(t, new Vector3(-0.4f, Surface + 2.2f, -0.4f), "WHOA!");
+        AddObstacle(root, bounceOnTop: true, passable: true, hey, whoa, a, b, c);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Market Group.prefab");
+    }
+
+    // Händler schiebt einen Karren mit Obstkisten langsam hin und her. Die Ladefläche ist eine Plattform (Layer Ground),
+    // seitlich angefahren fällt man vom Board
+    private static void BuildHandCart()
+    {
+        const float feet = -0.5f;
+        var root = new GameObject("Hand Cart");
+        root.layer = GroundLayer;
+        Transform t = root.transform;
+        // Box über Karren und Händler, Oberkante = Ladefläche (feet + 1.1)
+        PrimitiveKit.AddBoxCollider(root, new Vector3(-0.2f, feet + 0.55f, 0f), new Vector3(2.6f, 1.1f, 1f));
+        AddKinematicBody(root);
+
+        // Karren vorne (lokal +X der Figur = Fahrtrichtung), Händler dahinter
+        Transform body = PrimitiveKit.Pivot("Body", t, Vector3.zero);
+        PrimitiveKit.Box("Cart Bed", body, new Vector3(0.35f, feet + 0.85f, 0f), new Vector3(1.5f, 0.12f, 0.9f), wood);
+        PrimitiveKit.Box("Cart Side Front", body, new Vector3(0.35f, feet + 0.98f, -0.43f), new Vector3(1.5f, 0.25f, 0.04f), darkWood);
+        PrimitiveKit.Box("Cart Side Back", body, new Vector3(0.35f, feet + 0.98f, 0.43f), new Vector3(1.5f, 0.25f, 0.04f), darkWood);
+        foreach (float z in new[] { -0.5f, 0.5f })
+        {
+            Renderer wheel = PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, body, new Vector3(0.35f, feet + 0.4f, z), new Vector3(0.8f, 0.04f, 0.8f), darkWood);
+            wheel.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            PrimitiveKit.Box("Handle", body, new Vector3(-0.65f, feet + 1.0f, z * 0.8f), new Vector3(0.7f, 0.05f, 0.05f), darkWood);
+        }
+        PrimitiveKit.Box("Leg", body, new Vector3(1.0f, feet + 0.4f, 0f), new Vector3(0.06f, 0.8f, 0.06f), darkWood);
+        // Ladung: zwei flache Kisten mit Orangen und Äpfeln
+        Material orange = Lit("Fruit Orange", new Color(1f, 0.55f, 0.1f));
+        Material apple = Lit("Fruit Apple", new Color(0.75f, 0.12f, 0.1f));
+        FruitCrate(body, new Vector3(0f, feet + 0.91f, 0f), orange);
+        FruitCrate(body, new Vector3(0.7f, feet + 0.91f, 0f), apple);
+
+        CrowdFigure vendor = Person(body, "Vendor", new Vector3(-1.1f, feet, 0f), -90f, 0f, 70f);
+        GameObject hey = ParkSetup.SpeechBubble(t, new Vector3(-0.6f, feet + 2.2f, -0.4f), "HEY!");
+
+        var patrol = new SerializedObject(root.AddComponent<GroundPatrol>());
+        patrol.FindProperty("patrolSpeed").floatValue = 0.9f;
+        patrol.FindProperty("chaseSpeed").floatValue = 0.9f;
+        patrol.FindProperty("acceleration").floatValue = 2f;
+        patrol.FindProperty("deceleration").floatValue = 4f;
+        patrol.FindProperty("turnDuration").floatValue = 0.8f;
+        patrol.FindProperty("sightRange").floatValue = 0f;
+        patrol.FindProperty("usePatrolLimits").boolValue = true;
+        patrol.FindProperty("patrolLimits").vector2Value = new Vector2(-5f, 5f);
+        patrol.FindProperty("waitAtLimits").floatValue = 1.5f;
+        patrol.FindProperty("flipTarget").objectReferenceValue = body;
+        patrol.ApplyModifiedPropertiesWithoutUndo();
+
+        AddObstacle(root, bounceOnTop: false, passable: true, hey, null, vendor);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Hand Cart.prefab");
+    }
+
+    // Flache Holzkiste mit einer Lage Obst
+    private static void FruitCrate(Transform parent, Vector3 bottomCenter, Material fruit)
+    {
+        Transform crate = PrimitiveKit.Pivot("Fruit Crate", parent, bottomCenter);
+        PrimitiveKit.Box("Crate", crate, new Vector3(0f, 0.08f, 0f), new Vector3(0.6f, 0.16f, 0.8f), wood);
+        for (int x = 0; x < 3; x++)
+        {
+            for (int z = 0; z < 4; z++)
+            {
+                PrimitiveKit.Part("Fruit", PrimitiveType.Sphere, crate, new Vector3(-0.18f + x * 0.18f, 0.18f, -0.28f + z * 0.18f), Vector3.one * 0.16f, fruit);
+            }
+        }
+    }
+
+    // Holzkisten-Stapel auf der Bahn: levels = 1 (0.8 m hoch) oder 2 (1.6 m). Plattform, seitlich = vom Board fallen
+    private static void BuildCrates(string name, int levels)
+    {
+        const float crateHeight = 0.8f;
+        var root = new GameObject(name);
+        Transform t = root.transform;
+        Material[] fruits =
+        {
+            Lit("Fruit Tomato", new Color(0.9f, 0.18f, 0.12f)), Lit("Fruit Lemon", new Color(1f, 0.88f, 0.25f)),
+        };
+        for (int level = 0; level < levels; level++)
+        {
+            float y = Surface + level * crateHeight;
+            PrimitiveKit.Box("Crate", t, new Vector3(0f, y + crateHeight / 2f, 0f), new Vector3(1.1f, crateHeight - 0.02f, 0.9f), wood);
+            // Dunkle Latten außen, damit man die einzelnen Kisten erkennt
+            PrimitiveKit.Box("Slat", t, new Vector3(0f, y + 0.2f, -0.46f), new Vector3(1.12f, 0.08f, 0.02f), darkWood);
+            PrimitiveKit.Box("Slat", t, new Vector3(0f, y + crateHeight - 0.2f, -0.46f), new Vector3(1.12f, 0.08f, 0.02f), darkWood);
+        }
+        // Obenauf eine Lage Obst (Optik, ragt 10 cm über den Collider)
+        FruitCrate(t, new Vector3(0f, Surface + levels * crateHeight - 0.08f, 0f), fruits[levels - 1]);
+
+        GameObject box = new GameObject("Hitbox") { layer = GroundLayer };
+        box.transform.SetParent(t, false);
+        PrimitiveKit.AddBoxCollider(box, new Vector3(0f, Surface + levels * crateHeight / 2f, 0f), new Vector3(1.1f, levels * crateHeight, 0.9f));
+        var obstacle = new SerializedObject(box.AddComponent<CrowdObstacle>());
+        obstacle.FindProperty("bounceOnTop").boolValue = false;
+        obstacle.FindProperty("passableAfterCrash").boolValue = false;
+        obstacle.ApplyModifiedPropertiesWithoutUndo();
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/{name}.prefab");
+    }
+
+    private static void AddKinematicBody(GameObject root)
+    {
+        var body = root.AddComponent<Rigidbody>();
+        body.isKinematic = true;
+        body.useGravity = false;
+        body.interpolation = RigidbodyInterpolation.Interpolate;
+        body.constraints = RigidbodyConstraints.None;
+    }
+
+    private static void AddObstacle(GameObject target, bool bounceOnTop, bool passable, GameObject hey, GameObject whoa, params CrowdFigure[] duckers)
+    {
+        var obstacle = new SerializedObject(target.AddComponent<CrowdObstacle>());
+        obstacle.FindProperty("bounceOnTop").boolValue = bounceOnTop;
+        obstacle.FindProperty("passableAfterCrash").boolValue = passable;
+        obstacle.FindProperty("heyBubble").objectReferenceValue = hey;
+        obstacle.FindProperty("duckBubble").objectReferenceValue = whoa;
+        PrimitiveKit.SetReferences(obstacle, "duckers", duckers);
+        obstacle.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    // ---------- Marktstände (Kulisse hinter der Bahn) ----------
+
+    // Tisch mit Tuch, vier Stangen, gestreifte Markise, Händler dahinter, ein, zwei Kunden davor. goods legt die Ware auf
+    // den Tisch (Tischplatte bei y, Mitte bei z)
+    private static void BuildStall(string name, Material stripe, System.Action<Transform, float, float> goods)
+    {
+        var root = new GameObject(name);
+        StallFrame(root.transform, stripe, StallFrontZ - 0.3f, 2.3f, 2.8f);
+        goods(root.transform, Surface + 0.9f, StallFrontZ + 0.45f);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/{name}.prefab");
+    }
+
+    // Gerüst eines Stands. awningFrontZ: Vorderkante der Markise, frontY/backY: Höhe vorne/hinten (über dem Boden)
+    private static void StallFrame(Transform t, Material stripe, float awningFrontZ, float frontY, float backY)
+    {
+        const float tableHeight = 0.9f, tableDepth = 0.9f, backZ = StallFrontZ + 2.2f;
+        float tableZ = StallFrontZ + tableDepth / 2f;
+        PrimitiveKit.Box("Table", t, new Vector3(0f, Surface + tableHeight - 0.03f, tableZ), new Vector3(StallWidth - 0.2f, 0.06f, tableDepth), darkWood);
+        PrimitiveKit.Box("Table Cloth", t, new Vector3(0f, Surface + tableHeight / 2f, StallFrontZ - 0.01f), new Vector3(StallWidth - 0.2f, tableHeight - 0.06f, 0.02f), cloth);
+        PrimitiveKit.Box("Cloth Stripe", t, new Vector3(0f, Surface + tableHeight - 0.15f, StallFrontZ - 0.025f), new Vector3(StallWidth - 0.2f, 0.12f, 0.01f), stripe);
+
+        foreach (float x in new[] { -StallWidth / 2f, StallWidth / 2f })
+        {
+            PrimitiveKit.Box("Pole Front", t, new Vector3(x, Surface + frontY / 2f, StallFrontZ - 0.1f), new Vector3(0.06f, frontY, 0.06f), pole);
+            PrimitiveKit.Box("Pole Back", t, new Vector3(x, Surface + backY / 2f, backZ), new Vector3(0.06f, backY, 0.06f), pole);
+        }
+
+        // Markise: Streifen quer zur Bahn, von hinten oben nach vorne unten geneigt, vorne ein Volant
+        float depth = backZ - awningFrontZ;
+        float slope = Mathf.Atan2(backY - frontY, depth) * Mathf.Rad2Deg;
+        Transform awning = PrimitiveKit.Pivot("Awning", t, new Vector3(0f, Surface + (frontY + backY) / 2f + 0.05f, (awningFrontZ + backZ) / 2f));
+        awning.localRotation = Quaternion.Euler(-slope, 0f, 0f);
+        float length = Mathf.Sqrt(depth * depth + (backY - frontY) * (backY - frontY)) + 0.2f;
+        int stripes = Mathf.RoundToInt((StallWidth + 0.4f) / 0.4f);
+        for (int i = 0; i < stripes; i++)
+        {
+            float x = -(StallWidth + 0.4f) / 2f + 0.2f + i * 0.4f;
+            Material m = i % 2 == 0 ? stripe : white;
+            PrimitiveKit.Box("Stripe", awning, new Vector3(x, 0f, 0f), new Vector3(0.4f, 0.06f, length), m);
+            PrimitiveKit.Box("Valance", awning, new Vector3(x, -0.13f, -length / 2f), new Vector3(0.4f, 0.26f, 0.03f), m);
+        }
+
+        // Händler hinter dem Tisch (schaut zur Kamera), zwei Kunden davor (schauen auf den Stand, halb von der Kamera weg)
+        Person(t, "Vendor", new Vector3(0.3f, Surface, StallFrontZ + 1.4f), 0f);
+        Person(t, "Shopper A", new Vector3(-0.7f, Surface, StallFrontZ - 0.8f), 160f);
+        Person(t, "Shopper B", new Vector3(0.9f, Surface, StallFrontZ - 1.1f), 200f, 0.5f);
+    }
+
+    private static void FoodGoods(Transform t, float top, float z)
+    {
+        Material tomato = Lit("Fruit Tomato", new Color(0.9f, 0.18f, 0.12f));
+        Material lemon = Lit("Fruit Lemon", new Color(1f, 0.88f, 0.25f));
+        Material cheese = Lit("Cheese", new Color(0.98f, 0.85f, 0.45f));
+        Material salami = Lit("Salami", new Color(0.55f, 0.18f, 0.15f));
+        // Tomaten-Pyramide, Zitronen, Käselaibe, Basilikum-Töpfe
+        for (int row = 0; row < 3; row++)
+        {
+            for (int i = 0; i < 4 - row; i++)
+            {
+                PrimitiveKit.Part("Tomato", PrimitiveType.Sphere, t, new Vector3(-1.1f + i * 0.17f + row * 0.085f, top + 0.08f + row * 0.13f, z - 0.1f), Vector3.one * 0.16f, tomato);
+                PrimitiveKit.Part("Tomato", PrimitiveType.Sphere, t, new Vector3(-1.1f + i * 0.17f + row * 0.085f, top + 0.08f + row * 0.13f, z + 0.08f), Vector3.one * 0.16f, tomato);
+            }
+        }
+        for (int i = 0; i < 5; i++)
+        {
+            PrimitiveKit.Part("Lemon", PrimitiveType.Sphere, t, new Vector3(-0.3f + (i % 3) * 0.15f, top + 0.07f + (i / 3) * 0.12f, z), new Vector3(0.14f, 0.12f, 0.12f), lemon);
+        }
+        PrimitiveKit.Part("Cheese Wheel", PrimitiveType.Cylinder, t, new Vector3(0.45f, top + 0.08f, z), new Vector3(0.45f, 0.08f, 0.45f), cheese);
+        PrimitiveKit.Part("Cheese Wheel", PrimitiveType.Cylinder, t, new Vector3(0.45f, top + 0.24f, z), new Vector3(0.42f, 0.08f, 0.42f), cheese);
+        foreach (float x in new[] { 0.95f, 1.2f })
+        {
+            PrimitiveKit.Part("Basil Pot", PrimitiveType.Cylinder, t, new Vector3(x, top + 0.09f, z + 0.15f), new Vector3(0.16f, 0.09f, 0.16f), terracotta);
+            PrimitiveKit.Part("Basil", PrimitiveType.Sphere, t, new Vector3(x, top + 0.25f, z + 0.15f), Vector3.one * 0.24f, leaf);
+        }
+        // Salamis hängen vorne an der Markise
+        for (int i = 0; i < 5; i++)
+        {
+            PrimitiveKit.Part("Salami", PrimitiveType.Capsule, t, new Vector3(-0.9f + i * 0.45f, Surface + 1.85f, StallFrontZ - 0.05f), new Vector3(0.09f, 0.18f, 0.09f), salami);
+        }
+    }
+
+    private static void FishGoods(Transform t, float top, float z)
+    {
+        Material orange = Lit("Fish Salmon", new Color(0.98f, 0.55f, 0.4f), 0.6f);
+        Material mussel = Lit("Mussel", new Color(0.12f, 0.12f, 0.18f), 0.7f);
+        PrimitiveKit.Box("Ice", t, new Vector3(-0.35f, top + 0.05f, z), new Vector3(2f, 0.1f, 0.8f), ice);
+        for (int i = 0; i < 6; i++)
+        {
+            for (int row = 0; row < 2; row++)
+            {
+                Renderer fish = PrimitiveKit.Part("Fish", PrimitiveType.Capsule, t, new Vector3(-1.1f + i * 0.3f, top + 0.13f, z - 0.18f + row * 0.36f),
+                    new Vector3(0.12f, 0.16f, 0.07f), (i + row) % 4 == 0 ? orange : silver);
+                fish.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            }
+        }
+        PrimitiveKit.Box("Mussel Crate", t, new Vector3(1.05f, top + 0.1f, z), new Vector3(0.6f, 0.2f, 0.6f), wood);
+        for (int i = 0; i < 9; i++)
+        {
+            PrimitiveKit.Part("Mussel", PrimitiveType.Sphere, t, new Vector3(0.88f + (i % 3) * 0.17f, top + 0.22f, z - 0.17f + (i / 3) * 0.17f), new Vector3(0.13f, 0.07f, 0.09f), mussel);
+        }
+    }
+
+    private static void FlowerGoods(Transform t, float top, float z)
+    {
+        Color[] blooms =
+        {
+            new Color(0.95f, 0.35f, 0.55f), new Color(1f, 0.85f, 0.2f), new Color(0.85f, 0.15f, 0.2f), new Color(0.6f, 0.4f, 0.85f), new Color(0.97f, 0.97f, 0.95f),
+        };
+        Material bucket = Lit("Flower Bucket", new Color(0.2f, 0.32f, 0.3f), 0.5f);
+        for (int i = 0; i < 5; i++)
+        {
+            float x = -1.1f + i * 0.55f;
+            Material bloom = Lit("Bloom " + (i + 1), blooms[i]);
+            PrimitiveKit.Part("Bucket", PrimitiveType.Cylinder, t, new Vector3(x, top + 0.15f, z), new Vector3(0.32f, 0.15f, 0.32f), bucket);
+            PrimitiveKit.Part("Stems", PrimitiveType.Cylinder, t, new Vector3(x, top + 0.42f, z), new Vector3(0.2f, 0.15f, 0.2f), leaf);
+            for (int b = 0; b < 5; b++)
+            {
+                float angle = b * 72f * Mathf.Deg2Rad;
+                PrimitiveKit.Part("Bloom", PrimitiveType.Sphere, t, new Vector3(x + Mathf.Cos(angle) * 0.1f, top + 0.6f + (b % 2) * 0.06f, z + Mathf.Sin(angle) * 0.1f), Vector3.one * 0.13f, bloom);
+            }
+        }
+    }
+
+    private static void FleaGoods(Transform t, float top, float z)
+    {
+        Color[] covers = { new Color(0.7f, 0.2f, 0.2f), new Color(0.2f, 0.35f, 0.6f), new Color(0.3f, 0.5f, 0.3f), new Color(0.85f, 0.7f, 0.3f) };
+        // Bücherstapel
+        for (int stack = 0; stack < 2; stack++)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                PrimitiveKit.Box("Book", t, new Vector3(-1.05f + stack * 0.45f, top + 0.04f + i * 0.08f, z), new Vector3(0.32f - (i % 2) * 0.04f, 0.07f, 0.24f),
+                    Lit("Book " + ((i + stack) % 4 + 1), covers[(i + stack) % 4]));
+            }
+        }
+        // Stehlampe mit Schirm, Vase, Bilderrahmen, altes Radio
+        PrimitiveKit.Part("Lamp Foot", PrimitiveType.Cylinder, t, new Vector3(0.05f, top + 0.02f, z), new Vector3(0.18f, 0.02f, 0.18f), iron);
+        PrimitiveKit.Box("Lamp Stem", t, new Vector3(0.05f, top + 0.25f, z), new Vector3(0.03f, 0.46f, 0.03f), iron);
+        PrimitiveKit.Part("Lamp Shade", PrimitiveType.Cylinder, t, new Vector3(0.05f, top + 0.52f, z), new Vector3(0.3f, 0.1f, 0.3f), Lit("Lamp Shade", new Color(0.95f, 0.8f, 0.55f)));
+        PrimitiveKit.Part("Vase", PrimitiveType.Capsule, t, new Vector3(0.45f, top + 0.15f, z + 0.1f), new Vector3(0.16f, 0.15f, 0.16f), Lit("Vase Blue", new Color(0.25f, 0.45f, 0.75f), 0.7f));
+        Transform frame = PrimitiveKit.Pivot("Picture Frame", t, new Vector3(0.8f, top + 0.22f, z + 0.2f));
+        frame.localRotation = Quaternion.Euler(-12f, 0f, 0f);
+        PrimitiveKit.Box("Frame", frame, Vector3.zero, new Vector3(0.4f, 0.32f, 0.03f), Lit("Gold Frame", new Color(0.8f, 0.62f, 0.25f), 0.6f));
+        PrimitiveKit.Box("Painting", frame, new Vector3(0f, 0f, -0.02f), new Vector3(0.32f, 0.24f, 0.01f), Lit("Painting", new Color(0.35f, 0.55f, 0.7f)));
+        PrimitiveKit.Box("Radio", t, new Vector3(1.15f, top + 0.12f, z), new Vector3(0.36f, 0.24f, 0.18f), darkWood);
+        PrimitiveKit.Part("Speaker", PrimitiveType.Cylinder, t, new Vector3(1.1f, top + 0.12f, z - 0.095f), new Vector3(0.14f, 0.005f, 0.14f), cloth)
+            .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+    }
+
+    // Stand, dessen Markise weit über die Bahn ragt: ein Trampolin (BounceAwning). Unter der Markise fährt man durch
+    // (Unterkante vorne ~2.1 m über dem Weg), von oben federt man ~5 m hoch. Die Markise hängt vorne frei (Ausleger von
+    // den hinteren Stangen), es steht also nichts auf der Bahn
+    private static void BuildBouncyStall()
+    {
+        Material stripe = Lit("Market Orange", new Color(0.98f, 0.55f, 0.15f));
+        var root = new GameObject("Bouncy Market Stall");
+        Transform t = root.transform;
+        StallFrame(t, Lit("Market Red", new Color(0.82f, 0.16f, 0.12f)), StallFrontZ - 0.3f, 2.3f, 2.8f);
+        FoodGoods(t, Surface + 0.9f, StallFrontZ + 0.45f);
+
+        // Ausleger-Markise über der Bahn: von lokal z +2.6 bis -1.6, Oberkante vorne 2.4, hinten 2.7 über dem Weg
+        const float frontZ = -1.6f, backZ = 2.6f, frontTop = 2.4f, backTop = 2.7f;
+        float depth = backZ - frontZ;
+        float slope = Mathf.Atan2(backTop - frontTop, depth) * Mathf.Rad2Deg;
+        var canopy = new GameObject("Bouncy Canopy") { layer = GroundLayer };
+        canopy.transform.SetParent(t, false);
+        canopy.transform.localPosition = new Vector3(0f, Surface + (frontTop + backTop) / 2f - 0.05f, (frontZ + backZ) / 2f);
+        canopy.transform.localRotation = Quaternion.Euler(-slope, 0f, 0f);
+        float length = Mathf.Sqrt(depth * depth + (backTop - frontTop) * (backTop - frontTop));
+        Transform fabric = PrimitiveKit.Pivot("Canvas", canopy.transform, Vector3.zero);
+        int stripes = 8;
+        for (int i = 0; i < stripes; i++)
+        {
+            float x = -1.6f + 0.2f + i * 0.4f;
+            Material m = i % 2 == 0 ? stripe : white;
+            PrimitiveKit.Box("Stripe", fabric, new Vector3(x, 0f, 0f), new Vector3(0.4f, 0.1f, length), m);
+            PrimitiveKit.Box("Valance", fabric, new Vector3(x, -0.15f, -length / 2f), new Vector3(0.4f, 0.3f, 0.03f), m);
+        }
+        PrimitiveKit.AddBoxCollider(canopy, Vector3.zero, new Vector3(3.2f, 0.1f, length));
+        // Ausleger: zwei schräge Streben von den hinteren Stangen nach vorne
+        foreach (float x in new[] { -1.55f, 1.55f })
+        {
+            Vector3 from = new Vector3(x, Surface + 2.8f, StallFrontZ + 2.2f);
+            Vector3 to = new Vector3(x, Surface + frontTop - 0.1f, frontZ + 0.2f);
+            Renderer strut = PrimitiveKit.Box("Strut", t, (from + to) / 2f, new Vector3(0.06f, 0.06f, Vector3.Distance(from, to)), pole);
+            strut.transform.localRotation = Quaternion.LookRotation(to - from);
+        }
+        var bounce = new SerializedObject(canopy.AddComponent<BounceAwning>());
+        bounce.FindProperty("canvas").objectReferenceValue = fabric;
+        bounce.ApplyModifiedPropertiesWithoutUndo();
+
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Bouncy Market Stall.prefab");
+    }
+}

@@ -359,6 +359,12 @@ public class PlayerController : MonoBehaviour
         IsSkating = skating;
     }
 
+    // Blickrichtung von außen setzen (+1 = +u, -1 = -u), z.B. wenn er nach einem Sturz zum Board zurückläuft
+    public void Face(float direction)
+    {
+        FacingDirection = direction >= 0f ? 1f : -1f;
+    }
+
     // Abprallen nach dem Draufspringen auf einen Gegner. Wie beim Sprung entscheidet die gehaltene
     // Sprungtaste über die Höhe (ohne Taste greift die Jump-Cut-Schwerkraft und es wird ein kleiner Hüpfer)
     public void StompBounce()

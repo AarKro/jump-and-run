@@ -21,15 +21,133 @@ public class PlayerLife : MonoBehaviour
     [SerializeField] private float walkOutDuration = 0.6f;
     [SerializeField] private float walkBobHeight = 0.08f;
 
+    [Header("Sturz vom Skateboard (Markt, Level 4)")]
+    [Tooltip("So weit wird er zurückgeworfen")]
+    [SerializeField] private float crashKnockBack = 1.5f;
+    [SerializeField] private float crashKnockDuration = 0.35f;
+    [Tooltip("So weit rutscht das Board zurück (weiter als er fliegt, er läuft ihm hinterher)")]
+    [SerializeField] private float crashBoardSlide = 3.5f;
+    [SerializeField] private float crashBoardDuration = 0.6f;
+    [SerializeField] private float crashRunDuration = 0.35f;
+    [Tooltip("Danach sind Leute und Karren so lange durchlässig")]
+    [SerializeField] private float crashGraceTime = 1f;
+    [SerializeField] private LayerMask crashGroundLayer = 1 << 3;
+
     private PlayerController controller;
     private Rigidbody body;
     private Vector3 normalScale;
+    private DeliveryGuy guy;
+    // Gerade vom Board gefallen (bis er wieder draufsteht)
+    public bool IsCrashing { get; private set; }
 
     private void Awake()
     {
         controller = GetComponent<PlayerController>();
         body = GetComponent<Rigidbody>();
+        guy = GetComponent<DeliveryGuy>();
         normalScale = transform.localScale;
+    }
+
+    // ---------- Sturz vom Skateboard ----------
+
+    // In jemanden hineingefahren: Er fliegt ein Stück zurück, das Board rutscht weiter zurück, er läuft automatisch hin
+    // und springt wieder drauf (~1.5 s ohne Steuerung). Gibt false zurück, wenn gerade nichts gehen darf
+    public bool BoardCrash()
+    {
+        GameManager game = GameManager.Instance;
+        if (IsCrashing || !controller.IsSkating || body.isKinematic ||
+            (game != null && (game.LevelFinished || game.IsRespawning || game.InCutscene)))
+        {
+            return false;
+        }
+        StartCoroutine(BoardCrashRoutine());
+        return true;
+    }
+
+    private IEnumerator BoardCrashRoutine()
+    {
+        IsCrashing = true;
+        GameManager game = GameManager.Instance;
+        if (game != null)
+        {
+            // Solange er vom Board fällt, zählt kein anderer Treffer (er ist kinematisch und kann nicht ausweichen)
+            game.InCutscene = true;
+        }
+
+        float travel = controller.FacingDirection;
+        controller.Freeze();
+        body.linearVelocity = Vector3.zero;
+        body.isKinematic = true;
+        controller.SetSkating(false);
+        if (guy != null)
+        {
+            guy.Stumble(crashKnockDuration + 0.2f);
+        }
+        Transform board = guy != null ? guy.DetachBoard() : null;
+
+        // Zurück = entgegen der Fahrtrichtung. Beide landen auf dem Boden darunter (er kann auch in der Luft angestoßen sein)
+        float u = Lane.Project(body.position);
+        Vector3 start = body.position;
+        Vector3 knockTo = GroundCenter(u - travel * crashKnockBack, start.y);
+        Vector3 boardFrom = board != null ? board.position : start;
+        Quaternion boardRotation = board != null ? board.rotation : Quaternion.identity;
+        Vector3 boardTo = GroundCenter(u - travel * crashBoardSlide, start.y) + Vector3.down * 0.5f;
+
+        float duration = Mathf.Max(crashKnockDuration, crashBoardDuration);
+        for (float t = 0f; t < duration; t += Time.fixedDeltaTime)
+        {
+            // Spieler: kleiner Bogen nach hinten
+            float k = Mathf.Clamp01(t / crashKnockDuration);
+            Vector3 position = Vector3.Lerp(start, knockTo, k);
+            position.y += Mathf.Sin(k * Mathf.PI) * 0.5f;
+            body.MovePosition(position);
+            // Board: rutscht ausrollend zurück und überschlägt sich einmal um seine Längsachse
+            if (board != null)
+            {
+                float b = Mathf.Clamp01(t / crashBoardDuration);
+                float eased = 1f - (1f - b) * (1f - b);
+                Vector3 boardPosition = Vector3.Lerp(boardFrom, boardTo, eased);
+                boardPosition.y += Mathf.Sin(b * Mathf.PI) * 0.4f;
+                board.SetPositionAndRotation(boardPosition, Quaternion.AngleAxis(360f * eased, Lane.Tangent(u)) * boardRotation);
+            }
+            yield return new WaitForFixedUpdate();
+        }
+
+        // Zum Board laufen (schaut dabei dorthin), aufspringen, wieder in Fahrtrichtung drehen
+        controller.Face(-travel);
+        Vector3 boardStand = boardTo + Vector3.up * 0.5f;
+        yield return WalkTo(boardStand + Lane.Tangent(u) * (travel * 0.4f), crashRunDuration);
+        controller.Face(travel);
+        yield return WalkTo(boardStand, 0.15f);
+        if (guy != null)
+        {
+            guy.AttachBoard();
+        }
+        controller.SetSkating(true);
+        Revive();
+
+        if (game != null)
+        {
+            game.InCutscene = false;
+        }
+        IsCrashing = false;
+
+        Collider own = GetComponent<Collider>();
+        CrowdObstacle.SetPassable(own, true);
+        yield return new WaitForSeconds(crashGraceTime);
+        CrowdObstacle.SetPassable(own, false);
+    }
+
+    // Mitte des Spielers (Füße auf dem Boden) an der Stelle u: Boden per Strahl von oben suchen, sonst die Höhe behalten
+    private Vector3 GroundCenter(float u, float fallbackY)
+    {
+        Vector3 point = Lane.Point(u);
+        Vector3 origin = new Vector3(point.x, fallbackY + 1f, point.z);
+        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 6f, crashGroundLayer, QueryTriggerInteraction.Ignore))
+        {
+            return hit.point + Vector3.up * 0.5f;
+        }
+        return new Vector3(point.x, fallbackY, point.z);
     }
 
     public IEnumerator PlayDeath()

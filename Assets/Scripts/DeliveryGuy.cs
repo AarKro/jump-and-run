@@ -79,6 +79,11 @@ public class DeliveryGuy : MonoBehaviour
     private float legLeftSpread, legRightSpread;
     private float pushPhase;
     private float tilt;
+    // Board liegt gerade los neben ihm (Sturz): nicht automatisch ein-/ausblenden, er läuft gleich hin
+    private bool boardLoose;
+    private Vector3 boardLocalPosition;
+    // Sekunden, die er noch mit den Armen rudert (Sturz vom Board)
+    private float stumbleTime;
 
     private void Awake()
     {
@@ -87,6 +92,47 @@ public class DeliveryGuy : MonoBehaviour
         lastPosition = transform.position;
         rigStart = rig.localPosition;
         yaw = -facingYaw;
+        if (skateboard != null)
+        {
+            boardLocalPosition = skateboard.localPosition;
+        }
+    }
+
+    // Sturz vom Board: Das Brett löst sich vom Modell (bleibt in der Welt liegen), PlayerLife schiebt es weg
+    public Transform DetachBoard()
+    {
+        if (skateboard == null)
+        {
+            return null;
+        }
+        boardLoose = true;
+        skateboard.gameObject.SetActive(true);
+        skateboard.SetParent(null, true);
+        return skateboard;
+    }
+
+    // Wieder aufgestiegen: Brett zurück unter die Füße
+    public void AttachBoard()
+    {
+        if (skateboard == null)
+        {
+            return;
+        }
+        skateboard.SetParent(model, false);
+        skateboard.localPosition = boardLocalPosition;
+        skateboard.localRotation = Quaternion.identity;
+        if (boardTilt != null)
+        {
+            boardTilt.localRotation = Quaternion.identity;
+        }
+        tilt = 0f;
+        boardLoose = false;
+    }
+
+    // Ein paar Zehntelsekunden mit den Armen rudern (beim Sturz)
+    public void Stumble(float duration)
+    {
+        stumbleTime = duration;
     }
 
     private void Update()
@@ -108,7 +154,8 @@ public class DeliveryGuy : MonoBehaviour
         speed = Mathf.Lerp(speed, targetSpeed, blend);
 
         bool skating = player.IsSkating;
-        if (skateboard != null && skateboard.gameObject.activeSelf != skating)
+        stumbleTime = Mathf.Max(0f, stumbleTime - dt);
+        if (skateboard != null && !boardLoose && skateboard.gameObject.activeSelf != skating)
         {
             skateboard.gameObject.SetActive(skating);
         }
@@ -216,13 +263,18 @@ public class DeliveryGuy : MonoBehaviour
         model.localRotation = Quaternion.Euler(0f, yaw, 0f);
     }
 
-    // Arme: mit Karton nach vorne gestreckt (Hände unter dem Karton), ohne hängend und gegengleich zu den Beinen
+    // Arme: mit Karton nach vorne gestreckt (Hände unter dem Karton), ohne hängend und gegengleich zu den Beinen.
+    // Beim Sturz rudert er: Der Karton bleibt in den Händen, die Arme fahren schnell hoch und runter
     private void UpdateArms(float walkSwing, float pose)
     {
+        if (stumbleTime > 0f)
+        {
+            walkSwing = Mathf.Sin(Time.time * 30f) * 45f;
+        }
         bool holding = carton != null && carton.enabled;
         armAngle = Mathf.Lerp(armAngle, holding ? holdAngle : 0f, pose);
         armInward = Mathf.Lerp(armInward, holding ? holdInward : 0f, pose);
-        armSwing = Mathf.Lerp(armSwing, holding ? 0f : walkSwing, pose);
+        armSwing = Mathf.Lerp(armSwing, holding && stumbleTime <= 0f ? 0f : walkSwing, pose);
         // Euler wendet erst Z (nach innen kippen), dann X (nach vorne heben) an. Der linke Arm sitzt bei -X,
         // nach innen ist für ihn +Z, für den rechten -Z
         armLeft.localRotation = Quaternion.Euler(armAngle + armSwing, 0f, armInward);
