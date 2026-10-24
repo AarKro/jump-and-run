@@ -640,8 +640,8 @@ public static partial class CityBuilder
 
         Cylinder("Paving", circle, new Vector3(0f, (RoadTop - 0.1f + Surface + 0.01f) / 2f, 0f), 15f, Surface + 0.01f - (RoadTop - 0.1f), Paving);
         Cylinder("Lawn", circle, new Vector3(0f, 0.6f, 0f), 7.5f, 0.3f, Grass);
-        // Sockel 1.5 m hoch auf dem Rasen (Oberkante 0.75)
-        const float pedestalHeight = 1.5f;
+        // Sockel 0.75 m hoch auf dem Rasen (Oberkante 0.75)
+        const float pedestalHeight = 0.75f;
         PrimitiveKit.Box("Pedestal", circle, new Vector3(0f, 0.75f + pedestalHeight / 2f, 0f), new Vector3(3.2f, pedestalHeight, 3.2f), Marble);
 
         Transform statue = PrimitiveKit.Pivot("Founder Statue", circle, new Vector3(0f, 0.75f + pedestalHeight, 0f));
