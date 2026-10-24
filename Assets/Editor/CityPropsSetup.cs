@@ -158,7 +158,9 @@ public static class CityPropsSetup
         Transform t = root.transform;
         PrimitiveKit.Box("Floor", t, new Vector3(0f, -5.5f, -5.5f), new Vector3(1f, 3f, 17f), pit);
         Material dirt = PrimitiveKit.Material($"{MaterialFolder}/Dirt.mat", PrimitiveKit.LitShader, new Color(0.35f, 0.25f, 0.16f));
-        PrimitiveKit.Box("Back Wall", t, new Vector3(0f, -1.75f, FacadeZ - 0.2f), new Vector3(1f, 4.5f, 0.4f), dirt);
+        // Oberkante 1 cm unter dem Gehweg: Die Grube ist 1 m breiter als die Lücke, die Wand steckt also an beiden Enden
+        // im Gehweg. Läge ihre Oberseite genau auf Gehweghöhe, flackerten beide Flächen dort (Z-Fighting)
+        PrimitiveKit.Box("Back Wall", t, new Vector3(0f, (-4f + Surface - 0.01f) / 2f, FacadeZ - 0.2f), new Vector3(1f, 4f + Surface - 0.01f, 0.4f), dirt);
         PrimitiveKit.Box("Dirt", t, new Vector3(0f, -3.95f, -5.5f), new Vector3(1f, 0.1f, 17f), dirt);
         PrimitiveKit.SavePrefab(root, PathFor("Construction Pit"));
     }
