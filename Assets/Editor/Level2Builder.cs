@@ -163,8 +163,9 @@ public static class Level2Builder
         {
             PrimitiveKit.Box("Creek Wall", groundParent, new Vector3(x, 0f, (CityLayout.PromenadeFrontZ + back) / 2f), new Vector3(0.2f, 1f, back - CityLayout.PromenadeFrontZ), stone);
         }
-        // Auslass unter der Häuserreihe: dunkle Öffnung mit Steinrahmen
-        PrimitiveKit.Box("Culvert", groundParent, new Vector3(center, 0.27f, back + 0.02f), new Vector3(width - 0.8f, 0.44f, 0.04f), dark);
+        // Auslass unter der Häuserreihe: dunkle Öffnung mit Steinrahmen. 5 cm vor der Schnittkante (z = 3): Dort endet der
+        // Stadt-Boden unter den Häusern, eine Fläche genau auf dieser Ebene flackert mit ihm (Z-Fighting)
+        PrimitiveKit.Box("Culvert", groundParent, new Vector3(center, 0.27f, back - 0.03f), new Vector3(width - 0.8f, 0.44f, 0.04f), dark);
         PrimitiveKit.Box("Culvert Lintel", groundParent, new Vector3(center, 0.53f, back - 0.05f), new Vector3(width - 0.4f, 0.12f, 0.12f), stone);
 
         // Rinnsal den Abhang hinunter bis ins Meer, knapp über der Schräge
