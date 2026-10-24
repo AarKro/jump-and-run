@@ -1802,6 +1802,10 @@ MonoBehaviour:
   starSpinSpeed: 360
   runAwaySpeed: 6
   runAwayDistance: 10
+  curbDistance: 2
+  curbDrop: 0.2
+  curbHopHeight: 0.3
+  curbHopLength: 1.2
 --- !u!114 &6029140366688017149
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1818,6 +1822,11 @@ MonoBehaviour:
   chaseSpeed: 5
   startDirection: 1
   stoppingDistance: 0.3
+  acceleration: 20
+  deceleration: 25
+  turnDuration: 0.3
+  usePatrolLimits: 0
+  patrolLimits: {x: -10, y: 10}
   groundLayer:
     serializedVersion: 2
     m_Bits: 8
@@ -1829,6 +1838,10 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   loseSightTime: 1.5
+  flapOverGaps: 0
+  maxFlapGap: 4
+  flapHeight: 0.8
+  flapSpeed: 4
   flipTarget: {fileID: 4066268958700475128}
 --- !u!65 &6226313342320394008
 BoxCollider:
@@ -2255,6 +2268,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 603784486630829831}
+  - component: {fileID: 2321992975985116623}
   m_Layer: 0
   m_Name: Woof Bubble
   m_TagString: Untagged
@@ -2280,3 +2294,15 @@ Transform:
   - {fileID: 1756524771968864919}
   m_Father: {fileID: 3286962907290450936}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2321992975985116623
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9046061239061366718}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cfeb1adfc7ee49dd8cfc1c4657b21b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FaceCamera

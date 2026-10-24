@@ -252,7 +252,6 @@ public class Seagull : MonoBehaviour
         float angle = Mathf.Sin(Time.time * speed) * flapAngle;
         wingLeft.localRotation = Quaternion.Euler(0f, 0f, angle);
         wingRight.localRotation = Quaternion.Euler(0f, 0f, -angle);
-        skreeBubble.transform.rotation = Frame(transform.position);
     }
 
     private void SetVisible(bool visible)

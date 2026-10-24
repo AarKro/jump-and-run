@@ -83,6 +83,8 @@ public static class SeagullSetup
             .transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
         TextMeshPro text = PrimitiveKit.Text("Text", bubble, new Vector3(0f, 0f, -0.01f), new Vector2(1.1f, 0.38f), "SKREE!", new Color(0.15f, 0.1f, 0.05f));
         text.fontSizeMax = 10f;
+        // Dreht sich zur Kamera (die Möwe selbst dreht sich beim Fliegen)
+        bubble.gameObject.AddComponent<FaceCamera>();
         bubble.gameObject.SetActive(false);
         return bubble.gameObject;
     }

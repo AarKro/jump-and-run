@@ -220,6 +220,8 @@ public static class DogSetup
         text.enableAutoSizing = true;
         text.fontSizeMin = 0.5f;
         text.fontSizeMax = 10f;
+        // Dreht sich zur Kamera, auch wenn die von der anderen Seite der Bahn schaut
+        bubble.gameObject.AddComponent<FaceCamera>();
 
         return bubble.gameObject;
     }

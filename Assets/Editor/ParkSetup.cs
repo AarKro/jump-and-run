@@ -139,6 +139,8 @@ public static class ParkSetup
             .transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
         TextMeshPro text = PrimitiveKit.Text("Text", bubble, new Vector3(0f, 0f, -0.01f), new Vector2(1f, 0.38f), content, new Color(0.15f, 0.1f, 0.05f));
         text.fontSizeMax = 4f;
+        // Dreht sich zur Kamera, auch wenn die von der anderen Seite der Bahn schaut
+        bubble.gameObject.AddComponent<FaceCamera>();
         bubble.gameObject.SetActive(false);
         return bubble.gameObject;
     }
