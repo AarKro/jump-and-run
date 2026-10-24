@@ -3,8 +3,9 @@ using TMPro;
 using UnityEngine;
 
 // Zeigt am Café, ob der Checkpoint schon erreicht ist:
-// vorher dunkel (Fenster aus, Schild matt, "CLOSED" an der Tür, schwebende Kaffeetasse als Hinweis, Tafel "CLOSED"),
-// danach hell (Fenster an, Schild leuchtet, "OPEN"-Neon flackert an, Tafel klappt auf "OPEN", Tasse ploppt weg).
+// vorher dunkel (Fenster aus, Schild matt, "CLOSED" an der Tür, Tafel "CLOSED"),
+// danach hell (Fenster an, Schild leuchtet, "OPEN"-Neon flackert an, Tafel klappt auf "OPEN"),
+// und über dem Ladenschild steigt "Checkpoint unlocked!" mit Funken auf und blendet aus.
 [RequireComponent(typeof(Checkpoint))]
 public class CoffeeShopEffects : MonoBehaviour
 {
@@ -24,27 +25,25 @@ public class CoffeeShopEffects : MonoBehaviour
     [SerializeField] private Transform chalkboard;
     [SerializeField] private float flipDuration = 0.45f;
 
-    [Header("Hinweis-Tasse")]
-    [SerializeField] private Transform cupHint;
-    [SerializeField] private float bobHeight = 0.15f;
-    [SerializeField] private float bobSpeed = 2.5f;
-    [SerializeField] private float spinSpeed = 90f;
+    [Header("Meldung")]
+    [Tooltip("3D-Text über dem Ladenschild, im Prefab ausgeschaltet")]
+    [SerializeField] private TextMeshPro unlockedText;
+    [SerializeField] private float textRise = 1.2f;
+    [SerializeField] private float textHoldTime = 1.2f;
+    [SerializeField] private float textFadeTime = 0.6f;
     [SerializeField] private ParticleSystem sparkles;
     [SerializeField] private int sparkleCount = 30;
 
     private Checkpoint checkpoint;
-    private Vector3 cupStartPosition;
-    private Vector3 cupStartScale;
-    private bool open;
+    private Vector3 textStartPosition;
 
     private void Awake()
     {
         checkpoint = GetComponent<Checkpoint>();
         checkpoint.Activated += OnActivated;
-        if (cupHint != null)
+        if (unlockedText != null)
         {
-            cupStartPosition = cupHint.localPosition;
-            cupStartScale = cupHint.localScale;
+            textStartPosition = unlockedText.transform.localPosition;
         }
         ShowClosed();
     }
@@ -54,28 +53,14 @@ public class CoffeeShopEffects : MonoBehaviour
         checkpoint.Activated -= OnActivated;
     }
 
-    private void Update()
-    {
-        if (open || cupHint == null)
-        {
-            return;
-        }
-        // Schweben und drehen, damit die Tasse auffällt
-        cupHint.localPosition = cupStartPosition + Vector3.up * (Mathf.Sin(Time.time * bobSpeed) * bobHeight);
-        cupHint.Rotate(0f, spinSpeed * Time.deltaTime, 0f, Space.World);
-    }
-
-    // Für ein neues Level (die Stadt bleibt geladen): Ist das Café dort der Checkpoint, startet es geschlossen mit Tasse.
+    // Für ein neues Level (die Stadt bleibt geladen): Ist das Café dort der Checkpoint, startet es geschlossen.
     // Sonst ist es einfach ein offenes Café, ohne Flackern und Effekte
     public void ResetLook(bool closed)
     {
         StopAllCoroutines();
-        open = !closed;
-        if (cupHint != null)
+        if (unlockedText != null)
         {
-            cupHint.localPosition = cupStartPosition;
-            cupHint.localScale = cupStartScale;
-            cupHint.gameObject.SetActive(closed);
+            unlockedText.gameObject.SetActive(false);
         }
         if (chalkboard != null)
         {
@@ -110,7 +95,6 @@ public class CoffeeShopEffects : MonoBehaviour
 
     private void OnActivated()
     {
-        open = true;
         SetWindows(windowsOpen);
         if (signText != null)
         {
@@ -119,7 +103,7 @@ public class CoffeeShopEffects : MonoBehaviour
         SetActive(closedDoorSign, false);
         StartCoroutine(FlickerNeon());
         StartCoroutine(FlipChalkboard());
-        StartCoroutine(PopCup());
+        StartCoroutine(ShowUnlockedText());
     }
 
     // Neonröhren springen nicht sofort an, sondern flackern kurz
@@ -155,30 +139,38 @@ public class CoffeeShopEffects : MonoBehaviour
         chalkboard.localRotation = Quaternion.Euler(0f, 180f, 0f);
     }
 
-    private IEnumerator PopCup()
+    // Text ploppt über dem Schild auf, steigt langsam hoch und blendet aus. Er liegt in der Welt (nicht im HUD),
+    // dadurch sieht man direkt, WELCHES Gebäude jetzt der Checkpoint ist
+    private IEnumerator ShowUnlockedText()
     {
-        if (cupHint == null)
+        if (unlockedText == null)
         {
             yield break;
         }
+        Transform text = unlockedText.transform;
+        unlockedText.gameObject.SetActive(true);
+        text.localPosition = textStartPosition;
+        unlockedText.alpha = 1f;
         if (sparkles != null)
         {
-            sparkles.transform.position = cupHint.position;
+            sparkles.transform.position = text.position;
             sparkles.Emit(sparkleCount);
         }
-        const float growTime = 0.12f;
-        const float shrinkTime = 0.18f;
-        for (float t = 0f; t < growTime; t += Time.deltaTime)
+
+        const float popTime = 0.15f;
+        float total = popTime + textHoldTime + textFadeTime;
+        for (float t = 0f; t < total; t += Time.deltaTime)
         {
-            cupHint.localScale = cupStartScale * Mathf.Lerp(1f, 1.6f, t / growTime);
+            // Aufploppen: von 1.4-fach auf normale Größe
+            text.localScale = Vector3.one * Mathf.Lerp(1.4f, 1f, t / popTime);
+            // Ease-out: schnell los, oben langsam
+            float k = t / total;
+            text.localPosition = textStartPosition + Vector3.up * (textRise * (1f - (1f - k) * (1f - k)));
+            unlockedText.alpha = 1f - Mathf.Clamp01((t - popTime - textHoldTime) / textFadeTime);
             yield return null;
         }
-        for (float t = 0f; t < shrinkTime; t += Time.deltaTime)
-        {
-            cupHint.localScale = cupStartScale * Mathf.Lerp(1.6f, 0f, t / shrinkTime);
-            yield return null;
-        }
-        cupHint.gameObject.SetActive(false);
+        unlockedText.gameObject.SetActive(false);
+        text.localScale = Vector3.one;
     }
 
     private void SetWindows(Material material)

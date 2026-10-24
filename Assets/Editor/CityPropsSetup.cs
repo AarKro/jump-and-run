@@ -34,7 +34,7 @@ public static class CityPropsSetup
     private static Material concrete, curb, foundation, asphalt, roadLine, pit, iron, windowDark, windowLit,
         doorWood, interior, signWhite, red, white, green, cream, darkGreen, beige, brick, barrierOrange,
         trunk, leaves, leavesLight, lampGlow, hydrantRed, binGray, skyline, skylineLight, cloud, gondolaYellow, sill,
-        mint, blush, gelatoPink, waffle;
+        mint, blush, gelatoPink;
 
     [MenuItem("Tools/Jump and Run/City/Build City Prefabs")]
     public static void BuildAll()
@@ -114,7 +114,6 @@ public static class CityPropsSetup
         mint = Lit("Gelato Mint", new Color(0.45f, 0.78f, 0.65f));
         blush = Lit("Gelato Blush", new Color(0.97f, 0.86f, 0.86f));
         gelatoPink = Lit("Gelato Pink", new Color(0.93f, 0.45f, 0.6f));
-        waffle = Lit("Waffle", new Color(0.85f, 0.62f, 0.33f));
     }
 
     // Nur die Gelateria neu bauen (Checkpoint in Level 2), ohne alle anderen Stadt-Prefabs neu zu speichern
@@ -324,21 +323,19 @@ public static class CityPropsSetup
     // Café = Checkpoint (Level 1): Trigger vor der Tür. Beim Erreichen leuchtet das "OPEN"-Schild, danach respawnt man hier
     private static void BuildCoffeeShop()
     {
-        BuildCheckpointShop("Coffee Shop", 9f, darkGreen, beige, green, "COFFEE", "fresh coffee",
-            t => BuildCoffeeCup(t, new Vector3(0.5f, Surface + 3.3f, 0f)));
+        BuildCheckpointShop("Coffee Shop", 9f, darkGreen, beige, green, "COFFEE", "fresh coffee");
     }
 
-    // Gelateria = Checkpoint (Level 2), gleicher Aufbau wie das Café, nur in Pastell und mit Eistüte als Hinweis
+    // Gelateria = Checkpoint (Level 2), gleicher Aufbau wie das Café, nur in Pastell
     private static void BuildGelatoShop()
     {
-        BuildCheckpointShop("Gelato Shop", 8f, mint, blush, gelatoPink, "GELATO", "3 scoops!",
-            t => BuildGelatoCone(t, new Vector3(0.5f, Surface + 3.3f, 0f)));
+        BuildCheckpointShop("Gelato Shop", 8f, mint, blush, gelatoPink, "GELATO", "3 scoops!");
     }
 
     // Laden als Checkpoint, 8 m breit: Tür mit SpawnDoor, Trigger davor, und CoffeeShopEffects für geschlossen/offen
-    // (Fenster, Schild, CLOSED an der Tür, Neon, Gehweg-Tafel, schwebender Hinweis, Funken)
+    // (Fenster, Schild, CLOSED an der Tür, Neon, Gehweg-Tafel, "Checkpoint unlocked!"-Text, Funken)
     private static void BuildCheckpointShop(string name, float height, Material groundFloor, Material upper, Material accent,
-        string sign, string openLine, System.Func<Transform, Transform> buildHint)
+        string sign, string openLine)
     {
         const float width = 8f;
         var root = new GameObject(name);
@@ -366,7 +363,7 @@ public static class CityPropsSetup
         PrimitiveKit.Text("Text", closedSign, new Vector3(0f, 0f, -0.02f), new Vector2(0.72f, 0.26f), "CLOSED", new Color(0.8f, 0.13f, 0.1f));
 
         Transform chalkboard = BuildChalkboard(t, new Vector3(-2.3f, Surface, 1.3f), openLine);
-        Transform hint = buildHint(t);
+        TextMeshPro unlocked = BuildUnlockedText(t);
         ParticleSystem sparkles = BuildSparkles(t);
 
         PrimitiveKit.AddBoxCollider(root, new Vector3(0.5f, Surface + 1.5f, 0f), new Vector3(1.5f, 3f, 3f), true);
@@ -385,7 +382,7 @@ public static class CityPropsSetup
         fx.FindProperty("neonOff").objectReferenceValue = neonOff;
         fx.FindProperty("neonOn").objectReferenceValue = neonOn;
         fx.FindProperty("chalkboard").objectReferenceValue = chalkboard;
-        fx.FindProperty("cupHint").objectReferenceValue = hint;
+        fx.FindProperty("unlockedText").objectReferenceValue = unlocked;
         fx.FindProperty("sparkles").objectReferenceValue = sparkles;
         fx.ApplyModifiedPropertiesWithoutUndo();
         PrimitiveKit.SavePrefab(root, PathFor(name));
@@ -408,28 +405,19 @@ public static class CityPropsSetup
         return board;
     }
 
-    // Schwebende Kaffeetasse über der Laufbahn als Hinweis "hier ist ein Checkpoint"
-    private static Transform BuildCoffeeCup(Transform parent, Vector3 position)
+    // "Checkpoint unlocked!" knapp über dem Ladenschild (Schild-Oberkante bei Surface + 5), etwas vor der Fassade.
+    // Gelb mit dunkler Kontur, damit er vor jeder Fassadenfarbe lesbar ist. Startet ausgeschaltet
+    private static TextMeshPro BuildUnlockedText(Transform parent)
     {
-        Material coffee = PrimitiveKit.Material($"{MaterialFolder}/Coffee.mat", PrimitiveKit.LitShader, new Color(0.35f, 0.2f, 0.1f));
-        Transform cup = PrimitiveKit.Pivot("Coffee Cup Hint", parent, position);
-        PrimitiveKit.Part("Cup", PrimitiveType.Cylinder, cup, Vector3.zero, new Vector3(0.4f, 0.22f, 0.4f), white);
-        PrimitiveKit.Part("Coffee", PrimitiveType.Cylinder, cup, new Vector3(0f, 0.2f, 0f), new Vector3(0.34f, 0.02f, 0.34f), coffee);
-        PrimitiveKit.Box("Handle", cup, new Vector3(0.24f, 0.02f, 0f), new Vector3(0.1f, 0.22f, 0.06f), white);
-        PrimitiveKit.Part("Saucer", PrimitiveType.Cylinder, cup, new Vector3(0f, -0.22f, 0f), new Vector3(0.6f, 0.02f, 0.6f), white);
-        return cup;
-    }
-
-    // Schwebende Eistüte über der Laufbahn als Checkpoint-Hinweis der Gelateria: Waffel mit zwei Kugeln
-    private static Transform BuildGelatoCone(Transform parent, Vector3 position)
-    {
-        Transform cone = PrimitiveKit.Pivot("Gelato Cone Hint", parent, position);
-        // Waffel: schmaler Zylinder, leicht gekippt wie in der Hand gehalten
-        Renderer waffleCone = PrimitiveKit.Part("Waffle", PrimitiveType.Cylinder, cone, new Vector3(0f, -0.15f, 0f), new Vector3(0.18f, 0.22f, 0.18f), waffle);
-        waffleCone.transform.localRotation = Quaternion.Euler(0f, 0f, 8f);
-        PrimitiveKit.Part("Scoop Mint", PrimitiveType.Sphere, cone, new Vector3(0f, 0.12f, 0f), Vector3.one * 0.32f, mint);
-        PrimitiveKit.Part("Scoop Pink", PrimitiveType.Sphere, cone, new Vector3(0.02f, 0.36f, 0f), Vector3.one * 0.28f, gelatoPink);
-        return cone;
+        TextMeshPro text = PrimitiveKit.Text("Unlocked Text", parent, new Vector3(0f, Surface + 5.6f, FacadeZ - 0.6f), new Vector2(7f, 1f),
+            "Checkpoint unlocked!", new Color(1f, 0.85f, 0.25f));
+        var outline = AssetDatabase.LoadAssetAtPath<Material>("Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Outline.mat");
+        if (outline != null)
+        {
+            text.fontSharedMaterial = outline;
+        }
+        text.gameObject.SetActive(false);
+        return text;
     }
 
     // Funken-Ladung beim Aktivieren (nur Emit, keine Dauer-Emission)

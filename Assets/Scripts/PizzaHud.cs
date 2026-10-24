@@ -46,12 +46,6 @@ public class PizzaHud : MonoBehaviour
     [Header("Kalt")]
     [SerializeField] private GameObject coldPanel;
 
-    [Header("Checkpoint-Meldung")]
-    [SerializeField] private TextMeshProUGUI checkpointToast;
-    [Tooltip("So lange bleibt die Meldung voll sichtbar, danach blendet sie aus")]
-    [SerializeField] private float toastHoldTime = 1.1f;
-    [SerializeField] private float toastFadeTime = 0.5f;
-
     private float overheatBaseAlpha;
     private Coroutine gameplayFade;
     private Coroutine titleFade;
@@ -60,13 +54,8 @@ public class PizzaHud : MonoBehaviour
     {
         GameManager.PizzaDelivered += ShowDelivered;
         GameManager.PizzaCold += ShowCold;
-        Checkpoint.AnyActivated += ShowCheckpointToast;
 
         deliveredPanel.SetActive(false);
-        if (checkpointToast != null)
-        {
-            checkpointToast.gameObject.SetActive(false);
-        }
         coldPanel.SetActive(false);
         if (introTitle != null)
         {
@@ -134,7 +123,6 @@ public class PizzaHud : MonoBehaviour
     {
         GameManager.PizzaDelivered -= ShowDelivered;
         GameManager.PizzaCold -= ShowCold;
-        Checkpoint.AnyActivated -= ShowCheckpointToast;
     }
 
     private void Update()
@@ -178,42 +166,6 @@ public class PizzaHud : MonoBehaviour
     private void ShowCold()
     {
         coldPanel.SetActive(true);
-    }
-
-    private void ShowCheckpointToast()
-    {
-        if (checkpointToast != null)
-        {
-            StartCoroutine(ToastRoutine());
-        }
-    }
-
-    // Kurz aufploppen, stehen lassen, ausblenden
-    private IEnumerator ToastRoutine()
-    {
-        checkpointToast.gameObject.SetActive(true);
-        Color color = checkpointToast.color;
-        RectTransform rect = checkpointToast.rectTransform;
-
-        const float popTime = 0.15f;
-        for (float t = 0f; t < popTime; t += Time.deltaTime)
-        {
-            rect.localScale = Vector3.one * Mathf.Lerp(1.4f, 1f, t / popTime);
-            checkpointToast.color = new Color(color.r, color.g, color.b, t / popTime);
-            yield return null;
-        }
-        rect.localScale = Vector3.one;
-        checkpointToast.color = new Color(color.r, color.g, color.b, 1f);
-
-        yield return new WaitForSeconds(toastHoldTime);
-
-        for (float t = 0f; t < toastFadeTime; t += Time.deltaTime)
-        {
-            checkpointToast.color = new Color(color.r, color.g, color.b, 1f - t / toastFadeTime);
-            yield return null;
-        }
-        checkpointToast.gameObject.SetActive(false);
-        checkpointToast.color = new Color(color.r, color.g, color.b, 1f);
     }
 
     // Erst alle Plätze grau zeigen, dann die verdienten Münzen nacheinander "aufploppen" lassen
