@@ -145,30 +145,254 @@ public static partial class CityBuilder
         BuildPond(parent, random);
         BuildParkSign(parent, corners[1], center);
 
-        // Bäume zufällig verteilt, aber nicht auf den Wegen, nicht am Brunnen, nicht im/am Teich und den Bächen, und nicht
-        // auf der Wiese zwischen den beiden südlichen Wegen: Dort steht in Level 3 die Kamera und schaut zum Weg hinauf
-        Vector2 half2 = area.size / 2f;
-        int count = Mathf.FloorToInt(area.width * area.height / 95f);
+        BuildParkDecor(parent, area, center, ring, corners, random);
+    }
+
+    // ---------- Park-Deko ----------
+
+    // Bäume (dicht), Büsche, Findlinge, Blumenbeete, Laternen und Bänke neben den Wegen. Frei bleiben die Wege, die Teiche
+    // und Bäche, und ein Streifen auf der Kameraseite der Wege, über die Level 3 läuft (sonst stünde etwas zwischen Kamera
+    // und Spieler). Laternen und Bänke stehen dort nur auf der Seite hinter der Bahn
+    private static void BuildParkDecor(Transform parent, Rect area, Vector2 center, float ring, Vector2[] corners, System.Random random)
+    {
+        Transform decor = new GameObject("Park Decor").transform;
+        decor.SetParent(parent, false);
+        Vector2 half = area.size / 2f;
+
+        // Abstand zur nächsten Diagonale (alle vier Wege liegen auf den Diagonalen des Blocks)
+        float ToDiagonal(Vector2 offset) => Mathf.Abs(Mathf.Abs(offset.x) * half.y - Mathf.Abs(offset.y) * half.x) / half.magnitude;
+        bool OnPaths(Vector2 offset, float clear) =>
+            ToDiagonal(offset) < 1.5f + clear || Mathf.Abs(offset.magnitude - ring) < 1.5f + clear;
+        Vector2 RandomSpot() => new Vector2(area.xMin + 1.5f + (float)random.NextDouble() * (area.width - 3f),
+            area.yMin + 1.5f + (float)random.NextDouble() * (area.height - 3f));
+
+        // Erst die festen Stücke (Beete, Laternen, Bänke), dann das Verstreute drumherum: Bäume, Büsche und Steine halten
+        // Abstand zu allem, was hier eingetragen ist
+        var occupied = new System.Collections.Generic.List<(Vector2 at, float radius)>();
+        void Occupy(Vector2 at, float radius) => occupied.Add((at, radius));
+        bool Free(Vector2 at, float radius) => occupied.TrueForAll(o => Vector2.Distance(o.at, at) > o.radius + radius);
+
+        // Blumenbeete: im Brunnenring und neben den Wegen
+        for (int i = 0; i < 4; i++)
+        {
+            float angle = (45f + i * 90f) * Mathf.Deg2Rad;
+            Occupy(center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * (ring - 3.3f), 1.4f);
+            FlowerBed(decor, center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * (ring - 3.3f), 1.4f, random);
+        }
+
+        // Entlang der vier Wege: Laternen, Bänke und Blumenbeete im festen Abstand. Auf den südlichen Wegen (Level 3) nur auf
+        // der Seite hinter der Bahn und nicht dort, wo Level 3 etwas hinstellt
+        foreach (Vector2 corner in corners)
+        {
+            Vector2 dir = (corner - center).normalized;
+            float length = (corner - center).magnitude;
+            Vector2 left = new Vector2(-dir.y, dir.x), right = -left;
+            bool south = corner.y < center.y;
+            Vector2 far = left.y > 0f ? left : right;
+            float[] keepClear = !south ? new float[0] : corner.x > center.x ? CityLayout.ParkDecorKeepClearSE : CityLayout.ParkDecorKeepClearSW;
+            int index = 0;
+            for (float s = ring + 5f; s < length - 4f; s += 6f, index++)
+            {
+                if (System.Array.Exists(keepClear, k => Mathf.Abs(k - s) < 4f) || NearPond(center + dir * s + far * 2.5f, 0.5f))
+                {
+                    continue;
+                }
+                Vector2 side = south ? far : (index % 2 == 0 ? left : right);
+                Vector2 at = center + dir * s;
+                switch (index % 4)
+                {
+                    case 0: ParkLamp(decor, at + side * 2.3f); Occupy(at + side * 2.3f, 0.5f); break;
+                    case 1: ParkBench(decor, at + side * 2.4f, side); Occupy(at + side * 2.4f, 1f); break;
+                    case 2: FlowerBed(decor, at + side * 4f, 1.1f, random); Occupy(at + side * 4f, 1.1f); break;
+                }
+            }
+        }
+
+        // Bäume: ~2.5-mal so dicht wie früher
+        int trees = Mathf.FloorToInt(area.width * area.height / 38f);
+        for (int i = 0; i < trees; i++)
+        {
+            Vector2 spot = RandomSpot();
+            Vector2 offset = spot - center;
+            if (offset.magnitude < ring + 4f || OnPaths(offset, 2f) || InCameraStrip(offset, center, ring, corners) || NearPond(spot, 3f) || !Free(spot, 2f))
+            {
+                continue;
+            }
+            Tree(decor, new Vector3(spot.x, Surface + 0.05f, spot.y), 0.75f + (float)random.NextDouble() * 0.7f, random);
+        }
+
+        // Büsche: verstreut und als Hecke am Parkrand (nicht an den Ecken, dort beginnen die Wege)
+        int bushes = Mathf.FloorToInt(area.width * area.height / 90f);
+        for (int i = 0; i < bushes; i++)
+        {
+            Vector2 spot = RandomSpot();
+            Vector2 offset = spot - center;
+            if (offset.magnitude < ring + 2f || OnPaths(offset, 1.2f) || NearPond(spot, 0.8f) || !Free(spot, 1f))
+            {
+                continue;
+            }
+            Bush(decor, spot, 0.7f + (float)random.NextDouble() * 0.6f, random);
+        }
+        Vector2 min = area.min + Vector2.one * 0.8f, max = area.max - Vector2.one * 0.8f;
+        for (float x = min.x; x <= max.x; x += 3f)
+        {
+            foreach (float z in new[] { min.y, max.y })
+            {
+                HedgeBush(decor, new Vector2(x, z), corners, random);
+            }
+        }
+        for (float z = min.y; z <= max.y; z += 3f)
+        {
+            foreach (float x in new[] { min.x, max.x })
+            {
+                HedgeBush(decor, new Vector2(x, z), corners, random);
+            }
+        }
+
+        // Findlinge: Gruppen auf dem Rasen und am Ufer des großen Teichs (nicht auf der Wegseite)
+        for (int i = 0; i < 28; i++)
+        {
+            Vector2 spot = RandomSpot();
+            Vector2 offset = spot - center;
+            if (offset.magnitude < ring + 2f || OnPaths(offset, 1.5f) || NearPond(spot, 1f) || !Free(spot, 1.2f))
+            {
+                continue;
+            }
+            Boulders(decor, spot, random);
+        }
+        for (int i = 0; i < 7; i++)
+        {
+            float angle = 0.3f + i * Mathf.PI * 2f / 7f;
+            Vector2 local = new Vector2(Mathf.Cos(angle) * (CityLayout.PondHalfLength + 1.3f), Mathf.Sin(angle) * (CityLayout.PondHalfWidth + 1.3f));
+            if (local.y < 0f)
+            {
+                continue;
+            }
+            Vector2 spot = CityLayout.PondCenter - CityLayout.ParkDirSW * local.x + CityLayout.ParkNormalNW * local.y;
+            Boulders(decor, spot, random);
+        }
+
+    }
+
+    // Kameraseite eines Wegs, über den Level 3 läuft: die beiden südlichen Diagonalen und die Südhälfte des Brunnenrings.
+    // Die Kamera steht dort 8 m vor der Bahn auf der Südseite, 10 m davon bleiben frei
+    private static bool InCameraStrip(Vector2 offset, Vector2 center, float ring, Vector2[] corners)
+    {
+        const float strip = 10f;
+        foreach (Vector2 corner in corners)
+        {
+            if (corner.y > center.y)
+            {
+                continue;
+            }
+            Vector2 dir = (corner - center).normalized;
+            Vector2 normal = new Vector2(-dir.y, dir.x);
+            if (normal.y > 0f)
+            {
+                normal = -normal;
+            }
+            float along = Vector2.Dot(offset, dir);
+            float side = Vector2.Dot(offset, normal);
+            if (along > ring - 2f && along < (corner - center).magnitude + 2f && side > 0f && side < strip)
+            {
+                return true;
+            }
+        }
+        float distance = offset.magnitude;
+        return offset.y < 0f && distance > ring && distance < ring + strip;
+    }
+
+    // Busch aus 2-3 Kugeln in verschiedenen Grüntönen
+    private static void Bush(Transform parent, Vector2 at, float scale, System.Random random)
+    {
+        Material[] greens = { Mat("Leaves"), Mat("Leaves Light"), Mat("Bush Dark", new Color(0.16f, 0.4f, 0.2f)) };
+        Transform bush = new GameObject("Bush").transform;
+        bush.SetParent(parent, false);
+        bush.position = new Vector3(at.x, CityLayout.ParkLawnTop, at.y);
+        bush.localScale = Vector3.one * scale;
+        int parts = 2 + random.Next(2);
+        for (int i = 0; i < parts; i++)
+        {
+            var offset = new Vector3(((float)random.NextDouble() - 0.5f) * 0.9f, 0.4f, ((float)random.NextDouble() - 0.5f) * 0.9f);
+            float size = 0.9f + (float)random.NextDouble() * 0.5f;
+            PrimitiveKit.Part("Leaves", PrimitiveType.Sphere, bush, offset, new Vector3(size, size * 0.8f, size), greens[random.Next(greens.Length)]);
+        }
+    }
+
+    private static void HedgeBush(Transform parent, Vector2 at, Vector2[] corners, System.Random random)
+    {
+        if (System.Array.Exists(corners, corner => Vector2.Distance(corner, at) < 6f))
+        {
+            return;
+        }
+        Bush(parent, at, 0.9f + (float)random.NextDouble() * 0.3f, random);
+    }
+
+    // 2-4 graue, abgeflachte Steine nebeneinander
+    private static void Boulders(Transform parent, Vector2 at, System.Random random)
+    {
+        Material stone = Mat("Boulder", new Color(0.55f, 0.54f, 0.52f));
+        Material stoneDark = Mat("Boulder Dark", new Color(0.42f, 0.41f, 0.4f));
+        int count = 2 + random.Next(3);
         for (int i = 0; i < count; i++)
         {
-            var spot = new Vector2(area.xMin + 2f + (float)random.NextDouble() * (area.width - 4f), area.yMin + 2f + (float)random.NextDouble() * (area.height - 4f));
-            Vector2 offset = spot - center;
-            if (offset.magnitude < ring + 4f)
-            {
-                continue;
-            }
-            // Abstand zur Diagonale (alle vier Wege liegen auf den Diagonalen des Blocks)
-            float toDiagonal = Mathf.Abs(Mathf.Abs(offset.x) * half2.y - Mathf.Abs(offset.y) * half2.x) / half2.magnitude;
-            if (toDiagonal < 3.5f)
-            {
-                continue;
-            }
-            bool southMeadow = offset.y < 0f && Mathf.Abs(offset.y) * half2.x > Mathf.Abs(offset.x) * half2.y;
-            if (southMeadow || NearPond(spot, 4f))
-            {
-                continue;
-            }
-            Tree(parent, new Vector3(spot.x, Surface + 0.05f, spot.y), 0.8f + (float)random.NextDouble() * 0.6f, random);
+            float size = 0.4f + (float)random.NextDouble() * 0.8f;
+            var position = new Vector3(at.x + ((float)random.NextDouble() - 0.5f) * 1.6f, CityLayout.ParkLawnTop + size * 0.2f, at.y + ((float)random.NextDouble() - 0.5f) * 1.6f);
+            Renderer rock = PrimitiveKit.Part("Boulder", PrimitiveType.Sphere, parent, position, new Vector3(size * 1.2f, size * 0.7f, size), random.Next(2) == 0 ? stone : stoneDark);
+            rock.transform.localRotation = Quaternion.Euler(0f, (float)random.NextDouble() * 360f, ((float)random.NextDouble() - 0.5f) * 20f);
+        }
+    }
+
+    // Rundes Beet: dunkle Erde mit bunten Blüten-Kugeln
+    private static void FlowerBed(Transform parent, Vector2 at, float radius, System.Random random)
+    {
+        Material soil = Mat("Soil", new Color(0.3f, 0.2f, 0.13f));
+        Material[] blossoms =
+        {
+            Mat("Flower Red", new Color(0.9f, 0.18f, 0.2f)), Mat("Flower Yellow", new Color(1f, 0.85f, 0.2f)),
+            Mat("Flower Purple", new Color(0.6f, 0.3f, 0.8f)), Mat("Flower White", new Color(0.97f, 0.96f, 0.92f)),
+        };
+        Transform bed = new GameObject("Flower Bed").transform;
+        bed.SetParent(parent, false);
+        bed.position = new Vector3(at.x, CityLayout.ParkLawnTop, at.y);
+        Cylinder("Soil", bed, new Vector3(0f, 0.04f, 0f), radius, 0.08f, soil);
+        int count = Mathf.RoundToInt(radius * radius * 28f);
+        for (int i = 0; i < count; i++)
+        {
+            float angle = (float)random.NextDouble() * Mathf.PI * 2f;
+            float distance = Mathf.Sqrt((float)random.NextDouble()) * (radius - 0.15f);
+            var position = new Vector3(Mathf.Cos(angle) * distance, 0.18f + (float)random.NextDouble() * 0.08f, Mathf.Sin(angle) * distance);
+            PrimitiveKit.Part("Blossom", PrimitiveType.Sphere, bed, position, Vector3.one * 0.22f, blossoms[random.Next(blossoms.Length)]);
+        }
+    }
+
+    // Altmodische Parklaterne: dunkelgrüner Mast, Laterne mit leuchtendem Glas
+    private static void ParkLamp(Transform parent, Vector2 at)
+    {
+        Material green = Mat("Park Lamp", new Color(0.12f, 0.22f, 0.16f), 0.5f);
+        Transform lamp = new GameObject("Park Lamp").transform;
+        lamp.SetParent(parent, false);
+        lamp.position = new Vector3(at.x, CityLayout.ParkLawnTop, at.y);
+        Cylinder("Base", lamp, new Vector3(0f, 0.15f, 0f), 0.18f, 0.3f, green);
+        Cylinder("Post", lamp, new Vector3(0f, 1.6f, 0f), 0.06f, 3.2f, green);
+        PrimitiveKit.Box("Glass", lamp, new Vector3(0f, 3.45f, 0f), new Vector3(0.32f, 0.45f, 0.32f), Mat("Lamp Glow", new Color(1f, 0.92f, 0.65f)));
+        PrimitiveKit.Box("Cap", lamp, new Vector3(0f, 3.75f, 0f), new Vector3(0.45f, 0.12f, 0.45f), green);
+    }
+
+    // Parkbank neben dem Weg (nur Deko, ohne Collider), Sitzfläche zum Weg hin. away = Richtung vom Weg weg
+    private static void ParkBench(Transform parent, Vector2 at, Vector2 away)
+    {
+        Material wood = Mat("Bridge Wood", new Color(0.55f, 0.38f, 0.22f));
+        Material green = Mat("Park Lamp", new Color(0.12f, 0.22f, 0.16f), 0.5f);
+        Transform bench = new GameObject("Park Bench").transform;
+        bench.SetParent(parent, false);
+        bench.position = new Vector3(at.x, CityLayout.ParkLawnTop, at.y);
+        bench.rotation = Quaternion.LookRotation(new Vector3(away.x, 0f, away.y), Vector3.up);
+        PrimitiveKit.Box("Seat", bench, new Vector3(0f, 0.45f, 0f), new Vector3(1.8f, 0.08f, 0.5f), wood);
+        PrimitiveKit.Box("Backrest", bench, new Vector3(0f, 0.8f, 0.25f), new Vector3(1.8f, 0.4f, 0.06f), wood);
+        foreach (float x in new[] { -0.75f, 0.75f })
+        {
+            PrimitiveKit.Box("Leg", bench, new Vector3(x, 0.22f, 0.05f), new Vector3(0.08f, 0.44f, 0.55f), green);
         }
     }
 
@@ -244,13 +468,14 @@ public static partial class CityBuilder
         // Kleiner Teich südöstlich des Wegs (Kameraseite von Level 3): Weg-Seite ist lokal +Z
         PondBasin(parent, "Small Pond", CityLayout.SmallPondCenter, CityLayout.SmallPondHalfLength, CityLayout.SmallPondHalfWidth, 5, 4, 1f, random);
 
-        // Bäche: vom kleinen Teich quer über den Weg in den großen. Start und Ende jeweils ein Stück im Teichwasser
+        // Bäche: vom kleinen Teich quer über den Weg in den großen. Das Wasser reicht ein Stück unter das Teichwasser (liegt
+        // 5 mm tiefer, sonst flackerten beide Flächen), die Steinkanten enden genau am äußeren Teichrand (Rand = Oval + 0.5)
+        float a2 = CityLayout.SmallPondHalfLength, b2 = CityLayout.SmallPondHalfWidth;
         foreach (float s in CityLayout.ParkStreamsAlongPath)
         {
             Vector2 crossing = CityLayout.ParkPathSW(s);
-            float end = CityLayout.PondOffPath - OvalHalfWidthAt(s - CityLayout.PondAlongPath, a, b) + 0.5f;
-            float start = -CityLayout.SmallPondOffPath + OvalHalfWidthAt(s - CityLayout.SmallPondAlongPath,
-                CityLayout.SmallPondHalfLength, CityLayout.SmallPondHalfWidth) - 0.5f;
+            float end = CityLayout.PondOffPath - OvalHalfWidthAt(s - CityLayout.PondAlongPath, a, b) + 0.3f;
+            float start = -CityLayout.SmallPondOffPath + OvalHalfWidthAt(s - CityLayout.SmallPondAlongPath, a2, b2) - 0.3f;
             // Lokal Z = entlang des Bachs (0 = Kreuzung mit dem Weg), lokal X = entlang des Wegs
             Transform stream = new GameObject("Stream").transform;
             stream.SetParent(parent, false);
@@ -262,11 +487,20 @@ public static partial class CityBuilder
             float split = -CityLayout.ParkBridgeCutoutHalf;
             foreach (var (from, to) in new[] { (start, split), (split, end) })
             {
-                float middle = (from + to) / 2f;
-                PrimitiveKit.Box("Stream Water", stream, new Vector3(0f, waterTop - 0.01f, middle), new Vector3(width - 0.4f, 0.02f, to - from), water);
-                foreach (float x in new[] { -width / 2f + 0.1f, width / 2f - 0.1f })
+                PrimitiveKit.Box("Stream Water", stream, new Vector3(0f, waterTop - 0.015f, (from + to) / 2f), new Vector3(width - 0.4f, 0.02f, to - from), water);
+            }
+            foreach (float x in new[] { -width / 2f + 0.1f, width / 2f - 0.1f })
+            {
+                // Lokal +X zeigt gegen die Wegrichtung (ParkDirSW), die Kante liegt also bei s - x
+                float bankS = s - x;
+                float bankEnd = CityLayout.PondOffPath - OvalHalfWidthAt(bankS - CityLayout.PondAlongPath, a + 0.5f, b + 0.5f);
+                float bankStart = -CityLayout.SmallPondOffPath + OvalHalfWidthAt(bankS - CityLayout.SmallPondAlongPath, a2 + 0.5f, b2 + 0.5f);
+                foreach (var (from, to) in new[] { (bankStart, split), (split, bankEnd) })
                 {
-                    PrimitiveKit.Box("Bank", stream, new Vector3(x, CityLayout.ParkLawnTop + 0.03f, middle), new Vector3(0.2f, 0.08f, to - from), stone);
+                    if (to - from > 0.05f)
+                    {
+                        PrimitiveKit.Box("Bank", stream, new Vector3(x, CityLayout.ParkLawnTop + 0.03f, (from + to) / 2f), new Vector3(0.2f, 0.08f, to - from), stone);
+                    }
                 }
             }
         }

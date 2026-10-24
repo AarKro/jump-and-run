@@ -193,6 +193,10 @@ public static class CityLayout
     public static Vector2 PondCenter => ParkPathSW(PondAlongPath) + ParkNormalNW * PondOffPath;
     public static readonly float[] ParkStreamsAlongPath = { 27f, 37f };
     public const float ParkStreamWidth = 3f;
+    // Hier stellt Level 3 etwas neben die Bahn (Abstand s vom Brunnen): keine Laternen, Bänke, Beete der Park-Deko.
+    // Südost-Weg: das quer werfende Frisbee-Paar; Südwest-Weg: die zwei Bäche und das Picknick
+    public static readonly float[] ParkDecorKeepClearSE = { 42.5f };
+    public static readonly float[] ParkDecorKeepClearSW = { 27f, 37f, 50f };
     // Kleiner Teich: Mitte zwischen den Bächen, so weit südöstlich des Wegs (negativ entlang ParkNormalNW). Sein Steinrand
     // endet genau an der Wegkante: Die Kamera von Level 3 sieht nur ~3 m vor die Bahn, weiter weg läge er außerhalb des Bilds
     public const float SmallPondAlongPath = 32f;
