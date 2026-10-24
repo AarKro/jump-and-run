@@ -20,7 +20,7 @@ public static class LevelCleaner
         "Assets/Prefabs/Dog.prefab",
         "Assets/Prefabs/Flying Enemy.prefab",
         "Assets/Prefabs/Checkpoint.prefab",
-        "Assets/Prefabs/PowerUp.prefab",
+        "Assets/Prefabs/Heat Pickup.prefab",
     };
 
     [MenuItem("Tools/Jump and Run/Clear Level (active scene)")]
@@ -76,7 +76,7 @@ public static class LevelCleaner
                     (source != null && prefabSet.Contains(source)) ||
                     go.GetComponent<PointToPointMover>() != null ||
                     go.GetComponent<Checkpoint>() != null ||
-                    go.GetComponent<PowerUp>() != null ||
+                    go.GetComponent<HeatPickup>() != null ||
                     go.GetComponent<GroundPatrol>() != null ||
                     go.GetComponent<EnemyDamage>() != null;
 

@@ -1,4 +1,3 @@
-using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -56,15 +55,12 @@ public class PlayerController : MonoBehaviour
     private const float GroundLockAfterJump = 0.1f;
     private float coyoteTimer;
     private float jumpBufferTimer;
-    private float currentSpeedMultiplier = 1f;
-    private float currentJumpMultiplier = 1f;
-    private Coroutine speedBoostRoutine;
-    private Coroutine jumpBoostRoutine;
-    private PowerUpShine shine;
 
     // +1 = schaut nach rechts (+X, Levelrichtung), -1 = nach links. Kommt aus der Eingabe, nicht aus der
     // Geschwindigkeit, damit eine Plattform den Spieler nicht umdreht. Bleibt im Stehen beim letzten Wert.
     public float FacingDirection { get; private set; } = 1f;
+    // Steht auf dem Boden (für die Lauf-/Sprung-Animation des Modells)
+    public bool IsGrounded => isGrounded;
 
     // Ab diesem Eingabe-Anteil in X zählt es als Umdrehen (filtert leichtes Stick-Wackeln)
     private const float FacingInputThreshold = 0.1f;
@@ -77,7 +73,6 @@ public class PlayerController : MonoBehaviour
     private void Awake()
     {
         body = GetComponent<Rigidbody>();
-        shine = GetComponent<PowerUpShine>();
         GameManager.LevelReset += ResetState;
         // Schwerkraft kommt aus FixedUpdate, damit Steigen und Fallen unterschiedlich stark sein können
         body.useGravity = false;
@@ -98,26 +93,9 @@ public class PlayerController : MonoBehaviour
         GameManager.LevelReset -= ResetState;
     }
 
-    // Beim Respawn: Boosts beenden (die Power-Ups tauchen ja wieder auf) und Plattform-Schwung vergessen
+    // Beim Respawn: Plattform-Schwung und gepufferte Eingaben vergessen
     private void ResetState()
     {
-        if (speedBoostRoutine != null)
-        {
-            StopCoroutine(speedBoostRoutine);
-            speedBoostRoutine = null;
-        }
-        if (jumpBoostRoutine != null)
-        {
-            StopCoroutine(jumpBoostRoutine);
-            jumpBoostRoutine = null;
-        }
-        currentSpeedMultiplier = 1f;
-        currentJumpMultiplier = 1f;
-        if (shine != null)
-        {
-            shine.Clear();
-        }
-
         carryVelocity = Vector3.zero;
         jumpBufferTimer = 0f;
         coyoteTimer = 0f;
@@ -210,7 +188,7 @@ public class PlayerController : MonoBehaviour
         {
             FacingDirection = Mathf.Sign(along);
         }
-        Vector3 desiredVelocity = desiredDirection * moveSpeed * currentSpeedMultiplier;
+        Vector3 desiredVelocity = desiredDirection * moveSpeed;
         // Nur die eigene Bewegung steuern, der Plattform-Anteil kommt am Ende obendrauf
         Vector3 horizontalVelocity = new Vector3(body.linearVelocity.x, 0f, body.linearVelocity.z) - carryVelocity;
         // Seitliche Anteile (quer zur Bahn) verwerfen, z.B. nach einer Kurve
@@ -223,7 +201,7 @@ public class PlayerController : MonoBehaviour
         {
             horizontalVelocity += desiredDirection * (startSpeed - speedInDirection);
         }
-        // Langsamer werden (Taste losgelassen oder Boost vorbei) geht deutlich schneller als Beschleunigen
+        // Langsamer werden (Taste losgelassen) geht deutlich schneller als Beschleunigen
         float rate = desiredVelocity.sqrMagnitude < horizontalVelocity.sqrMagnitude ? deceleration : acceleration;
         Vector3 newHorizontalVelocity = Vector3.MoveTowards(
             horizontalVelocity,
@@ -280,7 +258,7 @@ public class PlayerController : MonoBehaviour
         if (jumpBufferTimer > 0f && coyoteTimer > 0f)
         {
             // Eine aufsteigende Plattform gibt dem Sprung zusätzlichen Schwung mit
-            velocity.y = JumpVelocity * currentJumpMultiplier + Mathf.Max(groundVerticalVelocity, 0f);
+            velocity.y = JumpVelocity + Mathf.Max(groundVerticalVelocity, 0f);
             jumpBufferTimer = 0f;
             coyoteTimer = 0f;
             groundLockTimer = GroundLockAfterJump;
@@ -355,48 +333,6 @@ public class PlayerController : MonoBehaviour
         ignoreJumpCut = true;
         coyoteTimer = 0f;
         groundLockTimer = GroundLockAfterJump;
-    }
-
-    // Ein laufender Boost wird beim erneuten Einsammeln neu gestartet, sonst würde
-    // der alte Timer den neuen Boost vorzeitig beenden
-    public void ApplySpeedBoost(float multiplier, float duration)
-    {
-        if (speedBoostRoutine != null)
-        {
-            StopCoroutine(speedBoostRoutine);
-        }
-        speedBoostRoutine = StartCoroutine(SpeedBoostRoutine(multiplier, duration));
-        if (shine != null)
-        {
-            shine.Play(PowerUp.PowerUpType.Speed, duration);
-        }
-    }
-
-    public void ApplyJumpBoost(float multiplier, float duration)
-    {
-        if (jumpBoostRoutine != null)
-        {
-            StopCoroutine(jumpBoostRoutine);
-        }
-        jumpBoostRoutine = StartCoroutine(JumpBoostRoutine(multiplier, duration));
-        if (shine != null)
-        {
-            shine.Play(PowerUp.PowerUpType.Jump, duration);
-        }
-    }
-
-    private IEnumerator SpeedBoostRoutine(float multiplier, float duration)
-    {
-        currentSpeedMultiplier = multiplier;
-        yield return new WaitForSeconds(duration);
-        currentSpeedMultiplier = 1f;
-    }
-
-    private IEnumerator JumpBoostRoutine(float multiplier, float duration)
-    {
-        currentJumpMultiplier = multiplier;
-        yield return new WaitForSeconds(duration);
-        currentJumpMultiplier = 1f;
     }
 
     private void OnDrawGizmosSelected()

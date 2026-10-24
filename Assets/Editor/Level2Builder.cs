@@ -18,9 +18,9 @@ using UnityEngine;
 //   -27..-23    Baugrube 1
 //   -46..-34    Überweg Mozzarella Blvd mit Autos
 //   ab -46      Strandpromenade
-//   -60..-56    Bachmündung 1, danach Hund zwischen Container und Bank, Balkon-Kletterei mit Speed-Boost
-//  -110         Rettungsturm (Plattform 3 m hoch) mit Sprung-Boost, wo früher die Oregano Street kreuzte
-//  -126..-130   federnder Sonnenschirm → Balkon mit Wärme-Bonus, Bachmündung 2, Gelateria-Checkpoint (Tür bei -165.5)
+//   -60..-56    Bachmündung 1, danach Hund zwischen Container und Bank, Balkon-Kletterei mit Chili
+//  -110         Rettungsturm (Plattform 3 m hoch) mit Chili, wo früher die Oregano Street kreuzte
+//  -126..-130   federnder Sonnenschirm → Balkon mit Chili, Bachmündung 2, Gelateria-Checkpoint (Tür bei -165.5)
 //   Ecke        rechts in die Basil Street (Ostseite, x -173), Bank, links über die Straße auf die Piazza
 //   Piazza      Hund zwischen zwei Bänken, Kunde westlich des Turms (x ≈ -228)
 // Möwen kreisen über dem ganzen Strand-Stück (u -165 bis -45).
@@ -198,7 +198,7 @@ public static class Level2Builder
     private static void BuildGameplay()
     {
         // Zwischen Mozzarella und Oregano: Hund zwischen Container und Bank (schaut dem Spieler entgegen, also +u),
-        // dann zwei Balkone als Kletterpartie mit Speed-Boost oben
+        // dann zwei Balkone als Kletterpartie mit Chili oben
         LevelBuildKit.Place("Dumpster", -66, 0, gameplayParent);
         GameObject dog = LevelBuildKit.Dog(-76, 1f, gameplayParent);
         // Draufgesprungen läuft er zum Meer: von der Promenade 0.3 m hinunter auf den Sand (statt 0.2 auf die Straße)
@@ -208,16 +208,16 @@ public static class Level2Builder
         LevelBuildKit.Place("Bench", -86, 0, gameplayParent);
         LevelBuildKit.Place("Balcony", -92, 3, gameplayParent);
         LevelBuildKit.Place("Balcony", -96, 6, gameplayParent);
-        LevelBuildKit.PowerUp(-96, 8, LevelBuildKit.PowerUpKind.Speed, true, gameplayParent);
+        LevelBuildKit.HeatPickup(-96, 8, gameplayParent);
 
-        // Wo früher die Oregano Street kreuzte: Rettungsturm (Plattform-Oberkante 3.5) mit Sprung-Boost
+        // Wo früher die Oregano Street kreuzte: Rettungsturm (Plattform-Oberkante 3.5) mit Chili
         LevelBuildKit.Place("Lifeguard Tower", -110, 3, gameplayParent);
-        LevelBuildKit.PowerUp(-110, 5, LevelBuildKit.PowerUpKind.Jump, true, gameplayParent);
+        LevelBuildKit.HeatPickup(-110, 5, gameplayParent);
 
-        // Federnder Sonnenschirm (Oberkante 2.5) → Balkon (Oberkante 6.5) mit Wärme-Bonus
+        // Federnder Sonnenschirm (Oberkante 2.5) → Balkon (Oberkante 6.5) mit Chili
         LevelBuildKit.Place("Bouncy Umbrella", -126, 2, gameplayParent);
         LevelBuildKit.Place("Balcony", -130, 6, gameplayParent);
-        LevelBuildKit.PowerUp(-130, 8, LevelBuildKit.PowerUpKind.TimeBonus, false, gameplayParent);
+        LevelBuildKit.HeatPickup(-130, 8, gameplayParent);
 
         // Basil Street: eine Bank als kleines Hindernis
         LevelBuildKit.Place("Bench", Mathf.Round(BasilU(14f)), 0, gameplayParent);

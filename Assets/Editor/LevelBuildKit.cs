@@ -16,8 +16,6 @@ public static class LevelBuildKit
         "Main Camera", "Player", "GameManager", "HUD", "KillZone", "Goal", "StartPoint"
     };
 
-    public enum PowerUpKind { Speed = 0, Jump = 1, TimeBonus = 2 }
-
     public static LanePath Lane { get; private set; }
 
     // Szene öffnen und alles löschen, was nicht in Keep steht
@@ -79,15 +77,10 @@ public static class LevelBuildKit
         return instance;
     }
 
-    public static GameObject PowerUp(float u, float y, PowerUpKind kind, bool respawn, Transform parent)
+    // Chili (Wärme-Bonus): taucht nach dem Tod nicht wieder auf (Prefab-Standard), sonst könnte man Wärme farmen
+    public static GameObject HeatPickup(float u, float y, Transform parent)
     {
-        GameObject powerUp = PlaceAsset("Assets/Prefabs/PowerUp.prefab", u, y, parent);
-        var serialized = new SerializedObject(powerUp.GetComponent<PowerUp>());
-        serialized.FindProperty("type").enumValueIndex = (int)kind;
-        serialized.FindProperty("respawnOnLevelReset").boolValue = respawn;
-        serialized.ApplyModifiedPropertiesWithoutUndo();
-        powerUp.name = $"PowerUp {kind}";
-        return powerUp;
+        return PlaceAsset("Assets/Prefabs/Heat Pickup.prefab", u, y, parent);
     }
 
     // Hund-Wurzel 1 m über der Gehweg-Mitte: Box-Unterkante liegt dann genau auf der Oberkante.

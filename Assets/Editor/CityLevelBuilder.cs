@@ -14,13 +14,13 @@ using UnityEngine;
 // Alle Positionen sind Lauf-Koordinaten u entlang der LanePath (auf dem ersten Stück ist u = Welt-X).
 // Nach dem Café biegt die Straße in einem 90°-Bogen in die Tiefe ab (Linkskurve nach +Z).
 // Ablauf (Gehweg-Oberkante y = 0.5, Sprung ~3.2 m hoch / ~5.5 m weit):
-//  -18..20    Start: Pizzeria (Tür bei u = -8), Balkon-Kletterei mit Speed-Boost oben
+//  -18..20    Start: Pizzeria (Tür bei u = -8), Balkon-Kletterei mit Chili oben
 //   20..23.5  Baugrube (3.5 m)
 //  23.5..64   Hund zwischen zwei Containern, Querstraße bei u = 50, Café-Checkpoint bei u = 61
 //   64..70.3  Kurve (Radius 4 m) über einen Eckplatz, die Seitenwand des Cafés bildet die Hausecke
-//  71.5..86.5 federnde Markise bei u = 77 → hoher Balkon mit Wärme-Bonus (der Kiosk bei u = 80 ist hier nur Kulisse, die Mikrowelle kommt erst in Level 4)
+//  71.5..86.5 federnde Markise bei u = 77 → hoher Balkon mit Chili (der Kiosk bei u = 80 ist hier nur Kulisse, die Mikrowelle kommt erst in Level 4)
 //  86.5..102  lange Baugrube: Fensterputzer-Gondel hoch, dann über zwei Balkone
-//  102..154   zwei Hunde (Bank/Container als Wände), Balkon mit Sprung-Boost, Kunde bei u = 146
+//  102..154   zwei Hunde (Bank/Container als Wände), Balkon mit Chili, Kunde bei u = 146
 public static class CityLevelBuilder
 {
     private const string ScenePath = "Assets/Scenes/levels/level01.unity";
@@ -164,10 +164,10 @@ public static class CityLevelBuilder
         // Westlich der Pizzeria geht es nicht weiter: Lieferwagen lädt Kisten ab, mit unsichtbarer Wand (Spieler käme von +u)
         Place("Delivery Truck", -22, 0, gameplayParent);
 
-        // Start: zwei Balkone als Kletterpartie (je 3 m höher), oben ein Speed-Boost
+        // Start: zwei Balkone als Kletterpartie (je 3 m höher), oben eine Chili
         Place("Balcony", 9, 3, gameplayParent);   // Oberkante 3.5
         Place("Balcony", 13, 6, gameplayParent);  // Oberkante 6.5
-        PowerUp(13, 8, PowerUpKind.Speed, true);
+        LevelBuildKit.HeatPickup(13, 8, gameplayParent);
         Place("Bench", 3, 0, gameplayParent);
 
         // Hund 1 zwischen zwei Containern (an denen er umdreht), schaut dem Spieler entgegen
@@ -178,31 +178,24 @@ public static class CityLevelBuilder
         // Querstraße mit Verkehr
         PlaceAsset("Assets/Prefabs/Street Crossing.prefab", StreetU, 0, gameplayParent);
 
-        // Nach der Kurve: Markise (Oberkante 2.5) katapultiert ~5 m hoch → Balkon (Oberkante 6.5) mit Wärme-Bonus
+        // Nach der Kurve: Markise (Oberkante 2.5) katapultiert ~5 m hoch → Balkon (Oberkante 6.5) mit Chili
         Place("Bouncy Awning", 77, 2, gameplayParent);
         Place("Balcony", 81, 6, gameplayParent);
-        PowerUp(81, 8, PowerUpKind.TimeBonus, false);
+        LevelBuildKit.HeatPickup(81, 8, gameplayParent);
 
         // Lange Baugrube: Gondel bündig am Gehweg-Ende, fährt auf Balkon-Höhe, dann zwei Balkone (je 2 m Abstand)
         Place("Window Washer Gondola", 88, 0, gameplayParent);   // 86.5 .. 89.5, fährt bis Oberkante 6.5
         Place("Balcony", 93, 6, gameplayParent);                 // 91.5 .. 94.5
         Place("Balcony", 98, 6, gameplayParent);                 // 96.5 .. 99.5, dann runter auf den Gehweg bei 102
 
-        // Schlussstück: Hund 2 zwischen Bank und Container, Balkon mit Sprung-Boost, Hund 3 zwischen zwei Containern
+        // Schlussstück: Hund 2 zwischen Bank und Container, Balkon mit Chili, Hund 3 zwischen zwei Containern
         Place("Bench", 107, 0, gameplayParent);
         Dog(112, -1f);
         Place("Dumpster", 118, 0, gameplayParent);
         Place("Balcony", 122, 3, gameplayParent);
-        PowerUp(122, 5, PowerUpKind.Jump, true);
+        LevelBuildKit.HeatPickup(122, 5, gameplayParent);
         Dog(129, 1f);
         Place("Dumpster", 136, 0, gameplayParent);
-    }
-
-    private enum PowerUpKind { Speed = 0, Jump = 1, TimeBonus = 2 }
-
-    private static void PowerUp(int u, int y, PowerUpKind kind, bool respawn)
-    {
-        LevelBuildKit.PowerUp(u, y, (LevelBuildKit.PowerUpKind)kind, respawn, gameplayParent);
     }
 
     private static void Dog(int u, float startDirection)

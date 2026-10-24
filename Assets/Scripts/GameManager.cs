@@ -223,6 +223,12 @@ public class GameManager : MonoBehaviour
         RemainingTime += seconds;
     }
 
+    // Chili: Anteil des ganzen Balkens (1/6 = halbe Münz-Stufe). Auch hier darf es über 100% gehen
+    public void AddHeat(float fraction)
+    {
+        AddTime(fraction * levelTime);
+    }
+
     // Vom Ziel aufgerufen. Gibt false zurück, wenn das Level schon vorbei ist (z.B. Pizza gerade kalt geworden)
     public bool DeliverPizza()
     {
