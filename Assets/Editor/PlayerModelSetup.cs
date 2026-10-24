@@ -98,6 +98,17 @@ public static class PlayerModelSetup
             Transform board = Skateboard(model, red, white, grip, truck);
             Transform boardTilt = board.Find("Board Tilt");
 
+            // Sterne über dem Kopf (benommen nach einem Sturz vom Board), gleiches Material wie beim Hund. Am Rig, damit sie
+            // beim Hinsetzen mit nach unten gehen. Im Prefab aus
+            Material star = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Dizzy Star.mat");
+            Transform stars = PrimitiveKit.Pivot("Dizzy Stars", rig, new Vector3(0f, 1.3f, 0f));
+            for (int i = 0; i < 5; i++)
+            {
+                float angle = i * 72f * Mathf.Deg2Rad;
+                PrimitiveKit.Part("Star " + (i + 1), PrimitiveType.Sphere, stars, new Vector3(Mathf.Cos(angle) * 0.3f, (i % 2) * 0.06f, Mathf.Sin(angle) * 0.3f), Vector3.one * 0.09f, star);
+            }
+            stars.gameObject.SetActive(false);
+
             PizzaCarton carton = root.GetComponentInChildren<PizzaCarton>(true);
             var cartonSettings = new SerializedObject(carton);
             cartonSettings.FindProperty("holdPoint").objectReferenceValue = hold;
@@ -118,6 +129,7 @@ public static class PlayerModelSetup
             serialized.FindProperty("carton").objectReferenceValue = carton;
             serialized.FindProperty("skateboard").objectReferenceValue = board;
             serialized.FindProperty("boardTilt").objectReferenceValue = boardTilt;
+            serialized.FindProperty("dizzyStars").objectReferenceValue = stars;
             // Ganz ins Profil drehen (90°), nicht nur zu drei Vierteln
             serialized.FindProperty("facingYaw").floatValue = 90f;
             // Schrittlänge und Wippen passend zu den 0.5 m langen Beinen

@@ -37,6 +37,14 @@ public static class MarketSetup
         BuildHandCart();
         BuildCrates("Crate Stack Low", 1);
         BuildCrates("Crate Stack High", 2);
+        BuildJugglers();
+        BuildStroller();
+        BuildHarborLamp();
+        BuildBench();
+        BuildMusician();
+        BuildIceCreamCart();
+        BuildBalloonSeller();
+        BuildLemonadeStand();
         AssetDatabase.SaveAssets();
         Debug.Log("MarketSetup: Markt-Prefabs gebaut.");
     }
@@ -247,6 +255,233 @@ public static class MarketSetup
         obstacle.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // ---------- Jongleure (Hindernis quer über die Bahn) ----------
+
+    // Einer steht vor der Bahn (Kameraseite, dreht ihr halb den Rücken zu), einer dahinter. Zwei Keulen fliegen flach
+    // auf Brusthöhe hin und her. Treffer = vom Board fallen. Um den vorderen stehen ein paar Zuschauer
+    private static void BuildJugglers()
+    {
+        Material clubWhite = white;
+        Material clubRed = Lit("Club Red", new Color(0.85f, 0.15f, 0.2f), 0.5f);
+        var root = new GameObject("Jugglers Across");
+        Transform t = root.transform;
+        const float frontZ = -3.2f, backZ = 2.6f, handHeight = 1.15f;
+        CrowdFigure a = Person(t, "Juggler A", new Vector3(0.2f, Surface, frontZ), 170f, 0f);
+        CrowdFigure b = Person(t, "Juggler B", new Vector3(-0.2f, Surface, backZ), 10f, 0f);
+        // Narrenkappen in Rot, damit man die beiden als Artisten erkennt
+        foreach (CrowdFigure juggler in new[] { a, b })
+        {
+            Transform rig = juggler.transform.Find("Rig");
+            PrimitiveKit.Part("Jester Hat", PrimitiveType.Capsule, rig, new Vector3(0f, 1.62f, 0f), new Vector3(0.4f, 0.22f, 0.4f), clubRed);
+        }
+        Vector3 handA = new Vector3(0.2f, Surface + handHeight, frontZ + 0.45f);
+        Vector3 handB = new Vector3(-0.2f, Surface + handHeight, backZ - 0.45f);
+
+        var clubs = new Rigidbody[2];
+        var visuals = new Transform[2];
+        for (int i = 0; i < clubs.Length; i++)
+        {
+            var club = new GameObject("Club " + (i + 1));
+            club.transform.SetParent(t, false);
+            club.transform.localPosition = handA;
+            var body = club.AddComponent<Rigidbody>();
+            body.isKinematic = true;
+            body.useGravity = false;
+            body.interpolation = RigidbodyInterpolation.Interpolate;
+            var trigger = club.AddComponent<SphereCollider>();
+            trigger.isTrigger = true;
+            trigger.radius = 0.3f;
+            club.AddComponent<CrashTrigger>();
+            Transform visual = PrimitiveKit.Pivot("Spin", club.transform, Vector3.zero);
+            PrimitiveKit.Part("Handle", PrimitiveType.Capsule, visual, new Vector3(0f, -0.12f, 0f), new Vector3(0.05f, 0.12f, 0.05f), clubWhite);
+            PrimitiveKit.Part("Body", PrimitiveType.Capsule, visual, new Vector3(0f, 0.1f, 0f), new Vector3(0.13f, 0.16f, 0.13f), clubWhite);
+            PrimitiveKit.Part("Stripe", PrimitiveType.Cylinder, visual, new Vector3(0f, 0.1f, 0f), new Vector3(0.14f, 0.025f, 0.14f), clubRed);
+            clubs[i] = body;
+            visuals[i] = visual;
+        }
+
+        // Zuschauer um den vorderen Jongleur, schauen zu ihm (und damit Richtung Bahn)
+        Person(t, "Spectator A", new Vector3(-1.4f, Surface, frontZ - 1.2f), 135f, 1f);
+        Person(t, "Spectator B", new Vector3(1.6f, Surface, frontZ - 1.0f), 215f, 1f);
+        Person(t, "Spectator C", new Vector3(0.4f, Surface, frontZ - 2.3f), 180f, 1f);
+
+        var serialized = new SerializedObject(root.AddComponent<Jugglers>());
+        PrimitiveKit.SetReferences(serialized, "clubs", clubs);
+        PrimitiveKit.SetReferences(serialized, "clubVisuals", visuals);
+        serialized.FindProperty("handA").vector3Value = handA;
+        serialized.FindProperty("handB").vector3Value = handB;
+        serialized.FindProperty("armA").objectReferenceValue = a.transform.Find("Rig/Arm Pivot R");
+        serialized.FindProperty("armB").objectReferenceValue = b.transform.Find("Rig/Arm Pivot R");
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        // Die Wurf-Arme bewegt Jugglers, nicht CrowdFigure: dort Gesten aus, Arme vorne
+        foreach (CrowdFigure juggler in new[] { a, b })
+        {
+            var figure = new SerializedObject(juggler);
+            figure.FindProperty("armsForward").floatValue = 70f;
+            figure.ApplyModifiedPropertiesWithoutUndo();
+        }
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Jugglers Across.prefab");
+    }
+
+    // ---------- Kulisse vor und hinter der Bahn ----------
+
+    // Spaziergänger ohne Collider. Die Wurzel wandert auf der Bahn, die Figur steht seitlich versetzt (setzt der Level-
+    // Generator: vorne am Wasser negativ, hinten zwischen den Ständen positiv)
+    private static void BuildStroller()
+    {
+        var root = new GameObject("Stroller");
+        CrowdFigure figure = Person(root.transform, "Figure", new Vector3(0f, Surface, -5f), -90f);
+        var serialized = new SerializedObject(root.AddComponent<Stroller>());
+        serialized.FindProperty("figure").objectReferenceValue = figure.transform;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Stroller.prefab");
+    }
+
+    // Alte Hafenlaterne am Wasser-Rand des sichtbaren Bereichs (lokal z -6.5: so weit vorne, dass sie den Spieler nicht verdeckt)
+    private static void BuildHarborLamp()
+    {
+        Material glow = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/Lamp Glow.mat");
+        var root = new GameObject("Harbor Lamp");
+        Transform t = root.transform;
+        const float z = -6.5f;
+        PrimitiveKit.Part("Foot", PrimitiveType.Cylinder, t, new Vector3(0f, Surface + 0.2f, z), new Vector3(0.3f, 0.2f, 0.3f), iron);
+        PrimitiveKit.Part("Pole", PrimitiveType.Cylinder, t, new Vector3(0f, Surface + 1.9f, z), new Vector3(0.12f, 1.7f, 0.12f), iron);
+        PrimitiveKit.Box("Arm", t, new Vector3(0f, Surface + 3.5f, z), new Vector3(1.1f, 0.06f, 0.06f), iron);
+        foreach (float x in new[] { -0.55f, 0.55f })
+        {
+            PrimitiveKit.Box("Lantern", t, new Vector3(x, Surface + 3.25f, z), new Vector3(0.26f, 0.38f, 0.26f), glow);
+            PrimitiveKit.Box("Lantern Cap", t, new Vector3(x, Surface + 3.48f, z), new Vector3(0.34f, 0.08f, 0.34f), iron);
+        }
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Harbor Lamp.prefab");
+    }
+
+    // Bank mit Blick aufs Wasser (Sitzende schauen also zur Kamera), zwei Leute darauf
+    private static void BuildBench()
+    {
+        var root = new GameObject("Promenade Bench");
+        Transform t = root.transform;
+        const float z = -5.6f, seat = 0.45f;
+        PrimitiveKit.Box("Seat", t, new Vector3(0f, Surface + seat, z), new Vector3(2f, 0.08f, 0.5f), darkWood);
+        PrimitiveKit.Box("Back", t, new Vector3(0f, Surface + seat + 0.35f, z + 0.25f), new Vector3(2f, 0.4f, 0.06f), darkWood);
+        foreach (float x in new[] { -0.85f, 0.85f })
+        {
+            PrimitiveKit.Box("Leg", t, new Vector3(x, Surface + seat / 2f, z), new Vector3(0.08f, seat, 0.45f), iron);
+        }
+        // Die Pillen-Figur hat keine Beine: Füße auf der Sitzfläche sieht aus wie sitzen
+        Person(t, "Sitter A", new Vector3(-0.45f, Surface + seat + 0.04f, z), 0f, 0.6f);
+        Person(t, "Sitter B", new Vector3(0.5f, Surface + seat + 0.04f, z), -15f, 0.6f);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Promenade Bench.prefab");
+    }
+
+    // Akkordeonspieler im Profil, Zuschauer im Halbkreis neben ihm (alle in derselben Tiefe vor der Bahn)
+    private static void BuildMusician()
+    {
+        Material bellows = Lit("Accordion Red", new Color(0.75f, 0.1f, 0.12f), 0.5f);
+        Material keys = white;
+        var root = new GameObject("Street Musician");
+        Transform t = root.transform;
+        const float z = -4.8f;
+        CrowdFigure musician = Person(t, "Musician", new Vector3(-1.2f, Surface, z), -70f, 0f, 60f);
+        Transform rig = musician.transform.Find("Rig");
+        // Akkordeon vor der Brust, der Balg geht auf und zu (Squeeze)
+        Transform accordion = PrimitiveKit.Pivot("Accordion", rig, new Vector3(0f, 0.75f, -0.38f));
+        PrimitiveKit.Box("Keys", accordion, new Vector3(-0.22f, 0f, 0f), new Vector3(0.08f, 0.38f, 0.28f), keys);
+        PrimitiveKit.Box("Bellows", accordion, Vector3.zero, new Vector3(0.36f, 0.34f, 0.26f), bellows);
+        PrimitiveKit.Box("Buttons", accordion, new Vector3(0.22f, 0f, 0f), new Vector3(0.08f, 0.38f, 0.28f), darkWood);
+        accordion.gameObject.AddComponent<Squeeze>();
+        // Hut für Münzen vor ihm
+        PrimitiveKit.Part("Hat", PrimitiveType.Cylinder, t, new Vector3(-0.6f, Surface + 0.05f, z - 0.3f), new Vector3(0.35f, 0.05f, 0.35f), Lit("Hat Black", new Color(0.12f, 0.12f, 0.14f)));
+        // Zuschauer schauen zu ihm (nach -X), wiegen sich und klatschen
+        Person(t, "Listener A", new Vector3(0.4f, Surface, z + 0.6f), 110f, 1f);
+        Person(t, "Listener B", new Vector3(0.7f, Surface, z - 0.5f), 75f, 1f);
+        Person(t, "Listener C", new Vector3(1.5f, Surface, z + 0.1f), 95f, 1f);
+        Person(t, "Listener D", new Vector3(0.1f, Surface, z - 1.4f), 45f, 1f);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Street Musician.prefab");
+    }
+
+    // Eiswagen: weiß-rosa Kasten mit Schirm, Eisverkäufer dahinter (zur Kamera), zwei Kunden
+    private static void BuildIceCreamCart()
+    {
+        Material pink = Lit("Ice Cream Pink", new Color(0.97f, 0.62f, 0.75f));
+        Material mint = Lit("Ice Cream Mint", new Color(0.6f, 0.9f, 0.75f));
+        var root = new GameObject("Ice Cream Cart");
+        Transform t = root.transform;
+        const float z = -5.4f;
+        PrimitiveKit.Box("Cart", t, new Vector3(0f, Surface + 0.55f, z), new Vector3(1.4f, 0.8f, 0.8f), white);
+        PrimitiveKit.Box("Cart Stripe", t, new Vector3(0f, Surface + 0.55f, z - 0.41f), new Vector3(1.4f, 0.2f, 0.02f), pink);
+        foreach (float x in new[] { -0.5f, 0.5f })
+        {
+            Renderer wheel = PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, t, new Vector3(x, Surface + 0.18f, z - 0.42f), new Vector3(0.36f, 0.03f, 0.36f), iron);
+            wheel.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        }
+        // Drei Eiskugeln-Attrappen oben drauf und ein Sonnenschirm
+        Material[] scoops = { pink, mint, Lit("Ice Cream Vanilla", new Color(0.98f, 0.92f, 0.7f)) };
+        for (int i = 0; i < 3; i++)
+        {
+            PrimitiveKit.Part("Scoop", PrimitiveType.Sphere, t, new Vector3(-0.4f + i * 0.4f, Surface + 1.05f, z), Vector3.one * 0.25f, scoops[i]);
+        }
+        PrimitiveKit.Box("Umbrella Pole", t, new Vector3(0.55f, Surface + 1.6f, z + 0.3f), new Vector3(0.05f, 2.2f, 0.05f), iron);
+        PrimitiveKit.Part("Umbrella", PrimitiveType.Sphere, t, new Vector3(0.55f, Surface + 2.65f, z + 0.3f), new Vector3(1.8f, 0.35f, 1.8f), pink);
+        Person(t, "Ice Cream Vendor", new Vector3(0f, Surface, z + 0.7f), 0f, 0.6f);
+        Person(t, "Ice Cream Kid", new Vector3(-1.2f, Surface, z - 0.3f), 60f, 1f).transform.localScale = Vector3.one * 0.7f;
+        Person(t, "Ice Cream Customer", new Vector3(1.3f, Surface, z - 0.4f), -60f, 0.8f);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Ice Cream Cart.prefab");
+    }
+
+    // Luftballonverkäufer mit einem Strauß bunter Ballons (wiegen sich im Wind, Squeeze an den Ballons)
+    private static void BuildBalloonSeller()
+    {
+        Color[] colors =
+        {
+            new Color(0.95f, 0.2f, 0.25f), new Color(0.2f, 0.5f, 0.95f), new Color(1f, 0.85f, 0.2f), new Color(0.3f, 0.8f, 0.4f),
+            new Color(0.75f, 0.35f, 0.9f), new Color(1f, 0.55f, 0.15f), new Color(0.95f, 0.5f, 0.75f),
+        };
+        var root = new GameObject("Balloon Seller");
+        Transform t = root.transform;
+        const float z = -5.6f;
+        CrowdFigure seller = Person(t, "Balloon Seller", new Vector3(0f, Surface, z), 20f, 0.3f);
+        // Strauß hängt an der rechten Hand, schwankt als Ganzes
+        Transform bunch = PrimitiveKit.Pivot("Balloons", t, new Vector3(0.45f, Surface + 1.0f, z));
+        Material line = Lit("Balloon String", new Color(0.9f, 0.9f, 0.9f));
+        for (int i = 0; i < colors.Length; i++)
+        {
+            float angle = i / (float)colors.Length * Mathf.PI * 2f;
+            Vector3 top = new Vector3(Mathf.Cos(angle) * 0.35f, 1.9f + (i % 3) * 0.25f, Mathf.Sin(angle) * 0.3f);
+            Renderer str = PrimitiveKit.Box("String", bunch, top / 2f, new Vector3(0.01f, top.magnitude, 0.01f), line);
+            str.transform.localRotation = Quaternion.FromToRotation(Vector3.up, top.normalized);
+            PrimitiveKit.Part("Balloon", PrimitiveType.Sphere, bunch, top + Vector3.up * 0.2f, new Vector3(0.38f, 0.46f, 0.38f), Lit("Balloon " + (i + 1), colors[i], 0.6f));
+        }
+        var sway = new SerializedObject(bunch.gameObject.AddComponent<Squeeze>());
+        sway.FindProperty("mode").enumValueIndex = (int)Squeeze.Mode.Sway;
+        sway.FindProperty("speed").floatValue = 0.35f;
+        sway.FindProperty("amount").floatValue = 6f;
+        sway.ApplyModifiedPropertiesWithoutUndo();
+        Person(t, "Balloon Kid", new Vector3(1.0f, Surface, z + 0.2f), -50f, 1f).transform.localScale = Vector3.one * 0.7f;
+        Person(t, "Balloon Parent", new Vector3(1.6f, Surface, z - 0.3f), -40f, 0.4f);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Balloon Seller.prefab");
+    }
+
+    // Kleiner Limonadenstand: Holzkiste als Theke, gelbes Schild, ein Kind verkauft, ein Kunde trinkt
+    private static void BuildLemonadeStand()
+    {
+        Material lemon = Lit("Fruit Lemon", new Color(1f, 0.88f, 0.25f));
+        var root = new GameObject("Lemonade Stand");
+        Transform t = root.transform;
+        const float z = -5.4f;
+        PrimitiveKit.Box("Counter", t, new Vector3(0f, Surface + 0.45f, z), new Vector3(1.2f, 0.9f, 0.6f), wood);
+        PrimitiveKit.Box("Sign Board", t, new Vector3(0f, Surface + 0.55f, z - 0.31f), new Vector3(1.0f, 0.35f, 0.02f), lemon);
+        var text = PrimitiveKit.Text("Sign Text", t, new Vector3(0f, Surface + 0.55f, z - 0.33f), new Vector2(0.95f, 0.3f), "LEMONADE", new Color(0.55f, 0.35f, 0.05f));
+        text.fontSizeMax = 3f;
+        PrimitiveKit.Part("Jug", PrimitiveType.Cylinder, t, new Vector3(-0.3f, Surface + 1.05f, z), new Vector3(0.18f, 0.15f, 0.18f), lemon);
+        for (int i = 0; i < 3; i++)
+        {
+            PrimitiveKit.Part("Cup", PrimitiveType.Cylinder, t, new Vector3(0.05f + i * 0.15f, Surface + 0.96f, z), new Vector3(0.08f, 0.06f, 0.08f), white);
+        }
+        Person(t, "Lemonade Kid", new Vector3(0f, Surface, z + 0.7f), 0f, 1f).transform.localScale = Vector3.one * 0.72f;
+        Person(t, "Lemonade Customer", new Vector3(1.1f, Surface, z - 0.3f), -50f, 0.6f);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Lemonade Stand.prefab");
+    }
+
     // ---------- Marktstände (Kulisse hinter der Bahn) ----------
 
     // Tisch mit Tuch, vier Stangen, gestreifte Markise, Händler dahinter, ein, zwei Kunden davor. goods legt die Ware auf
@@ -293,6 +528,8 @@ public static class MarketSetup
         Person(t, "Vendor", new Vector3(0.3f, Surface, StallFrontZ + 1.4f), 0f);
         Person(t, "Shopper A", new Vector3(-0.7f, Surface, StallFrontZ - 0.8f), 160f);
         Person(t, "Shopper B", new Vector3(0.9f, Surface, StallFrontZ - 1.1f), 200f, 0.5f);
+        Person(t, "Shopper C", new Vector3(0.1f, Surface, StallFrontZ - 0.6f), 175f, 0.3f);
+        Person(t, "Shopper D", new Vector3(-1.5f, Surface, StallFrontZ - 1.3f), 120f, 0.8f);
     }
 
     private static void FoodGoods(Transform t, float top, float z)

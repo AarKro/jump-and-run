@@ -97,10 +97,11 @@ public class CrowdFigure : MonoBehaviour
 
         duckAmount = Mathf.Lerp(duckAmount, Duck, 1f - Mathf.Exp(-14f * dt));
         float bob = Mathf.Abs(Mathf.Sin(phase)) * bobHeight * walking;
-        rig.localPosition = rigStart + Vector3.up * (bob - 0.35f * duckAmount);
-        // Ducken: zusammensinken und nach vorne beugen (Figur schaut bei Drehung 0 nach -Z, nach vorn = negative X-Drehung)
-        rig.localScale = new Vector3(1f, 1f - 0.2f * duckAmount, 1f);
-        rig.localRotation = Quaternion.Euler(-25f * duckAmount, 0f, sway);
+        // Ducken: zusammensinken (Stauchen um den Drehpunkt an den Füßen, die bleiben also auf dem Boden) und nach vorne
+        // beugen (Figur schaut bei Drehung 0 nach -Z, nach vorn = negative X-Drehung). Nicht absenken, sonst steckt sie im Boden
+        rig.localPosition = rigStart + Vector3.up * bob;
+        rig.localScale = new Vector3(1f + 0.08f * duckAmount, 1f - 0.3f * duckAmount, 1f + 0.08f * duckAmount);
+        rig.localRotation = Quaternion.Euler(-20f * duckAmount, 0f, sway);
 
         float swing = Mathf.Sin(phase) * armSwing * walking;
         // Arme: Drehung um X, positiv = nach vorn (die Hand geht zur Kamera). Ducken: Arme schützend über den Kopf

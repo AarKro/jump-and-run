@@ -67,6 +67,13 @@ public class DeliveryGuy : MonoBehaviour
     [Tooltip("Nase hoch beim Ollie (Grad)")]
     [SerializeField] private float ollieTilt = 14f;
 
+    [Header("Benommen (Sturz vom Board)")]
+    [Tooltip("Sterne über dem Kopf (Kind des Rigs, im Prefab aus), drehen sich, solange er benommen sitzt")]
+    [SerializeField] private Transform dizzyStars;
+    [SerializeField] private float starSpinSpeed = 360f;
+    [Tooltip("So weit sinkt er zum Sitzen ab (Hüfte knapp über dem Boden)")]
+    [SerializeField] private float sitDrop = 0.42f;
+
     private PlayerController player;
     private Rigidbody body;
     private Vector3 lastPosition;
@@ -84,6 +91,8 @@ public class DeliveryGuy : MonoBehaviour
     private Vector3 boardLocalPosition;
     // Sekunden, die er noch mit den Armen rudert (Sturz vom Board)
     private float stumbleTime;
+    // Sitzt benommen auf dem Boden (Sturz vom Board)
+    private bool dazed;
 
     private void Awake()
     {
@@ -129,6 +138,16 @@ public class DeliveryGuy : MonoBehaviour
         boardLoose = false;
     }
 
+    // Benommen hinsetzen (Beine nach vorn, Sterne über dem Kopf) bzw. wieder aufstehen
+    public void SetDazed(bool value)
+    {
+        dazed = value;
+        if (dizzyStars != null)
+        {
+            dizzyStars.gameObject.SetActive(value);
+        }
+    }
+
     // Ein paar Zehntelsekunden mit den Armen rudern (beim Sturz)
     public void Stumble(float duration)
     {
@@ -163,6 +182,13 @@ public class DeliveryGuy : MonoBehaviour
 
         // Kinematisch = Skript bewegt ihn (Tür, Tod), dort läuft keine Bodenprüfung, er gilt als am Boden
         bool grounded = body.isKinematic || player.IsGrounded;
+        if (dazed)
+        {
+            UpdateDazed(dt, blend);
+            return;
+        }
+        // Nach dem Sitzen wieder gerade aufrichten
+        rig.localRotation = Quaternion.Slerp(rig.localRotation, Quaternion.identity, blend);
         if (skating)
         {
             UpdateSkating(grounded, dt, blend);
@@ -244,6 +270,27 @@ public class DeliveryGuy : MonoBehaviour
             boardTilt.localRotation = Quaternion.Euler(0f, 0f, tilt);
         }
 
+        UpdateArms(0f, pose);
+    }
+
+    // Sitzt auf dem Boden: Hüfte runter, Beine waagerecht nach vorn (Drehung um X, positiv = Fuß nach vorn), Oberkörper
+    // schwankt im Kreis, die Sterne drehen sich über dem Kopf. Den Karton hält er weiter fest
+    private void UpdateDazed(float dt, float blend)
+    {
+        float pose = 1f - Mathf.Exp(-poseSharpness * dt);
+        legLeftAngle = Mathf.Lerp(legLeftAngle, 80f, pose);
+        legRightAngle = Mathf.Lerp(legRightAngle, 75f, pose);
+        legLeftSpread = Mathf.Lerp(legLeftSpread, -10f, pose);
+        legRightSpread = Mathf.Lerp(legRightSpread, 10f, pose);
+        legLeft.localRotation = Quaternion.Euler(legLeftAngle, 0f, legLeftSpread);
+        legRight.localRotation = Quaternion.Euler(legRightAngle, 0f, legRightSpread);
+        rig.localPosition = Vector3.Lerp(rig.localPosition, rigStart + Vector3.down * sitDrop, blend);
+        float wobble = Time.time * 7f;
+        rig.localRotation = Quaternion.Euler(Mathf.Sin(wobble) * 6f, 0f, Mathf.Cos(wobble) * 6f);
+        if (dizzyStars != null)
+        {
+            dizzyStars.Rotate(0f, starSpinSpeed * dt, 0f, Space.Self);
+        }
         UpdateArms(0f, pose);
     }
 

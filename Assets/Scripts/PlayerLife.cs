@@ -28,6 +28,8 @@ public class PlayerLife : MonoBehaviour
     [Tooltip("So weit rutscht das Board zurück (weiter als er fliegt, er läuft ihm hinterher)")]
     [SerializeField] private float crashBoardSlide = 3.5f;
     [SerializeField] private float crashBoardDuration = 0.6f;
+    [Tooltip("So lange sitzt er benommen da (Sterne über dem Kopf), bevor er zum Board läuft")]
+    [SerializeField] private float crashDazedTime = 1f;
     [SerializeField] private float crashRunDuration = 0.35f;
     [Tooltip("Danach sind Leute und Karren so lange durchlässig")]
     [SerializeField] private float crashGraceTime = 1f;
@@ -111,6 +113,15 @@ public class PlayerLife : MonoBehaviour
                 board.SetPositionAndRotation(boardPosition, Quaternion.AngleAxis(360f * eased, Lane.Tangent(u)) * boardRotation);
             }
             yield return new WaitForFixedUpdate();
+        }
+
+        // Benommen sitzen bleiben (die eigentliche Strafe), dann aufstehen
+        if (guy != null)
+        {
+            guy.SetDazed(true);
+            yield return new WaitForSeconds(crashDazedTime);
+            guy.SetDazed(false);
+            yield return new WaitForSeconds(0.2f);
         }
 
         // Zum Board laufen (schaut dabei dorthin), aufspringen, wieder in Fahrtrichtung drehen

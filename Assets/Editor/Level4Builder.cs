@@ -200,12 +200,12 @@ public static class Level4Builder
 
     // Hindernisse auf der Bahn, Welt-z in Fahrtrichtung (nach Norden). Abstand ~9–10 m: Ein Ollie bei 14 m/s geht ~10 m weit,
     // dazwischen braucht man einen Moment zum Reagieren. Passanten laufen in ihrem Bereich (± range) hin und her
-    private enum MarketThing { Pedestrian, CratesLow, CratesHigh, Group, Cart, BouncyStall }
+    private enum MarketThing { Pedestrian, CratesLow, CratesHigh, Group, Cart, BouncyStall, Jugglers }
     private static readonly (float z, MarketThing thing, float range)[] MarketLayout =
     {
         (146f, MarketThing.Pedestrian, 3f),
         (156f, MarketThing.CratesLow, 0f),
-        (165f, MarketThing.Pedestrian, 3f),
+        (165f, MarketThing.Jugglers, 0f),      // werfen Keulen quer über die Bahn
         (174f, MarketThing.Group, 0f),
         (184f, MarketThing.Pedestrian, 4f),
         (194f, MarketThing.CratesHigh, 0f),
@@ -223,6 +223,22 @@ public static class Level4Builder
     private const float StallSpacing = 5f;
     private static readonly string[] StallTypes = { "Food", "Fish", "Flowers", "Food", "Flea", "Fish", "Flowers", "Flea" };
 
+    // Kulisse vor der Bahn (zum Wasser hin, lokal z -4 bis -7: weiter vorne sieht die Kamera nicht hin, näher an der Bahn
+    // würden Leute den Spieler verdecken). Welt-z, Prefab
+    private static readonly (float z, string prefab)[] MarketForeground =
+    {
+        (150f, "Promenade Bench"), (180f, "Street Musician"), (192f, "Promenade Bench"), (202f, "Ice Cream Cart"),
+        (222f, "Promenade Bench"), (230f, "Balloon Seller"), (240f, "Promenade Bench"), (248f, "Lemonade Stand"),
+    };
+    private const float LampSpacing = 12f;
+    // Spaziergänger (Kulisse, ohne Collider): Welt-z, seitlicher Abstand zur Bahn (lokal z: - = am Wasser, + = zwischen den
+    // Ständen), Bereich in Metern
+    private static readonly (float z, float side, float range)[] MarketStrollers =
+    {
+        (160f, -5f, 6f), (196f, -6f, 5f), (214f, -4.6f, 6f), (244f, -5.8f, 5f),
+        (147f, 1.6f, 5f), (170f, 1.5f, 4f), (188f, 1.7f, 5f), (207f, 1.5f, 4f), (226f, 1.6f, 5f), (250f, 1.5f, 4f),
+    };
+
     private static void BuildMarket()
     {
         Transform market = new GameObject("Market").transform;
@@ -230,6 +246,7 @@ public static class Level4Builder
         string folder = MarketSetup.PrefabFolder;
         float direction = 1f;
         float bouncyZ = 0f;
+        var keepClear = new List<float>();
         foreach (var entry in MarketLayout)
         {
             float u = Mathf.Round(MarinaraU(entry.z));
@@ -260,6 +277,11 @@ public static class Level4Builder
                     LevelBuildKit.HeatPickup(u, MarketChiliHeight, market);
                     bouncyZ = entry.z;
                     break;
+                case MarketThing.Jugglers:
+                    // Der hintere Jongleur steht da, wo sonst ein Stand wäre
+                    LevelBuildKit.PlaceAsset($"{folder}/Jugglers Across.prefab", u, 0, market);
+                    keepClear.Add(entry.z);
+                    break;
             }
         }
 
@@ -268,12 +290,41 @@ public static class Level4Builder
         for (float z = CrustLaneZ + 7f; z <= CityLayout.MarketToZ - 3f; z += StallSpacing)
         {
             bool fourCheese = z > FourCheeseZ - 6f && z < FourCheeseZ + 6f;
-            if (fourCheese || Mathf.Abs(z - bouncyZ) < 4f)
+            if (fourCheese || Mathf.Abs(z - bouncyZ) < 4f || keepClear.Exists(clear => Mathf.Abs(z - clear) < 4f))
             {
                 continue;
             }
             string type = StallTypes[index++ % StallTypes.Length];
             LevelBuildKit.PlaceAsset($"{folder}/Market Stall {type}.prefab", Mathf.Round(MarinaraU(z)), 0, market);
+        }
+
+        // Vor der Bahn: Bänke, Musiker, Eiswagen, Ballons, Limonade, dazwischen Laternen (nicht direkt an einer Attraktion)
+        Transform front = new GameObject("Market Foreground").transform;
+        front.SetParent(market, false);
+        foreach (var entry in MarketForeground)
+        {
+            LevelBuildKit.PlaceAsset($"{folder}/{entry.prefab}.prefab", Mathf.Round(MarinaraU(entry.z)), 0, front);
+        }
+        for (float z = CrustLaneZ + 7f; z <= CityLayout.MarketToZ - 3f; z += LampSpacing)
+        {
+            float lampZ = z;
+            if (System.Array.Exists(MarketForeground, entry => Mathf.Abs(entry.z - lampZ) < 3f) || keepClear.Exists(clear => Mathf.Abs(lampZ - clear) < 3f))
+            {
+                continue;
+            }
+            LevelBuildKit.PlaceAsset($"{folder}/Harbor Lamp.prefab", Mathf.Round(MarinaraU(z)), 0, front);
+        }
+        float strollDirection = 1f;
+        foreach (var entry in MarketStrollers)
+        {
+            GameObject stroller = LevelBuildKit.PlaceAsset($"{folder}/Stroller.prefab", Mathf.Round(MarinaraU(entry.z)), 0, front);
+            Transform figure = stroller.transform.Find("Figure");
+            figure.localPosition = new Vector3(0f, figure.localPosition.y, entry.side);
+            var settings = new SerializedObject(stroller.GetComponent<Stroller>());
+            settings.FindProperty("range").floatValue = entry.range;
+            settings.FindProperty("startDirection").floatValue = strollDirection;
+            settings.ApplyModifiedPropertiesWithoutUndo();
+            strollDirection = -strollDirection;
         }
     }
 
