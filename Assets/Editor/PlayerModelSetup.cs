@@ -109,6 +109,8 @@ public static class PlayerModelSetup
             serialized.FindProperty("armLeft").objectReferenceValue = armLeft;
             serialized.FindProperty("armRight").objectReferenceValue = armRight;
             serialized.FindProperty("carton").objectReferenceValue = carton;
+            // Ganz ins Profil drehen (90°), nicht nur zu drei Vierteln
+            serialized.FindProperty("facingYaw").floatValue = 90f;
             // Schrittlänge und Wippen passend zu den 0.5 m langen Beinen
             serialized.FindProperty("strideLength").floatValue = 1.8f;
             serialized.FindProperty("bobHeight").floatValue = 0.06f;

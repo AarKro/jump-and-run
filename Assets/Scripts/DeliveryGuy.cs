@@ -3,8 +3,7 @@ using UnityEngine;
 // Animiert das Modell des Pizzaboten (gebaut von PlayerModelSetup), ganz ohne Animator: nur Drehpunkte, die per Code
 // gedreht werden ("prozedurale Animation"). Die Physik (Kugel-Collider, Rigidbody) weiß davon nichts, das Modell ist reine Optik.
 //
-// - Dreht sich in Laufrichtung, aber nur zu drei Vierteln (±60°), damit man das Gesicht noch sieht.
-//   Läuft er in die Tiefe (aus der Tür, zur Mikrowelle), schaut er in diese Richtung.
+// - Dreht sich ganz in Laufrichtung (±90°, reines Profil). Läuft er in die Tiefe (aus der Tür, zur Mikrowelle), schaut er in diese Richtung.
 // - Laufzyklus: Beine schwingen gegengleich, der Körper wippt. Die Phase wächst mit der gelaufenen Strecke,
 //   dadurch passen die Schritte zur Geschwindigkeit und rutschen nicht.
 // - In der Luft: ein Bein angezogen, eins gestreckt.
@@ -27,7 +26,7 @@ public class DeliveryGuy : MonoBehaviour
 
     [Header("Drehen")]
     [Tooltip("Wie weit er sich von der Kamera weg in Laufrichtung dreht. 90 = reines Profil, 0 = frontal")]
-    [SerializeField] private float facingYaw = 60f;
+    [SerializeField] private float facingYaw = 90f;
     [SerializeField] private float turnSharpness = 15f;
 
     [Header("Laufen")]
