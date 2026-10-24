@@ -48,6 +48,8 @@ public class GameManager : MonoBehaviour
     private Transform currentRespawnPoint;
     // Tür des letzten Checkpoints (bzw. die Start-Tür). Ohne Tür wird am currentRespawnPoint aufgeploppt
     private SpawnDoor currentDoor;
+    // Kommt er nach einem Respawn auf dem Skateboard aus der Tür? Setzt der Checkpoint (Board-Shop an, Kiosk aus)
+    private bool respawnSkating;
 
     private void Awake()
     {
@@ -161,6 +163,12 @@ public class GameManager : MonoBehaviour
         currentRespawnPoint = door.OutsidePoint;
     }
 
+    // Ab dem letzten Checkpoint mit oder ohne Skateboard (Level 4: Board-Shop gibt es, am Kiosk wird es abgestellt)
+    public void SetRespawnSkating(bool skating)
+    {
+        respawnSkating = skating;
+    }
+
     public void RespawnPlayer()
     {
         // Nach dem Abliefern (oder bei kalter Pizza) soll z.B. ein Hund den Spieler nicht mehr zurücksetzen.
@@ -191,6 +199,10 @@ public class GameManager : MonoBehaviour
         }
 
         LevelReset?.Invoke();
+        if (playerController != null)
+        {
+            playerController.SetSkating(respawnSkating);
+        }
 
         if (playerLife == null)
         {

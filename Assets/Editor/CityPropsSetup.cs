@@ -34,7 +34,7 @@ public static class CityPropsSetup
     private static Material concrete, curb, foundation, asphalt, roadLine, pit, iron, windowDark, windowLit,
         doorWood, interior, signWhite, red, white, green, cream, darkGreen, beige, brick, barrierOrange,
         trunk, leaves, leavesLight, lampGlow, hydrantRed, binGray, skyline, skylineLight, cloud, gondolaYellow, sill,
-        mint, blush, gelatoPink;
+        mint, blush, gelatoPink, boardTeal, boardOrange;
 
     [MenuItem("Tools/Jump and Run/City/Build City Prefabs")]
     public static void BuildAll()
@@ -53,6 +53,7 @@ public static class CityPropsSetup
         BuildPizzeria();
         BuildCoffeeShop();
         BuildGelatoShop();
+        BuildBoardShop();
         BuildKiosk();
         BuildBalcony();
         BuildAwning();
@@ -114,6 +115,8 @@ public static class CityPropsSetup
         mint = Lit("Gelato Mint", new Color(0.45f, 0.78f, 0.65f));
         blush = Lit("Gelato Blush", new Color(0.97f, 0.86f, 0.86f));
         gelatoPink = Lit("Gelato Pink", new Color(0.93f, 0.45f, 0.6f));
+        boardTeal = Lit("Board Shop Teal", new Color(0.16f, 0.6f, 0.62f));
+        boardOrange = Lit("Board Shop Orange", new Color(0.98f, 0.52f, 0.12f));
     }
 
     // Nur die Gelateria neu bauen (Checkpoint in Level 2), ohne alle anderen Stadt-Prefabs neu zu speichern
@@ -122,6 +125,15 @@ public static class CityPropsSetup
     {
         CreateMaterials();
         BuildGelatoShop();
+        AssetDatabase.SaveAssets();
+    }
+
+    // Nur den Board-Shop neu bauen (Checkpoint in Level 4)
+    [MenuItem("Tools/Jump and Run/City/Build Board Shop Prefab")]
+    public static void BuildBoardShopPrefab()
+    {
+        CreateMaterials();
+        BuildBoardShop();
         AssetDatabase.SaveAssets();
     }
 
@@ -336,10 +348,42 @@ public static class CityPropsSetup
         BuildCheckpointShop("Gelato Shop", 8f, mint, blush, gelatoPink, "GELATO", "3 scoops!");
     }
 
+    // Ollie's Board Shop = Checkpoint (Level 4): Retro-Look in Türkis und Orange. Dort holt sich der Spieler das Skateboard
+    // (SkateShop: rein in den Laden, auf dem Board wieder heraus)
+    private static void BuildBoardShop()
+    {
+        BuildCheckpointShop("Board Shop", 9f, boardTeal, cream, boardOrange, "OLLIE'S <size=60%>BOARD SHOP</size>", "boards & wheels",
+            root =>
+            {
+                Transform t = root.transform;
+                // Großes Brett schräg an der Fassade rechts über dem Schaufenster
+                Transform bigBoard = PrimitiveKit.Pivot("Wall Board", t, new Vector3(3.1f, Surface + 3.6f, FacadeZ - 0.12f));
+                bigBoard.localRotation = Quaternion.Euler(0f, 0f, 25f);
+                PrimitiveKit.Box("Deck", bigBoard, Vector3.zero, new Vector3(1.6f, 0.42f, 0.06f), boardOrange);
+                PrimitiveKit.Box("Stripe", bigBoard, new Vector3(0f, 0f, -0.035f), new Vector3(1.4f, 0.08f, 0.01f), white);
+                foreach (float x in new[] { -0.52f, 0.52f })
+                {
+                    foreach (float y in new[] { -0.2f, 0.2f })
+                    {
+                        Renderer wheel = PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, bigBoard, new Vector3(x, y, -0.08f), new Vector3(0.16f, 0.04f, 0.16f), white);
+                        wheel.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                    }
+                }
+                // Bretter im linken Schaufenster, hochkant nebeneinander (bunte Decks vor dem Glas)
+                Material[] decks = { boardOrange, red, gondolaYellow, green };
+                for (int i = 0; i < decks.Length; i++)
+                {
+                    PrimitiveKit.Box("Display Deck " + (i + 1), t, new Vector3(-3.1f + i * 0.4f, Surface + 1.45f, FacadeZ - 0.04f), new Vector3(0.24f, 1.25f, 0.03f), decks[i]);
+                }
+                root.AddComponent<SkateShop>();
+            });
+    }
+
     // Laden als Checkpoint, 8 m breit: Tür mit SpawnDoor, Trigger davor, und CoffeeShopEffects für geschlossen/offen
-    // (Fenster, Schild, CLOSED an der Tür, Neon, Gehweg-Tafel, "Checkpoint unlocked!"-Text, Funken)
+    // (Fenster, Schild, CLOSED an der Tür, Neon, Gehweg-Tafel, "Checkpoint unlocked!"-Text, Funken).
+    // extras: baut ladenspezifische Teile dazu, bevor das Prefab gespeichert wird
     private static void BuildCheckpointShop(string name, float height, Material groundFloor, Material upper, Material accent,
-        string sign, string openLine)
+        string sign, string openLine, System.Action<GameObject> extras = null)
     {
         const float width = 8f;
         var root = new GameObject(name);
@@ -389,6 +433,7 @@ public static class CityPropsSetup
         fx.FindProperty("unlockedText").objectReferenceValue = unlocked;
         fx.FindProperty("sparkles").objectReferenceValue = sparkles;
         fx.ApplyModifiedPropertiesWithoutUndo();
+        extras?.Invoke(root);
         PrimitiveKit.SavePrefab(root, PathFor(name));
     }
 

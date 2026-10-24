@@ -94,6 +94,28 @@ public static class LevelBuildKit
         return dog;
     }
 
+    // Unsichtbarer Laufboden (Layer Ground) entlang der Bahn von u0 bis u1, Oberkante top. Für Stellen, an denen die Stadt
+    // keinen Collider hat (Fahrbahnen, Hafen). Auf Geraden ein Stück, in Bögen etwa 1 m lange Sehnen; 4 m breit, 1 m dick
+    public static void WalkGround(string name, float u0, float u1, float top, Transform parent)
+    {
+        Transform group = new GameObject(name).transform;
+        group.SetParent(parent, false);
+        bool straight = Vector3.Angle(Lane.TangentAt(u0), Lane.TangentAt(u1)) < 0.1f
+            && Vector3.Angle(Lane.TangentAt(u0), Lane.TangentAt((u0 + u1) / 2f)) < 0.1f;
+        int steps = straight ? 1 : Mathf.Max(1, Mathf.CeilToInt(u1 - u0));
+        for (int i = 0; i < steps; i++)
+        {
+            Vector3 p0 = Lane.PointAt(Mathf.Lerp(u0, u1, i / (float)steps));
+            Vector3 p1 = Lane.PointAt(Mathf.Lerp(u0, u1, (i + 1) / (float)steps));
+            var piece = new GameObject("Walk " + (i + 1)) { layer = 3 };
+            piece.transform.SetParent(group, false);
+            piece.transform.SetPositionAndRotation((p0 + p1) / 2f + Vector3.up * (top - 0.5f),
+                Quaternion.LookRotation(Vector3.Cross(p1 - p0, Vector3.up).normalized, Vector3.up));
+            // Etwas länger als die Sehne, damit zwischen den Stücken im Bogen keine Kerbe entsteht
+            PrimitiveKit.AddBoxCollider(piece, Vector3.zero, new Vector3(Vector3.Distance(p0, p1) + 0.1f, 1f, 4f));
+        }
+    }
+
     // "City Link": LevelCity lädt die Stadt und richtet die festen Gebäude ein (Start-Tür, benutzte Checkpoints/Mikrowelle)
     public static Transform CityLink(string startLandmark, params string[] usedLandmarks)
     {

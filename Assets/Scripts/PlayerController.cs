@@ -11,6 +11,16 @@ public class PlayerController : MonoBehaviour
     [Tooltip("Abbremsen beim Loslassen oder Umdrehen in m/s². Hoch = sofortiger Stopp, kaum Nachrutschen")]
     [SerializeField] private float deceleration = 150f;
 
+    [Header("Skateboard")]
+    [Tooltip("Höchstgeschwindigkeit auf dem Board (doppelt so schnell wie zu Fuß)")]
+    [SerializeField] private float skateSpeed = 14f;
+    [Tooltip("Beschleunigen auf dem Board in m/s². 23 = in gut 0.6 s auf voller Geschwindigkeit")]
+    [SerializeField] private float skateAcceleration = 23f;
+    [Tooltip("Ausrollen nach dem Loslassen in m/s². 28 = aus vollem Tempo in 0.5 s (gut 3 m) zum Stehen")]
+    [SerializeField] private float skateRollOut = 28f;
+    [Tooltip("Bremsen beim Umdrehen auf dem Board in m/s². Dauert länger als zu Fuß, aber kürzer als das Ausrollen")]
+    [SerializeField] private float skateTurnBrake = 45f;
+
     [Header("Sprung")]
     [Tooltip("Maximale Sprunghöhe in Metern bei gehaltener Taste")]
     [SerializeField] private float jumpHeight = 3.2f;
@@ -59,6 +69,10 @@ public class PlayerController : MonoBehaviour
     public float FacingDirection { get; private set; } = 1f;
     // Steht auf dem Boden (für die Lauf-/Sprung-Animation des Modells)
     public bool IsGrounded => isGrounded;
+    // Fährt Skateboard (Level 4: vom Board-Shop bis zum Kiosk). Ändert nur Tempo und Bremsen, gesprungen wird gleich hoch
+    public bool IsSkating { get; private set; }
+    // Wird gerade schneller (Taste gehalten, noch nicht auf Höchsttempo): Auf dem Board stößt er sich dann mit dem Fuß ab
+    public bool IsSpeedingUp { get; private set; }
 
     // Ab diesem Eingabe-Anteil in X zählt es als Umdrehen (filtert leichtes Stick-Wackeln)
     private const float FacingInputThreshold = 0.1f;
@@ -215,7 +229,7 @@ public class PlayerController : MonoBehaviour
         {
             FacingDirection = Mathf.Sign(along);
         }
-        Vector3 desiredVelocity = desiredDirection * moveSpeed;
+        Vector3 desiredVelocity = desiredDirection * (IsSkating ? skateSpeed : moveSpeed);
         // Nur die eigene Bewegung steuern, der Plattform-Anteil kommt am Ende obendrauf
         Vector3 horizontalVelocity = new Vector3(body.linearVelocity.x, 0f, body.linearVelocity.z) - carryVelocity;
         // Seitliche Anteile (quer zur Bahn) verwerfen, z.B. nach einer Kurve
@@ -227,11 +241,15 @@ public class PlayerController : MonoBehaviour
         float speedInDirection = Vector3.Dot(horizontalVelocity, desiredDirection);
         bool turning = desiredDirection != Vector3.zero && speedInDirection < 0f;
         bool braking = desiredDirection == Vector3.zero || turning || horizontalVelocity.sqrMagnitude > desiredVelocity.sqrMagnitude;
+        // Auf dem Board rollt er nach dem Loslassen aus, statt sofort zu stehen, und das Umdrehen dauert einen Moment
+        float brakeRate = !IsSkating ? deceleration : turning ? skateTurnBrake : skateRollOut;
+        float speedUpRate = IsSkating ? skateAcceleration : acceleration;
         Vector3 newHorizontalVelocity = Vector3.MoveTowards(
             horizontalVelocity,
             turning ? Vector3.zero : desiredVelocity,
-            (braking ? deceleration : acceleration) * Time.fixedDeltaTime
+            (braking ? brakeRate : speedUpRate) * Time.fixedDeltaTime
         );
+        IsSpeedingUp = !braking && desiredDirection != Vector3.zero && speedInDirection < desiredVelocity.magnitude - 0.5f;
 
         // Am Boden übernimmt der Player die Geschwindigkeit des Untergrunds (fester Boden = 0).
         // In der Luft bleibt der letzte Plattform-Schwung erhalten
@@ -332,6 +350,13 @@ public class PlayerController : MonoBehaviour
         controlEnabled = true;
         jumpBufferTimer = 0f;
         carryVelocity = Vector3.zero;
+    }
+
+    // Aufs Board steigen bzw. absteigen (Board-Shop, Kiosk, Respawn). Die aktuelle Geschwindigkeit bleibt: Steigt er bei
+    // 14 m/s ab, bremst die normale Verzögerung ihn auf Lauftempo herunter
+    public void SetSkating(bool skating)
+    {
+        IsSkating = skating;
     }
 
     // Abprallen nach dem Draufspringen auf einen Gegner. Wie beim Sprung entscheidet die gehaltene

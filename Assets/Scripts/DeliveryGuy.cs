@@ -8,6 +8,8 @@ using UnityEngine;
 //   dadurch passen die Schritte zur Geschwindigkeit und rutschen nicht.
 // - In der Luft: ein Bein angezogen, eins gestreckt.
 // - Arme halten den Karton vor dem Bauch. Hat er ihn nicht (Mikrowelle, Kunde), hängen sie und schwingen mit.
+// - Auf dem Skateboard (PlayerController.IsSkating): steht quer auf dem Brett (Gesicht zur Kamera, Brett entlang der Bahn),
+//   Beine gespreizt, Knie leicht gebeugt. Beim Beschleunigen stößt er sich mit dem hinteren Fuß ab, beim Ollie hebt die Nase.
 //
 // Die Geschwindigkeit kommt aus der Positionsänderung, nicht aus dem Rigidbody: Beim Rauslaufen aus der Tür ist er
 // kinematisch und wird per MovePosition geschoben, dort ist body.linearVelocity 0.
@@ -47,6 +49,24 @@ public class DeliveryGuy : MonoBehaviour
     [SerializeField] private float holdInward = 10f;
     [SerializeField] private float poseSharpness = 18f;
 
+    [Header("Skateboard")]
+    [Tooltip("Brett unter den Füßen (Kind von Model, im Prefab aus). Wird beim Skaten eingeschaltet")]
+    [SerializeField] private Transform skateboard;
+    [Tooltip("Drehpunkt in der Brettmitte: kippt beim Ollie die Nase hoch")]
+    [SerializeField] private Transform boardTilt;
+    [Tooltip("So viel höher steht er auf dem Brett (Oberkante des Decks über dem Boden)")]
+    [SerializeField] private float boardRideHeight = 0.12f;
+    [Tooltip("Knie leicht gebeugt: so viel tiefer als gestreckt")]
+    [SerializeField] private float skateCrouch = 0.04f;
+    [Tooltip("Beine nach außen gespreizt (Grad), Füße stehen über den Achsen")]
+    [SerializeField] private float stanceSpread = 14f;
+    [Tooltip("Ein Abstoßen (Fuß runter, nach hinten, wieder aufs Brett) dauert so lange")]
+    [SerializeField] private float pushPeriod = 0.5f;
+    [Tooltip("So weit schwingt der hintere Fuß beim Abstoßen nach hinten (Grad, zusätzlich zur Spreizung)")]
+    [SerializeField] private float pushSwing = 28f;
+    [Tooltip("Nase hoch beim Ollie (Grad)")]
+    [SerializeField] private float ollieTilt = 14f;
+
     private PlayerController player;
     private Rigidbody body;
     private Vector3 lastPosition;
@@ -56,6 +76,9 @@ public class DeliveryGuy : MonoBehaviour
     private float yaw;
     private float legLeftAngle, legRightAngle;
     private float armAngle, armInward, armSwing;
+    private float legLeftSpread, legRightSpread;
+    private float pushPhase;
+    private float tilt;
 
     private void Awake()
     {
@@ -84,10 +107,20 @@ public class DeliveryGuy : MonoBehaviour
         float blend = 1f - Mathf.Exp(-12f * dt);
         speed = Mathf.Lerp(speed, targetSpeed, blend);
 
-        UpdateFacing(flat, dt);
+        bool skating = player.IsSkating;
+        if (skateboard != null && skateboard.gameObject.activeSelf != skating)
+        {
+            skateboard.gameObject.SetActive(skating);
+        }
+        UpdateFacing(flat, dt, skating);
 
         // Kinematisch = Skript bewegt ihn (Tür, Tod), dort läuft keine Bodenprüfung, er gilt als am Boden
         bool grounded = body.isKinematic || player.IsGrounded;
+        if (skating)
+        {
+            UpdateSkating(grounded, dt, blend);
+            return;
+        }
         float swingAmount = Mathf.Clamp01(speed / fullSwingSpeed);
         float targetLeft, targetRight;
         if (grounded)
@@ -110,20 +143,73 @@ public class DeliveryGuy : MonoBehaviour
         float pose = 1f - Mathf.Exp(-poseSharpness * dt);
         legLeftAngle = Mathf.Lerp(legLeftAngle, targetLeft, pose);
         legRightAngle = Mathf.Lerp(legRightAngle, targetRight, pose);
-        legLeft.localRotation = Quaternion.Euler(legLeftAngle, 0f, 0f);
-        legRight.localRotation = Quaternion.Euler(legRightAngle, 0f, 0f);
+        legLeftSpread = Mathf.Lerp(legLeftSpread, 0f, pose);
+        legRightSpread = Mathf.Lerp(legRightSpread, 0f, pose);
+        legLeft.localRotation = Quaternion.Euler(legLeftAngle, 0f, legLeftSpread);
+        legRight.localRotation = Quaternion.Euler(legRightAngle, 0f, legRightSpread);
 
         UpdateArms(grounded ? -Mathf.Sin(phase) * legSwing * 0.6f * swingAmount : 0f, pose);
     }
 
-    private void UpdateFacing(Vector2 flat, float dt)
+    // Quer auf dem Brett: Das Modell schaut zur Kamera, die Beine stehen links und rechts (entlang der Bahn) über den Achsen.
+    // Die Beine drehen dafür um Z (zur Seite), nicht um X (vor/zurück) wie beim Laufen
+    private void UpdateSkating(bool grounded, float dt, float blend)
     {
-        float targetYaw = -facingYaw * player.FacingDirection;
+        float pose = 1f - Mathf.Exp(-poseSharpness * dt);
+
+        // Abstoßen nur am Boden, solange er schneller wird. Ein Zyklus läuft immer zu Ende (sonst springt der Fuß zurück)
+        bool pushing = grounded && !body.isKinematic && player.IsSpeedingUp;
+        if (pushing || pushPhase > 0f)
+        {
+            pushPhase += dt / pushPeriod;
+            if (pushPhase >= 1f)
+            {
+                pushPhase = pushing ? pushPhase - 1f : 0f;
+            }
+        }
+        // 0 → 1 → 0 pro Zyklus, weich an beiden Enden
+        float push = Mathf.Sin(pushPhase * Mathf.PI);
+        push *= push;
+
+        // Der hintere Fuß (entgegen der Fahrtrichtung) stößt ab. Model-X = Bahn-X, also ist bei Fahrt nach +u der linke (-X) hinten.
+        // Positive Drehung um Z schiebt den Fuß nach +X (siehe Rechnung: Fuß (0,-1,0) gedreht um θ → (sin θ, -cos θ))
+        bool leftIsBack = player.FacingDirection > 0f;
+        float spreadLeft = -stanceSpread - (leftIsBack ? push * pushSwing : 0f);
+        float spreadRight = stanceSpread + (leftIsBack ? 0f : push * pushSwing);
+        // Der abstoßende Fuß tritt neben das Brett (zur Kamera hin), damit er nicht durch das Deck geht
+        float stepOff = push * 20f;
+        legLeftSpread = Mathf.Lerp(legLeftSpread, spreadLeft, pose);
+        legRightSpread = Mathf.Lerp(legRightSpread, spreadRight, pose);
+        legLeftAngle = Mathf.Lerp(legLeftAngle, leftIsBack ? stepOff : 0f, pose);
+        legRightAngle = Mathf.Lerp(legRightAngle, leftIsBack ? 0f : stepOff, pose);
+        legLeft.localRotation = Quaternion.Euler(legLeftAngle, 0f, legLeftSpread);
+        legRight.localRotation = Quaternion.Euler(legRightAngle, 0f, legRightSpread);
+
+        // Höher (Brett unter den Füßen), Knie gebeugt, beim Abstoßen geht das Standbein noch etwas tiefer
+        float height = boardRideHeight - skateCrouch - push * 0.05f;
+        rig.localPosition = Vector3.Lerp(rig.localPosition, rigStart + Vector3.up * height, blend);
+
+        // Ollie: Beim Steigen hebt die Nase (vorne = Fahrtrichtung), beim Fallen liegt das Brett wieder flach
+        if (boardTilt != null)
+        {
+            float targetTilt = !grounded && body.linearVelocity.y > 1f ? ollieTilt * player.FacingDirection : 0f;
+            tilt = Mathf.Lerp(tilt, targetTilt, pose);
+            boardTilt.localRotation = Quaternion.Euler(0f, 0f, tilt);
+        }
+
+        UpdateArms(0f, pose);
+    }
+
+    private void UpdateFacing(Vector2 flat, float dt, bool skating)
+    {
+        // Auf dem Board quer zur Fahrtrichtung, also frontal zur Kamera (Yaw 0)
+        float targetYaw = skating ? 0f : -facingYaw * player.FacingDirection;
         // Läuft er deutlich in die Tiefe, schaut er dorthin. Das Modell schaut bei Yaw 0 zur Kamera (-Z):
-        // Richtung (x, z) entspricht Yaw = atan2(-x, -z)
+        // Richtung (x, z) entspricht Yaw = atan2(-x, -z). Auf dem Board steht er quer dazu (Brett zeigt in die Tiefe)
         if (speed > 0.5f && Mathf.Abs(flat.y) > Mathf.Abs(flat.x))
         {
-            targetYaw = Mathf.Atan2(-flat.x, -flat.y) * Mathf.Rad2Deg;
+            float heading = Mathf.Atan2(-flat.x, -flat.y) * Mathf.Rad2Deg;
+            targetYaw = skating ? heading - 90f * player.FacingDirection : heading;
         }
         // LerpAngle nimmt den kürzeren Weg (z.B. von 170° nach -170° über 180°, nicht zurück über 0°)
         yaw = Mathf.LerpAngle(yaw, targetYaw, 1f - Mathf.Exp(-turnSharpness * dt));

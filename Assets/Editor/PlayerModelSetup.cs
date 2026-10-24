@@ -24,6 +24,8 @@ public static class PlayerModelSetup
         Material skin = Mat("Skin", new Color(0.96f, 0.78f, 0.62f), 0.3f);
         Material hair = Mat("Hair", new Color(0.3f, 0.18f, 0.1f), 0.2f);
         Material eyes = Mat("Eyes", new Color(0.08f, 0.08f, 0.1f), 0.8f);
+        Material grip = Mat("Grip Tape", new Color(0.07f, 0.07f, 0.08f), 0.05f);
+        Material truck = Mat("Truck Metal", new Color(0.55f, 0.56f, 0.6f), 0.6f);
 
         GameObject root = PrefabUtility.LoadPrefabContents(PlayerPrefabPath);
         try
@@ -91,6 +93,11 @@ public static class PlayerModelSetup
             // seiner vorderen Kante. Hängt am Rig, wippt also beim Laufen mit
             Transform hold = PrimitiveKit.Pivot("Carton Hold", rig, new Vector3(0f, 0.48f, -0.6f));
 
+            // Skateboard für Level 4: hängt an Model (nicht am Rig, wippt also nicht mit), Räder auf dem Boden (y -0.5).
+            // Liegt entlang Model-X: Bei Yaw 0 (Gesicht zur Kamera) zeigt es in Fahrtrichtung. Im Prefab aus
+            Transform board = Skateboard(model, red, white, grip, truck);
+            Transform boardTilt = board.Find("Board Tilt");
+
             PizzaCarton carton = root.GetComponentInChildren<PizzaCarton>(true);
             var cartonSettings = new SerializedObject(carton);
             cartonSettings.FindProperty("holdPoint").objectReferenceValue = hold;
@@ -109,6 +116,8 @@ public static class PlayerModelSetup
             serialized.FindProperty("armLeft").objectReferenceValue = armLeft;
             serialized.FindProperty("armRight").objectReferenceValue = armRight;
             serialized.FindProperty("carton").objectReferenceValue = carton;
+            serialized.FindProperty("skateboard").objectReferenceValue = board;
+            serialized.FindProperty("boardTilt").objectReferenceValue = boardTilt;
             // Ganz ins Profil drehen (90°), nicht nur zu drei Vierteln
             serialized.FindProperty("facingYaw").floatValue = 90f;
             // Schrittlänge und Wippen passend zu den 0.5 m langen Beinen
@@ -123,6 +132,35 @@ public static class PlayerModelSetup
         {
             PrefabUtility.UnloadPrefabContents(root);
         }
+    }
+
+    // Rotes Deck mit weißem Streifen an der Kante (Farben der Pizzeria wie Polo, Kappe und Karton), schwarzes Griptape oben,
+    // aufgebogene Nase und Tail, graue Achsen, weiße Rollen. Deck-Oberkante 0.12 über dem Boden (DeliveryGuy.boardRideHeight)
+    private static Transform Skateboard(Transform model, Material deck, Material stripe, Material grip, Material truck)
+    {
+        Transform board = PrimitiveKit.Pivot("Skateboard", model, new Vector3(0f, -0.5f, 0f));
+        // Drehpunkt in Deck-Höhe: Beim Ollie kippt das ganze Brett um seine Mitte
+        Transform tilt = PrimitiveKit.Pivot("Board Tilt", board, new Vector3(0f, 0.1f, 0f));
+        PrimitiveKit.Box("Deck", tilt, Vector3.zero, new Vector3(0.66f, 0.035f, 0.22f), deck);
+        PrimitiveKit.Box("Deck Stripe", tilt, Vector3.zero, new Vector3(0.665f, 0.012f, 0.225f), stripe);
+        PrimitiveKit.Box("Grip", tilt, new Vector3(0f, 0.019f, 0f), new Vector3(0.64f, 0.004f, 0.2f), grip);
+        foreach (float side in new[] { -1f, 1f })
+        {
+            // Nase und Tail: kurze Stücke, 22° nach oben gebogen
+            Transform kick = PrimitiveKit.Pivot(side < 0f ? "Tail" : "Nose", tilt, new Vector3(side * 0.33f, 0f, 0f));
+            kick.localRotation = Quaternion.Euler(0f, 0f, side * 22f);
+            PrimitiveKit.Box("Kick", kick, new Vector3(side * 0.06f, 0f, 0f), new Vector3(0.13f, 0.035f, 0.22f), deck);
+            PrimitiveKit.Box("Kick Grip", kick, new Vector3(side * 0.06f, 0.019f, 0f), new Vector3(0.12f, 0.004f, 0.2f), grip);
+
+            PrimitiveKit.Box("Truck", tilt, new Vector3(side * 0.22f, -0.04f, 0f), new Vector3(0.05f, 0.04f, 0.16f), truck);
+            foreach (float z in new[] { -0.09f, 0.09f })
+            {
+                Renderer wheel = PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, tilt, new Vector3(side * 0.22f, -0.065f, z), new Vector3(0.07f, 0.02f, 0.07f), stripe);
+                wheel.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            }
+        }
+        board.gameObject.SetActive(false);
+        return board;
     }
 
     private static Transform Leg(string name, Transform parent, float x, Material pants, Material shoe)

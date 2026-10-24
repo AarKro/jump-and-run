@@ -78,12 +78,14 @@ public class PlayerLife : MonoBehaviour
 
         Vector3 from = door.InsidePosition;
         Vector3 to = door.OutsidePosition;
+        // Auf dem Skateboard rollt er gleichmäßig heraus, ohne Schritte
+        float bob = controller.IsSkating ? 0f : walkBobHeight;
         for (float t = 0f; t < walkOutDuration; t += Time.fixedDeltaTime)
         {
             float k = t / walkOutDuration;
             Vector3 position = Vector3.Lerp(from, to, k);
             // Kleines Auf und Ab, damit es nach Laufen aussieht statt nach Schweben
-            position.y += Mathf.Abs(Mathf.Sin(k * Mathf.PI * 3f)) * walkBobHeight;
+            position.y += Mathf.Abs(Mathf.Sin(k * Mathf.PI * 3f)) * bob;
             // MovePosition im Physik-Takt: mit Interpolation ruckelfrei, auch für kinematische Körper
             body.MovePosition(position);
             yield return new WaitForFixedUpdate();
