@@ -28,6 +28,8 @@ public static class Level3Builder
     private const float AvenueCurbLocalZ = -1f;      // Lane-Rahmen: Bordstein 1 m vor der Laufbahn
     private const float AvenueRoadEndLocalZ = -13f;  // gegenüberliegender Bordstein (12 m Fahrbahn)
     private const float FacadeLocalZ = 3f;
+    // Fassade der Häuser auf der Westseite des Mozzarella Blvd (x -50): dort ist die Parkgarage
+    private const float GarageFacadeLocalZ = -17f;
     // Crust Street östlich des Mozzarella Blvd (Mitte z 112, Avenue = 12 m Fahrbahn)
     private const float CrustZ = 112f;
     private const float CrustNorthCurb = CrustZ + 6f;
@@ -72,6 +74,8 @@ public static class Level3Builder
     private const float BridgeLowY = -2f, BridgeHighY = 2f;      // Wurzel; Oberkante je 0.5 höher
     private const float ElevatorLowY = 1f, ElevatorHighY = 6f;
     private static readonly float[] RoadClosureZ = { 9f, 103f };
+    //   z  94–102    Baugrundstück mit Bauwagen = Checkpoint (ersetzt das Eckhaus an der Crust Street, Tor bei z 98)
+    private const float SiteOfficeZ = 98f;
 
     private static Transform groundParent, gameplayParent, propParent;
 
@@ -220,13 +224,29 @@ public static class Level3Builder
         }
 
         // Überweg über die Crust Street: Die Autos kommen von Osten (lokal +Z = Hausseite) die Crust Street entlang
+        // Sie fahren über die Kreuzung, über den abgesenkten Bordstein in die Parkgarage gegenüber und verschwinden dort
+        // im Haus (die Fassade verdeckt sie): Die Fahrhöhe steigt am westlichen Bordstein auf Gehweghöhe, verschwinden
+        // erst 5 m hinter der Fassade (x -55)
         GameObject crossing = LevelBuildKit.PlaceAsset("Assets/Prefabs/Avenue Crossing.prefab", Mathf.Round(MozzarellaU(CrustZ)), 0, groundParent);
         foreach (TrafficLane trafficLane in crossing.GetComponentsInChildren<TrafficLane>(true))
         {
             var serialized = new SerializedObject(trafficLane);
             serialized.FindProperty("spawnZ").floatValue = 100f;
+            serialized.FindProperty("despawnZ").floatValue = GarageFacadeLocalZ - 5f;
+            SerializedProperty height = serialized.FindProperty("heightOverZ");
+            height.animationCurveValue = WithGarageCurb(height.animationCurveValue);
             serialized.ApplyModifiedPropertiesWithoutUndo();
+            // Die nördliche Spur (z 115) streifte den runden Platz des Founder's Circle (Rand bei z ~115): etwas nach Süden
+            Vector3 position = trafficLane.transform.position;
+            if (position.z > CrustZ)
+            {
+                trafficLane.transform.position = new Vector3(position.x, position.y, CrustZ + 1.8f);
+            }
         }
+        ParkingGarage();
+
+        // Eckhaus an der Crust Street weg, dort steht das Baugrundstück mit dem Bauwagen (bringt eigenen Boden mit)
+        LevelBuildKit.Cutout(link, "Site Office Lot", MozzarellaX + FacadeLocalZ, MozzarellaX + FacadeLocalZ + 10.8f, SiteOfficeZ - 4f, SiteOfficeZ + 4f);
 
         // Founder's Circle liegt über der Kreuzung (nur Optik, die Fahrbahn darunter hat keinen Collider), die Parkwege
         // sind auch nur Optik: unsichtbarer Laufboden ab dem Überweg bis zum Bahn-Anfang. Auf dem Pflaster 0.51, auf den
@@ -234,6 +254,75 @@ public static class Level3Builder
         float rampFrom = pieceStartU[5], rampTo = pieceStartU[6];
         WalkGround(startU - 0.5f, MozzarellaU(CrustNorthCurb) + 0.5f,
             u => Mathf.Lerp(ParkPathTop, PavingTop, Mathf.InverseLerp(rampFrom, rampTo, u)));
+    }
+
+    // Höhenkurve der Autos (0 = Fahrbahn, 0.2 = Gehweghöhe) um die Rampe am westlichen Bordstein ergänzen: Vorn (Richtung
+    // Kamera, lokal z < -13) liegt der Gehweg vor der Garage, dort bleiben sie oben
+    private static AnimationCurve WithGarageCurb(AnimationCurve original)
+    {
+        const float bump = CityLayout.Surface - CityLayout.RoadTop;
+        var curve = new AnimationCurve();
+        foreach (Keyframe key in original.keys)
+        {
+            if (key.time > AvenueRoadEndLocalZ + 0.4f)
+            {
+                curve.AddKey(key);
+            }
+        }
+        curve.AddKey(AvenueRoadEndLocalZ + 0.4f, 0f);
+        curve.AddKey(AvenueRoadEndLocalZ - 0.4f, bump);
+        curve.AddKey(GarageFacadeLocalZ - 20f, bump);
+        for (int i = 0; i < curve.length; i++)
+        {
+            AnimationUtility.SetKeyLeftTangentMode(curve, i, AnimationUtility.TangentMode.Linear);
+            AnimationUtility.SetKeyRightTangentMode(curve, i, AnimationUtility.TangentMode.Linear);
+        }
+        return curve;
+    }
+
+    // Einfahrt einer Parkgarage in den Häusern westlich der Kreuzung (Fassade x -50, schaut nach Osten): dunkle Öffnung
+    // über beide Spuren, Betonrahmen, blaues P-Schild, hochgeklappte Schranken, dunkle Zufahrt über den Gehweg
+    private static void ParkingGarage()
+    {
+        Transform garage = new GameObject("Parking Garage").transform;
+        garage.SetParent(propParent, false);
+        Material dark = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Interior Dark.mat");
+        Material concrete = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Foundation.mat");
+        Material asphalt = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Asphalt.mat");
+        Material white = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Awning White.mat");
+        Material red = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Pizzeria Red.mat");
+        Material blue = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Site Blue.mat");
+
+        float facadeX = MozzarellaX + GarageFacadeLocalZ;
+        float curbX = MozzarellaX + AvenueRoadEndLocalZ;
+        const float z0 = CrustZ - 5.5f, z1 = CrustZ + 5.5f, top = CityLayout.Surface + 2.8f;
+        float zMid = (z0 + z1) / 2f;
+        // Öffnung knapp vor der Fassade (genau darauf flackerte sie mit dem Haus)
+        PrimitiveKit.Box("Opening", garage, new Vector3(facadeX + 0.03f, (CityLayout.Surface + top) / 2f, zMid), new Vector3(0.04f, top - CityLayout.Surface, z1 - z0), dark);
+        PrimitiveKit.Box("Lintel", garage, new Vector3(facadeX + 0.15f, top + 0.25f, zMid), new Vector3(0.3f, 0.5f, z1 - z0 + 0.8f), concrete);
+        foreach (float z in new[] { z0 - 0.2f, zMid, z1 + 0.2f })
+        {
+            PrimitiveKit.Box("Pillar", garage, new Vector3(facadeX + 0.15f, (CityLayout.Surface + top) / 2f, z), new Vector3(0.3f, top - CityLayout.Surface, 0.4f), concrete);
+        }
+        PrimitiveKit.Box("Driveway", garage, new Vector3((facadeX + curbX) / 2f, CityLayout.Surface + 0.005f, zMid), new Vector3(curbX - facadeX, 0.01f, z1 - z0), asphalt);
+
+        // Schild über der Einfahrt, Schrift nach Osten (Text ist von seiner -Z-Seite lesbar, Drehung -90° → von +X)
+        PrimitiveKit.Box("Sign", garage, new Vector3(facadeX + 0.35f, top + 1.1f, zMid), new Vector3(0.08f, 1f, 4f), blue);
+        var sign = PrimitiveKit.Text("Sign Text", garage, new Vector3(facadeX + 0.4f, top + 1.1f, zMid), new Vector2(3.8f, 0.9f), "P  PARKING", Color.white);
+        sign.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+
+        // Schranken, hochgeklappt, an jeder Spur
+        foreach (float z in new[] { CrustZ - 3f, CrustZ + 3f })
+        {
+            float postZ = z + 1.6f;
+            PrimitiveKit.Box("Barrier Post", garage, new Vector3(facadeX + 1f, CityLayout.Surface + 0.5f, postZ), new Vector3(0.3f, 1f, 0.3f), white);
+            Transform arm = PrimitiveKit.Pivot("Barrier Arm", garage, new Vector3(facadeX + 1f, CityLayout.Surface + 0.95f, postZ));
+            arm.localRotation = Quaternion.Euler(80f, 0f, 0f);
+            for (int i = 0; i < 4; i++)
+            {
+                PrimitiveKit.Box("Stripe", arm, new Vector3(0f, 0f, -0.35f - i * 0.7f), new Vector3(0.08f, 0.08f, 0.7f), i % 2 == 0 ? red : white);
+            }
+        }
     }
 
     // Baugrube auf dem Mozzarella Blvd, Lücke um z (Welt), quer über Gehweg und Fahrbahn bis zum gegenüberliegenden Bordstein.
@@ -331,6 +420,9 @@ public static class Level3Builder
         LevelBuildKit.Place("Scaffold", Mathf.Round(MozzarellaU(79f)), 3, gameplayParent);
         Lift(88f, BridgeLowY, BridgeHighY, PitFloorY, startHigh: true);
 
+        // Checkpoint: Bauwagen auf dem Grundstück des Eckhauses (der Cutout dazu steht in BuildGround)
+        LevelBuildKit.Place("Site Office", Mathf.Round(MozzarellaU(SiteOfficeZ)), 0, gameplayParent);
+
         foreach (float z in RoadClosureZ)
         {
             RoadClosure(z);
@@ -403,6 +495,7 @@ public static class Level3Builder
         // Aufzugs-Bühne und Gerüste (die Stangen stehen hinter der Laufbahn, wo sonst Laternen stehen)
         blocked.Add((MozzarellaU(73f), MozzarellaU(63f)));
         blocked.Add((MozzarellaU(82f), MozzarellaU(76f)));
+        blocked.Add((MozzarellaU(SiteOfficeZ + 5f), MozzarellaU(SiteOfficeZ - 5f)));
         bool Free(float u) => blocked.TrueForAll(zone => u < zone.from || u > zone.to);
         for (float z = 12f; z < 104f; z += 12f)
         {

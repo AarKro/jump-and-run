@@ -411,9 +411,10 @@ public static class CityPropsSetup
 
     // "Checkpoint unlocked!" knapp über dem Ladenschild (Schild-Oberkante bei Surface + 5), etwas vor der Fassade.
     // Gelb mit dunkler Kontur, damit er vor jeder Fassadenfarbe lesbar ist. Startet ausgeschaltet
-    private static TextMeshPro BuildUnlockedText(Transform parent)
+    // position: lokal, ohne Angabe über dem Ladenschild (für andere Checkpoint-Gebäude wie den Bauwagen)
+    public static TextMeshPro BuildUnlockedText(Transform parent, Vector3? position = null)
     {
-        TextMeshPro text = PrimitiveKit.Text("Unlocked Text", parent, new Vector3(0f, Surface + 5.6f, FacadeZ - 0.6f), new Vector2(7f, 1f),
+        TextMeshPro text = PrimitiveKit.Text("Unlocked Text", parent, position ?? new Vector3(0f, Surface + 5.6f, FacadeZ - 0.6f), new Vector2(7f, 1f),
             "Checkpoint unlocked!", new Color(1f, 0.85f, 0.25f));
         var outline = AssetDatabase.LoadAssetAtPath<Material>("Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Outline.mat");
         if (outline != null)
@@ -425,7 +426,7 @@ public static class CityPropsSetup
     }
 
     // Funken-Ladung beim Aktivieren (nur Emit, keine Dauer-Emission)
-    private static ParticleSystem BuildSparkles(Transform parent)
+    public static ParticleSystem BuildSparkles(Transform parent)
     {
         var sparkleObject = new GameObject("Sparkles");
         sparkleObject.transform.SetParent(parent, false);

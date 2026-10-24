@@ -139,38 +139,9 @@ public class CoffeeShopEffects : MonoBehaviour
         chalkboard.localRotation = Quaternion.Euler(0f, 180f, 0f);
     }
 
-    // Text ploppt über dem Schild auf, steigt langsam hoch und blendet aus. Er liegt in der Welt (nicht im HUD),
-    // dadurch sieht man direkt, WELCHES Gebäude jetzt der Checkpoint ist
     private IEnumerator ShowUnlockedText()
     {
-        if (unlockedText == null)
-        {
-            yield break;
-        }
-        Transform text = unlockedText.transform;
-        unlockedText.gameObject.SetActive(true);
-        text.localPosition = textStartPosition;
-        unlockedText.alpha = 1f;
-        if (sparkles != null)
-        {
-            sparkles.transform.position = text.position;
-            sparkles.Emit(sparkleCount);
-        }
-
-        const float popTime = 0.15f;
-        float total = popTime + textHoldTime + textFadeTime;
-        for (float t = 0f; t < total; t += Time.deltaTime)
-        {
-            // Aufploppen: von 1.4-fach auf normale Größe
-            text.localScale = Vector3.one * Mathf.Lerp(1.4f, 1f, t / popTime);
-            // Ease-out: schnell los, oben langsam
-            float k = t / total;
-            text.localPosition = textStartPosition + Vector3.up * (textRise * (1f - (1f - k) * (1f - k)));
-            unlockedText.alpha = 1f - Mathf.Clamp01((t - popTime - textHoldTime) / textFadeTime);
-            yield return null;
-        }
-        unlockedText.gameObject.SetActive(false);
-        text.localScale = Vector3.one;
+        return CheckpointPopup.Play(unlockedText, textStartPosition, sparkles, sparkleCount, textRise, textHoldTime, textFadeTime);
     }
 
     private void SetWindows(Material material)
