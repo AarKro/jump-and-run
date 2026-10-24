@@ -72,9 +72,12 @@ public static class RoadblockSetup
         var root = new GameObject("Delivery Truck");
         Transform t = root.transform;
 
-        // Lieferwagen auf der Straße, Heck zum Spieler (+X), Hecktüren offen, Rampe hinunter, Kisten auf dem Gehweg.
-        // Weit genug hinter den Kisten: Die Kamera (8 m vor der Bahn) schaut sonst durch das Heck auf den Spieler
-        Transform truck = PrimitiveKit.Pivot("Truck", t, new Vector3(-6.5f, RoadTop, -4.6f));
+        // Lieferwagen halb auf dem Gehweg geparkt (Bordsteinkante bei z -2), damit er im Bild ist: Die Kamera steht 8 m
+        // vor der Bahn und schaut leicht nach unten, weiter vorne auf der Straße war er kaum zu sehen.
+        // Heck zum Spieler (+X), Hecktüren offen, kurze Rampe hinunter auf den Gehweg, Kisten davor.
+        // Gekippt: Die Räder auf dem Gehweg stehen 0.2 m höher als die auf der Straße (Spurweite 2.2 m → gut 5°)
+        Transform truck = PrimitiveKit.Pivot("Truck", t, new Vector3(-5f, (RoadTop + Surface) / 2f, -2f));
+        truck.localRotation = Quaternion.Euler(-Mathf.Atan2(Surface - RoadTop, 2.2f) * Mathf.Rad2Deg, 0f, 0f);
         Material cargo = Mat("Truck White", new Color(0.95f, 0.95f, 0.93f));
         PrimitiveKit.Box("Cargo", truck, new Vector3(0.4f, 1.9f, 0f), new Vector3(6f, 2.8f, 2.4f), cargo);
         PrimitiveKit.Box("Cab", truck, new Vector3(-3.6f, 1.45f, 0f), new Vector3(2f, 1.9f, 2.3f), red);
@@ -97,9 +100,9 @@ public static class RoadblockSetup
             hinge.localRotation = Quaternion.Euler(0f, side * -100f, 0f);
             PrimitiveKit.Box("Door", hinge, new Vector3(0.6f, 0f, -side * 0.0f), new Vector3(1.2f, 2.7f, 0.06f), cargo);
         }
-        // Rampe vom Ladeboden auf die Straße
-        Renderer ramp = PrimitiveKit.Box("Ramp", truck, new Vector3(4.6f, 0.35f, 0f), new Vector3(2.6f, 0.08f, 1.6f), iron);
-        ramp.transform.localRotation = Quaternion.Euler(0f, 0f, -12f);
+        // Rampe vom Ladeboden hinunter, kurz genug, dass sie vor den Kisten endet
+        Renderer ramp = PrimitiveKit.Box("Ramp", truck, new Vector3(3.9f, 0.3f, 0f), new Vector3(1.6f, 0.08f, 1.6f), iron);
+        ramp.transform.localRotation = Quaternion.Euler(0f, 0f, -14f);
 
         // Kistenstapel quer über den Gehweg
         Crate(t, new Vector3(0.6f, Surface, -1.3f), 0, "TOMATOES");
