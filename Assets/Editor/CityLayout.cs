@@ -76,6 +76,14 @@ public static class CityLayout
         waterlineZ = -length / 2f + length * (SeaLevel - SlopeEndY) / (SandTop - SlopeEndY);
     }
 
+    // Marktpromenade (Level 4): Die Marinara Promenade hat zwischen Crust Street und Salami Street keine Fahrbahn. Plattenweg
+    // auf Gehweghöhe von der Blockkante bis zur Kaimauer am Wasser, Geländer an der Kante, die Four Cheese Avenue endet
+    // davor mit Pollern. Die Marktstände und die Leute bringt Level 4 mit
+    public const float MarketFromZ = 136f;      // Nordbordstein der Crust Street
+    public const float MarketToZ = 259f;        // Südbordstein der Salami Street
+    public const float MarketWaterX = West - 22f;   // Außenkante der Kaimauer
+    public const float MarketBlockEdgeX = West - 2f; // Bordstein = Ende der Gehweg-Platten der Blöcke
+
     public static readonly Street[] Streets =
     {
         // Außenring
@@ -84,7 +92,9 @@ public static class CityLayout
         new Street("Margherita Avenue", false, RS, BeachToX, RE, Side.Ring),
         new Street("Pepperoni Parkway", true, RE, RS, RN, Side.Ring),
         new Street("Calzone Road", false, RN, RW, RE, Side.Ring),
-        new Street("Marinara Promenade", true, RW, RS, RN, Side.Ring),
+        // Unterbrochen von der Marktpromenade (siehe MarketFromZ)
+        new Street("Marinara Promenade", true, RW, RS, MarketFromZ, Side.Ring),
+        new Street("Marinara Promenade", true, RW, MarketToZ, RN, Side.Ring),
         // Nord-Süd
         new Street("Basil Street", true, -180f, RS, RN, Side.Avenue),
         new Street("Oregano Street", true, -110f, PromenadeBackZ, 130f, Side.Avenue),
@@ -95,7 +105,7 @@ public static class CityLayout
         new Street("Crust Street", false, 130f, RW, -40f, Side.Avenue),
         new Street("Crust Street", false, 112f, -40f, RE, Side.Avenue),
         new Street("Olive Lane", false, 165f, -40f, RE, Side.Avenue),
-        new Street("Four Cheese Avenue", false, 215f, RW, RE, Side.Avenue),
+        new Street("Four Cheese Avenue", false, 215f, MarketBlockEdgeX, RE, Side.Avenue),
         new Street("Salami Street", false, 265f, RW, -110f, Side.Avenue),
     };
 

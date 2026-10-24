@@ -65,6 +65,7 @@ public static partial class CityBuilder
         BuildStreets();
         BuildBlocks();
         BuildBeach();
+        BuildMarketPromenade();
         Transform landmarks = Group("Landmarks");
         PlaceLandmarks(landmarks);
         BuildFoundersCircle(landmarks);

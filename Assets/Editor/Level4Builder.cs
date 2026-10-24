@@ -11,7 +11,7 @@ using UnityEngine;
 // Route (der Spieler läuft nach LINKS, also Richtung -u), ~650 m: aus der Pizzeria nach Westen, über den Mozzarella Blvd
 // auf die Strandpromenade, rechts in die Oregano Street (Ostseite, x -103), am Ende der Board-Shop (Checkpoint 1, ab dort
 // auf dem Skateboard), über die Crust Street (Autos) und links auf ihren Nordgehweg am Park entlang (z 137), über die
-// Basil Street (Autos), rechts um die Blockecke auf die Marinara Promenade (x -250, Markt mit Menschenmenge), beim Kiosk an
+// Basil Street (Autos), rechts um die Blockecke auf die Marinara Promenade (x -255, Markt mit Menschenmenge), beim Kiosk an
 // der Salami Street (Checkpoint 2, Mikrowelle, Board wird abgestellt) links in den Containerhafen zu den Bauarbeitern.
 // Die Bahn ist in +u-Richtung definiert (Häuser links davon): Sie beginnt am Kunden im Hafen und endet hinter der Pizzeria.
 // Auf der Margherita Avenue ist u = Welt-X.
@@ -30,10 +30,11 @@ public static class Level4Builder
     private const float KeepWarmTime = 90f;
 
     // Laufbahn-Linien (Welt): Oregano Street Ostseite (Fassaden x -100, Bordstein -104), Crust Street Nordseite am Park
-    // (Bordstein z 136), Marinara Promenade an der Blockkante (Ring, wie Level 1), Hafen (vorläufig, wird mit dem Hafen geplant)
+    // (Bordstein z 136), Marinara Promenade 8 m vor den Fassaden (x -247) auf dem Plattenweg, wo früher die Fahrbahn war:
+    // dazwischen stehen die Marktstände. Hafen vorläufig (wird mit dem Hafen geplant)
     private const float OreganoX = -103f;
     private const float CrustLaneZ = 137f;
-    private const float MarinaraX = -250f;
+    private const float MarinaraX = -255f;
     private const float PortZ = 286f;
     private const float PortEndX = -380f;
     private const float MainEndX = 16f;
@@ -50,10 +51,9 @@ public static class Level4Builder
     private const float CrustZ = 130f;
     private const float BasilX = -180f;
     private const float FourCheeseZ = 215f;
-    private const float SalamiZ = 265f;
-    private const float AvenueHalfRoad = 6f;
 
-    // Kamera auf der Strandpromenade wie in Level 2: weiter hinten und höher über dem Wasser
+    // Kamera auf der Strandpromenade wie in Level 2: weiter hinten und höher über dem Wasser.
+    // Auf dem Markt genauso: Sie steht über dem Hafenbecken und schaut über die Promenade auf Stände und Häuser
     private static readonly Vector3 BeachCameraOffset = new Vector3(0f, 9f, -18f);
     private const float BeachCameraLookHeight = 1f;
 
@@ -172,8 +172,8 @@ public static class Level4Builder
         // an der Four Cheese Avenue Poller, siehe Arbeitsschritt 2) und im Hafen liegt unsichtbarer Laufboden.
         // Der Bogen von der Oregano Street auf die Crust Street geht ein Stück über den Rand des Überwegs hinaus
         LevelBuildKit.WalkGround("Walk Crust Corner", pieceStartU[5] - 0.5f, pieceStartU[6] + 0.5f, CityLayout.Surface, groundParent);
-        LevelBuildKit.WalkGround("Walk Four Cheese", MarinaraU(FourCheeseZ + AvenueHalfRoad + 0.5f), MarinaraU(FourCheeseZ - AvenueHalfRoad - 0.5f), CityLayout.Surface, groundParent);
-        LevelBuildKit.WalkGround("Walk Salami", MarinaraU(SalamiZ + AvenueHalfRoad + 0.5f), MarinaraU(SalamiZ - AvenueHalfRoad - 0.5f), CityLayout.Surface, groundParent);
+        // Nördlich der Marktpromenade liegt die Bahn auf der Ringstraße (bis zur Abzweigung in den Hafen)
+        LevelBuildKit.WalkGround("Walk Salami", pieceStartU[2] - 0.5f, MarinaraU(CityLayout.MarketToZ - 0.5f), CityLayout.Surface, groundParent);
         // Bogen über die Ringstraße auf Gehweghöhe, dann Hafen-Beton (Oberkante 0.6)
         LevelBuildKit.WalkGround("Walk Port Corner", pieceStartU[1], pieceStartU[2] + 0.5f, CityLayout.Surface, groundParent);
         LevelBuildKit.WalkGround("Walk Port", pieceStartU[0] - 1f, pieceStartU[1], 0.6f, groundParent);
@@ -209,6 +209,16 @@ public static class Level4Builder
         beachZone.FindProperty("lookHeight").floatValue = BeachCameraLookHeight;
         beachZone.ApplyModifiedPropertiesWithoutUndo();
         ((CameraZone)beachZone.targetObject).transform.SetParent(gameplayParent, false);
+
+        // Marktpromenade: Kamera über dem Wasser, ab kurz nach der Ecke bis vor die Salami Street
+        var marketZone = new SerializedObject(new GameObject("Market Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
+        marketZone.FindProperty("fromU").floatValue = MarinaraU(CityLayout.MarketToZ - 4f);
+        marketZone.FindProperty("toU").floatValue = MarinaraU(CrustLaneZ + 8f);
+        marketZone.FindProperty("blend").floatValue = 8f;
+        marketZone.FindProperty("offset").vector3Value = BeachCameraOffset;
+        marketZone.FindProperty("lookHeight").floatValue = BeachCameraLookHeight;
+        marketZone.ApplyModifiedPropertiesWithoutUndo();
+        ((CameraZone)marketZone.targetObject).transform.SetParent(gameplayParent, false);
 
         // Crust Street (auf dem Board): zwei Bänke zum Drüberspringen, damit man die Ollie-Weite ausprobieren kann.
         // Rampen über Baugruben, Poller und der Hund kommen mit dem Feinschliff dieses Stücks
