@@ -18,7 +18,7 @@ using UnityEngine;
 //   20..23.5  Baugrube (3.5 m)
 //  23.5..64   Hund zwischen zwei Containern, Querstraße bei u = 50, Café-Checkpoint bei u = 61
 //   64..70.3  Kurve (Radius 4 m) über einen Eckplatz, die Seitenwand des Cafés bildet die Hausecke
-//  71.5..86.5 federnde Markise bei u = 77 → hoher Balkon mit Wärme-Bonus, 24/7-Kiosk mit Mikrowelle bei u = 80
+//  71.5..86.5 federnde Markise bei u = 77 → hoher Balkon mit Wärme-Bonus (der Kiosk bei u = 80 ist hier nur Kulisse, die Mikrowelle kommt erst in Level 4)
 //  86.5..102  lange Baugrube: Fensterputzer-Gondel hoch, dann über zwei Balkone
 //  102..154   zwei Hunde (Bank/Container als Wände), Balkon mit Sprung-Boost, Kunde bei u = 146
 public static class CityLevelBuilder
@@ -240,12 +240,12 @@ public static class CityLevelBuilder
 
     // ---------- Verbindung zur Stadt ----------
 
-    // LevelCity lädt die Stadt dazu und richtet Pizzeria (Start), Café (Checkpoint) und Kiosk (Mikrowelle) ein.
+    // LevelCity lädt die Stadt dazu und richtet Pizzeria (Start) und Café (Checkpoint) ein. Der Kiosk ist unbenutzt (Mikrowelle aus).
     // Die CityCutouts schneiden die Stadt dort aus, wo Level 1 eigenen Boden hat (Gehwege mit Baugruben, Eckplatz,
     // Querstraße mit Zebrastreifen) und wo sein Kundenhaus (Teil des Goal-Prefabs) steht
     private static void SetupCityLink()
     {
-        Transform link = LevelBuildKit.CityLink("Pizzeria", "Coffee Shop", "Kiosk");
+        Transform link = LevelBuildKit.CityLink("Pizzeria", "Coffee Shop");
         // Gehweg + Straße davor (Sidewalk-Prefab reicht von Z -14 bis 3) ab dem ersten Gehwegstück bei u = -18
         LevelBuildKit.Cutout(link, "Main Street", -18f, 66f, -14f, 3f);
         // Nach der Kurve bis zum Ende des letzten Gehwegstücks (u = 154 → z 87.7), Straße bis 14 m davor
