@@ -30,8 +30,8 @@ public static class HeatPickupSetup
 
         var root = new GameObject("Heat Pickup");
         Transform model = PrimitiveKit.Pivot("Model", root.transform, Vector3.zero);
-        // Schräg gestellt, wie eine hingeworfene Schote
-        model.localRotation = Quaternion.Euler(0f, 0f, 20f);
+        // Aufrecht: Die Schote ist entlang X gebaut (Stiel bei -X), -90° um Z stellt den Stiel nach oben
+        model.localRotation = Quaternion.Euler(0f, 0f, -90f);
 
         for (int i = 0; i < Spine.Length - 1; i++)
         {
