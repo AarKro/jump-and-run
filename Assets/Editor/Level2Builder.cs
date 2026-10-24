@@ -112,9 +112,11 @@ public static class Level2Builder
         Renderer table = PrimitiveKit.Box("Basil Crossing", groundParent, new Vector3(-180f, 0.41f, 31f), new Vector3(12f, 0.22f, 18f), asphalt);
         table.gameObject.layer = 3;
         table.gameObject.AddComponent<BoxCollider>();
-        for (int i = 0; i < 7; i++)
+        // Zebrastreifen: Die Balken laufen parallel zur Fahrbahn (Basil Street = Nord-Süd, also entlang Z)
+        // und liegen nebeneinander quer über die Straße
+        for (int i = 0; i < 5; i++)
         {
-            PrimitiveKit.Box("Stripe " + (i + 1), table.transform.parent, new Vector3(-180f, 0.525f, 23.5f + i * 2.5f), new Vector3(10f, 0.005f, 1.1f), marking);
+            PrimitiveKit.Box("Stripe " + (i + 1), table.transform.parent, new Vector3(-185f + i * 2.5f, 0.525f, 31f), new Vector3(1.1f, 0.005f, 16f), marking);
         }
     }
 
