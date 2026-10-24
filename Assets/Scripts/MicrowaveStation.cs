@@ -4,7 +4,8 @@ using UnityEngine;
 
 // Mikrowellen-Station im 24/7-Kiosk: Läuft der Spieler in den Trigger, geht er zur Theke, schiebt den Pizzakarton
 // in die Mikrowelle, "DING!", nimmt ihn wieder heraus und läuft weiter, mit wieder ofenfrischer Pizza (100%).
-// Einmal pro Leben: Danach "USED", nach einem Respawn wieder frei . Der Stopp dauert ein paar Sekunden.
+// Einmal pro Level (Level 4): Danach "USED", auch nach einem Respawn. Sonst könnte man im Hafen sterben, am Kiosk-Checkpoint
+// wieder auftauchen und gleich wieder aufwärmen. Erst ein Neustart (kalte Pizza) macht sie wieder bereit.
 public class MicrowaveStation : MonoBehaviour
 {
     [Header("Wege (Spieler-Mitte)")]
@@ -13,6 +14,8 @@ public class MicrowaveStation : MonoBehaviour
     [Tooltip("Zurück auf der Laufbahn (Z = 0)")]
     [SerializeField] private Transform exitPoint;
     [SerializeField] private float walkDuration = 0.45f;
+    [Tooltip("An: nach einem Respawn bleibt sie benutzt (nur ein Neustart setzt sie zurück). Aus: einmal pro Leben")]
+    [SerializeField] private bool oncePerLevel = true;
 
     [Header("Mikrowelle")]
     [Tooltip("Tür-Drehpunkt am linken Rand")]
@@ -51,7 +54,7 @@ public class MicrowaveStation : MonoBehaviour
 
     private void ResetStation()
     {
-        if (running)
+        if (running || (oncePerLevel && used))
         {
             return;
         }

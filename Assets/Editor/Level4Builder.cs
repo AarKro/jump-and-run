@@ -35,6 +35,11 @@ public static class Level4Builder
     private const float OreganoX = -103f;
     private const float CrustLaneZ = 137f;
     private const float MarinaraX = -255f;
+    // Am Nordende des Markts biegt die Bahn in einer sanften S-Kurve an die Fassaden heran (x -250, Gehweg-Linie wie am Ring),
+    // dort steht der Kiosk (Checkpoint 2). Danach bleibt sie dort, über die Salami Street bis zur Abzweigung in den Hafen
+    private const float MarinaraNorthX = -250f;
+    private const float KioskZ = 249f;
+    private const float SBendNorthZ = 245f;
     private const float PortZ = 286f;
     private const float PortEndX = -380f;
     private const float MainEndX = 16f;
@@ -45,6 +50,26 @@ public static class Level4Builder
     private static readonly float CrustCorner = CornerRadius(1);      // Oregano → Crust, über die Kreuzung (klein, bleibt auf dem Überweg)
     private static readonly float MarinaraCorner = CornerRadius(2);   // Crust → Marinara, außen um die Blockecke
     private static readonly float PortCorner = CornerRadius(3);       // Marinara → Hafen, über die Ringstraße
+
+    // S-Kurve: zwei gleiche Bögen (Winkel θ, Radius R) versetzen die Bahn um 5 m. θ ist so gewählt, dass der Weg genau 1 m
+    // länger ist als geradeaus (wie bei den Ecken: u bleibt danach Welt-Koordinate + ganze Zahl).
+    // Versatz = 2R(1 - cos θ), Umweg = 2R(θ - sin θ) → (θ - sin θ) / (1 - cos θ) = Umweg / Versatz, per Intervallhalbierung
+    private static float SBendAngle
+    {
+        get
+        {
+            float target = 1f / (MarinaraNorthX - MarinaraX);
+            float low = 0.01f, high = 1.5f;
+            for (int i = 0; i < 60; i++)
+            {
+                float mid = (low + high) / 2f;
+                if ((mid - Mathf.Sin(mid)) / (1f - Mathf.Cos(mid)) < target) low = mid; else high = mid;
+            }
+            return (low + high) / 2f;
+        }
+    }
+    private static float SBendRadius => (MarinaraNorthX - MarinaraX) / (2f * (1f - Mathf.Cos(SBendAngle)));
+    private static float SBendSouthZ => SBendNorthZ - 2f * SBendRadius * Mathf.Sin(SBendAngle);
 
     // Straßen, die die Bahn quert (Welt): Crust Street (Mitte z 130), Basil Street (x -180), Four Cheese Avenue (z 215),
     // Salami Street (z 265). Avenue = 12 m Fahrbahn
@@ -67,9 +92,11 @@ public static class Level4Builder
 
     // Stelle u auf den einzelnen Geraden (Welt-Koordinate entlang der Straße)
     public static float PortU(float x) => pieceStartU[0] + (x - PortEndX);
-    public static float MarinaraU(float z) => pieceStartU[2] + (PortZ - PortCorner - z);
-    public static float CrustU(float x) => pieceStartU[4] + (x - (MarinaraX + MarinaraCorner));
-    public static float OreganoU(float z) => pieceStartU[6] + (CrustLaneZ - CrustCorner - z);
+    // Marinara nördlich der S-Kurve (Kiosk, Salami Street, x -250) bzw. auf dem Markt (x -255)
+    public static float MarinaraNorthU(float z) => pieceStartU[2] + (PortZ - PortCorner - z);
+    public static float MarinaraU(float z) => pieceStartU[5] + (SBendSouthZ - z);
+    public static float CrustU(float x) => pieceStartU[7] + (x - (MarinaraX + MarinaraCorner));
+    public static float OreganoU(float z) => pieceStartU[9] + (CrustLaneZ - CrustCorner - z);
 
     [MenuItem("Tools/Jump and Run/City/Rebuild Level 4 (Port)")]
     public static void Rebuild()
@@ -93,7 +120,7 @@ public static class Level4Builder
         gameplayParent = LevelBuildKit.Group("Level Gameplay");
         propParent = LevelBuildKit.Group("Level Props");
 
-        LevelBuildKit.CityLink("Pizzeria", "Board Shop");
+        LevelBuildKit.CityLink("Pizzeria", "Board Shop", "Kiosk");
         BuildGround();
         BuildGameplay();
 
@@ -102,7 +129,8 @@ public static class Level4Builder
             "Lunch Break at the Port", new Vector3(60f, 90f, -120f));
         LevelBuildKit.Save(scene);
         Debug.Log($"Level4Builder: Level 4 (Port) gebaut. Bahn u {LevelBuildKit.Lane.StartU:F2} bis {LevelBuildKit.Lane.EndU:F2}. " +
-                  $"Oregano u(z) = {OreganoU(0f):F2} - z, Crust u(x) = x + {CrustU(0f):F2}, Marinara u(z) = {MarinaraU(0f):F2} - z, Hafen u(x) = x + {PortU(0f):F2}");
+                  $"Oregano u(z) = {OreganoU(0f):F2} - z, Crust u(x) = x + {CrustU(0f):F2}, Markt u(z) = {MarinaraU(0f):F2} - z, " +
+                  $"Marinara Nord u(z) = {MarinaraNorthU(0f):F2} - z, Hafen u(x) = x + {PortU(0f):F2}, S-Kurve z {SBendSouthZ:F2}–{SBendNorthZ:F2}");
     }
 
     // Neue Szene als Kopie von Level 2 (bringt die festen Objekte mit, Ziel mit Kundenhaus), hinter Level 3 in die Build Settings
@@ -131,9 +159,12 @@ public static class Level4Builder
     {
         var pieces = new List<LanePath.Piece>
         {
-            LevelBuildKit.Straight(MarinaraX - PortCorner - PortEndX),                            // Hafen (Kunde am Kai)
+            LevelBuildKit.Straight(MarinaraNorthX - PortCorner - PortEndX),                       // Hafen (Kunde am Kai)
             LevelBuildKit.Arc(PortCorner, -90f),
-            LevelBuildKit.Straight(PortZ - PortCorner - (CrustLaneZ + MarinaraCorner)),           // Marinara Promenade (Markt, Kiosk)
+            LevelBuildKit.Straight(PortZ - PortCorner - SBendNorthZ),                             // Marinara Nord (Kiosk, Salami Street)
+            LevelBuildKit.Arc(SBendRadius, -SBendAngle * Mathf.Rad2Deg),                          // S-Kurve hinaus auf die Promenade
+            LevelBuildKit.Arc(SBendRadius, SBendAngle * Mathf.Rad2Deg),
+            LevelBuildKit.Straight(SBendSouthZ - (CrustLaneZ + MarinaraCorner)),                  // Markt
             LevelBuildKit.Arc(MarinaraCorner, 90f),
             LevelBuildKit.Straight(OreganoX - CrustCorner - (MarinaraX + MarinaraCorner)),        // Crust Street am Park (Basil-Überweg)
             LevelBuildKit.Arc(CrustCorner, -90f),
@@ -174,9 +205,9 @@ public static class Level4Builder
         // Die Stadt hat nur auf den Gehweg-Platten Collider. Über die Fahrbahnen ohne Überweg (vorläufig, der Markt bekommt
         // an der Four Cheese Avenue Poller, siehe Arbeitsschritt 2) und im Hafen liegt unsichtbarer Laufboden.
         // Der Bogen von der Oregano Street auf die Crust Street geht ein Stück über den Rand des Überwegs hinaus
-        LevelBuildKit.WalkGround("Walk Crust Corner", pieceStartU[5] - 0.5f, pieceStartU[6] + 0.5f, CityLayout.Surface, groundParent);
+        LevelBuildKit.WalkGround("Walk Crust Corner", pieceStartU[8] - 0.5f, pieceStartU[9] + 0.5f, CityLayout.Surface, groundParent);
         // Nördlich der Marktpromenade liegt die Bahn auf der Ringstraße (bis zur Abzweigung in den Hafen)
-        LevelBuildKit.WalkGround("Walk Salami", pieceStartU[2] - 0.5f, MarinaraU(CityLayout.MarketToZ - 0.5f), CityLayout.Surface, groundParent);
+        LevelBuildKit.WalkGround("Walk Salami", pieceStartU[2] - 0.5f, MarinaraNorthU(CityLayout.MarketToZ - 0.5f), CityLayout.Surface, groundParent);
         // Bogen über die Ringstraße auf Gehweghöhe, dann Hafen-Beton (Oberkante 0.6)
         LevelBuildKit.WalkGround("Walk Port Corner", pieceStartU[1], pieceStartU[2] + 0.5f, CityLayout.Surface, groundParent);
         LevelBuildKit.WalkGround("Walk Port", pieceStartU[0] - 1f, pieceStartU[1], 0.6f, groundParent);
@@ -214,8 +245,7 @@ public static class Level4Builder
         (222f, MarketThing.Cart, 4f),
         (232f, MarketThing.Group, 0f),
         (241f, MarketThing.Pedestrian, 3f),
-        (248f, MarketThing.CratesLow, 0f),
-        (254f, MarketThing.Group, 0f),
+        // Danach: S-Kurve an die Fassaden, Kiosk (Checkpoint 2, Board abstellen, Mikrowelle)
     };
     // Chili 2 schwebt über dem federnden Stand: nur mit dessen Schwung (~5 m über der Markise) erreichbar
     private const float MarketChiliHeight = 7f;
@@ -227,8 +257,8 @@ public static class Level4Builder
     // würden Leute den Spieler verdecken). Welt-z, Prefab
     private static readonly (float z, string prefab)[] MarketForeground =
     {
-        (150f, "Promenade Bench"), (180f, "Street Musician"), (192f, "Promenade Bench"), (202f, "Ice Cream Cart"),
-        (222f, "Promenade Bench"), (230f, "Balloon Seller"), (240f, "Promenade Bench"), (248f, "Lemonade Stand"),
+        (150f, "Promenade Bench"), (156f, "Lemonade Stand"), (180f, "Street Musician"), (192f, "Promenade Bench"),
+        (202f, "Ice Cream Cart"), (222f, "Promenade Bench"), (230f, "Balloon Seller"), (240f, "Promenade Bench"),
     };
     private const float LampSpacing = 12f;
     // Spaziergänger (Kulisse, ohne Collider): Welt-z, seitlicher Abstand zur Bahn (lokal z: - = am Wasser, + = zwischen den
@@ -236,7 +266,7 @@ public static class Level4Builder
     private static readonly (float z, float side, float range)[] MarketStrollers =
     {
         (160f, -5f, 6f), (196f, -6f, 5f), (214f, -4.6f, 6f), (244f, -5.8f, 5f),
-        (147f, 1.6f, 5f), (170f, 1.5f, 4f), (188f, 1.7f, 5f), (207f, 1.5f, 4f), (226f, 1.6f, 5f), (250f, 1.5f, 4f),
+        (147f, 1.6f, 5f), (170f, 1.5f, 4f), (188f, 1.7f, 5f), (207f, 1.5f, 4f), (222f, 1.6f, 4f),
     };
 
     private static void BuildMarket()
@@ -287,7 +317,8 @@ public static class Level4Builder
 
         // Stände hinter der Bahn, außer vor der Mündung der Four Cheese Avenue (Blick auf die Poller) und neben dem federnden Stand
         int index = 0;
-        for (float z = CrustLaneZ + 7f; z <= CityLayout.MarketToZ - 3f; z += StallSpacing)
+        // In der S-Kurve rückt die Bahn an die Fassaden, dort ist kein Platz mehr für Stände
+        for (float z = CrustLaneZ + 7f; z <= SBendSouthZ - 2f; z += StallSpacing)
         {
             bool fourCheese = z > FourCheeseZ - 6f && z < FourCheeseZ + 6f;
             if (fourCheese || Mathf.Abs(z - bouncyZ) < 4f || keepClear.Exists(clear => Mathf.Abs(z - clear) < 4f))
@@ -305,7 +336,7 @@ public static class Level4Builder
         {
             LevelBuildKit.PlaceAsset($"{folder}/{entry.prefab}.prefab", Mathf.Round(MarinaraU(entry.z)), 0, front);
         }
-        for (float z = CrustLaneZ + 7f; z <= CityLayout.MarketToZ - 3f; z += LampSpacing)
+        for (float z = CrustLaneZ + 7f; z <= SBendNorthZ; z += LampSpacing)
         {
             float lampZ = z;
             if (System.Array.Exists(MarketForeground, entry => Mathf.Abs(entry.z - lampZ) < 3f) || keepClear.Exists(clear => Mathf.Abs(lampZ - clear) < 3f))
@@ -345,9 +376,9 @@ public static class Level4Builder
         beachZone.ApplyModifiedPropertiesWithoutUndo();
         ((CameraZone)beachZone.targetObject).transform.SetParent(gameplayParent, false);
 
-        // Marktpromenade: Kamera weiter weg (über der Kaimauer), ab kurz nach der Ecke bis vor die Salami Street
+        // Marktpromenade: Kamera weiter weg (über der Kaimauer), ab kurz nach der Ecke bis hinter den Kiosk
         var marketZone = new SerializedObject(new GameObject("Market Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
-        marketZone.FindProperty("fromU").floatValue = MarinaraU(CityLayout.MarketToZ - 4f);
+        marketZone.FindProperty("fromU").floatValue = MarinaraNorthU(KioskZ + 3f);
         marketZone.FindProperty("toU").floatValue = MarinaraU(CrustLaneZ + 8f);
         marketZone.FindProperty("blend").floatValue = 8f;
         marketZone.FindProperty("offset").vector3Value = MarketCameraOffset;

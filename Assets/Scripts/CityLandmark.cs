@@ -64,6 +64,10 @@ public class CityLandmark : MonoBehaviour
         {
             microwave.ResetForNewLevel();
         }
+        foreach (BoardDropOff dropOff in GetComponentsInChildren<BoardDropOff>(true))
+        {
+            dropOff.ResetForNewLevel();
+        }
         if (Door != null)
         {
             Door.SnapClosed();
