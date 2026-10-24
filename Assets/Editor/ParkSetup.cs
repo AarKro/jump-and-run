@@ -9,6 +9,8 @@ using UnityEngine;
 //    dazwischen die Frisbee (Trigger mit KillZone), gesteuert von FrisbeePlayers
 //  - "Duck Family": weiße Entenmutter (GroundPatrol + EnemyDamage + Duck) und drei gelbe Küken (Duckling), die ihre Spur
 //    mit Verzögerung nachlaufen. Wurzel 1 m über der Plattform-Mitte wie beim Hund
+//  - "Picnic Goal": Ziel von Level 3 ohne Haus: Picknickdecke mit Korb, der Kunde (Customer, sitzt) und eine Freundin
+//    (PicnicFriend). Level 3 setzt es statt des Goal-Prefabs mit Kundenhaus ein (Name bleibt "Goal")
 public static class ParkSetup
 {
     private const int GroundLayer = 3;
@@ -27,6 +29,7 @@ public static class ParkSetup
         CreateMaterials();
         BuildFrisbeePlayers();
         BuildDuckFamily();
+        BuildPicnicGoal();
         AssetDatabase.SaveAssets();
         Debug.Log("ParkSetup: Park-Prefabs gespeichert.");
     }
@@ -239,6 +242,66 @@ public static class ParkSetup
             PrimitiveKit.Box("Foot", legs[i], new Vector3(0.04f * scale, -hipY + 0.01f, 0f), new Vector3(0.13f * scale, 0.02f, 0.09f * scale), duckOrange);
         }
         return legs;
+    }
+
+    // ---------- Picknick (Ziel von Level 3) ----------
+
+    // Wurzel auf der Laufbahn (wie das Goal-Prefab): Trigger davor, Decke dahinter (lokal +Z, Teichseite)
+    private static void BuildPicnicGoal()
+    {
+        Material red = PrimitiveKit.Material($"{MaterialFolder}/Blanket Red.mat", PrimitiveKit.LitShader, new Color(0.85f, 0.18f, 0.16f));
+        Material wicker = PrimitiveKit.Material($"{MaterialFolder}/Wicker.mat", PrimitiveKit.LitShader, new Color(0.7f, 0.5f, 0.28f));
+        Material juice = PrimitiveKit.Material($"{MaterialFolder}/Juice.mat", PrimitiveKit.LitShader, new Color(1f, 0.6f, 0.1f), 0.6f);
+
+        var root = new GameObject("Picnic Goal");
+        Transform t = root.transform;
+        PrimitiveKit.AddBoxCollider(root, new Vector3(0f, Surface + 1.5f, 0f), new Vector3(2f, 3f, 3f), true);
+        root.AddComponent<LevelGoal>();
+
+        // Karierte Decke aus 6 x 4 Feldern
+        Transform blanket = PrimitiveKit.Pivot("Blanket", t, new Vector3(0.8f, Surface + 0.045f, 1.9f));
+        const float tile = 0.4f;
+        for (int x = 0; x < 6; x++)
+        {
+            for (int z = 0; z < 4; z++)
+            {
+                PrimitiveKit.Box("Tile", blanket, new Vector3((x - 2.5f) * tile, 0f, (z - 1.5f) * tile), new Vector3(tile, 0.01f, tile), (x + z) % 2 == 0 ? red : bubbleWhite);
+            }
+        }
+        // Korb mit Deckel und Henkel, Teller, Saftflasche
+        PrimitiveKit.Box("Basket", t, new Vector3(-0.6f, Surface + 0.2f, 2.3f), new Vector3(0.6f, 0.35f, 0.4f), wicker);
+        PrimitiveKit.Box("Basket Lid", t, new Vector3(-0.6f, Surface + 0.39f, 2.3f), new Vector3(0.64f, 0.04f, 0.44f), wicker);
+        PrimitiveKit.Box("Handle", t, new Vector3(-0.6f, Surface + 0.55f, 2.3f), new Vector3(0.45f, 0.04f, 0.04f), wicker);
+        foreach (float x in new[] { -0.82f, -0.38f })
+        {
+            PrimitiveKit.Box("Handle Side", t, new Vector3(x, Surface + 0.47f, 2.3f), new Vector3(0.04f, 0.17f, 0.04f), wicker);
+        }
+        PrimitiveKit.Part("Plate", PrimitiveType.Cylinder, t, new Vector3(1.0f, Surface + 0.06f, 1.4f), new Vector3(0.35f, 0.01f, 0.35f), bubbleWhite);
+        PrimitiveKit.Part("Plate", PrimitiveType.Cylinder, t, new Vector3(1.5f, Surface + 0.06f, 2.6f), new Vector3(0.35f, 0.01f, 0.35f), bubbleWhite);
+        PrimitiveKit.Part("Juice", PrimitiveType.Cylinder, t, new Vector3(0.2f, Surface + 0.2f, 2.5f), new Vector3(0.12f, 0.15f, 0.12f), juice);
+
+        // Kunde sitzt vorne auf der Decke, schaut zur Kamera; die Freundin daneben, etwas zu ihm gedreht
+        Figure customerFigure = BuildFigure(t, "Customer", new Vector3(0.3f, Surface, 1.5f), 0f);
+        var customer = new SerializedObject(customerFigure.root.gameObject.AddComponent<Customer>());
+        customer.FindProperty("rig").objectReferenceValue = customerFigure.rig;
+        customer.FindProperty("leftArm").objectReferenceValue = customerFigure.leftArm;
+        customer.FindProperty("rightArm").objectReferenceValue = customerFigure.rightArm;
+        customer.FindProperty("sitsOnBlanket").boolValue = true;
+        customer.FindProperty("shirtColor").colorValue = new Color(0.2f, 0.62f, 0.3f);
+        PrimitiveKit.SetReferences(customer, "shirtRenderers", customerFigure.body);
+        PrimitiveKit.SetReferences(customer, "skinRenderers", customerFigure.head, customerFigure.leftArmMesh, customerFigure.rightArmMesh);
+        customer.ApplyModifiedPropertiesWithoutUndo();
+
+        Figure friendFigure = BuildFigure(t, "Friend", new Vector3(1.7f, Surface, 2.2f), -25f);
+        var friend = new SerializedObject(friendFigure.root.gameObject.AddComponent<PicnicFriend>());
+        friend.FindProperty("rig").objectReferenceValue = friendFigure.rig;
+        friend.FindProperty("leftArm").objectReferenceValue = friendFigure.leftArm;
+        friend.FindProperty("rightArm").objectReferenceValue = friendFigure.rightArm;
+        PrimitiveKit.SetReferences(friend, "shirtRenderers", friendFigure.body);
+        PrimitiveKit.SetReferences(friend, "skinRenderers", friendFigure.head, friendFigure.leftArmMesh, friendFigure.rightArmMesh);
+        friend.ApplyModifiedPropertiesWithoutUndo();
+
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Picnic Goal.prefab");
     }
 
     // ---------- Figur (wie der Kunde: Kapsel-Körper, Kugel-Kopf, Arme mit Drehpunkt an der Schulter) ----------

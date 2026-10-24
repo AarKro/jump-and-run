@@ -111,6 +111,7 @@ public static class Level3Builder
     {
         EnsureScene();
         var scene = LevelBuildKit.OpenAndClear(ScenePath);
+        UsePicnicGoal();
         BuildLane();
         groundParent = LevelBuildKit.Group("Level Ground");
         gameplayParent = LevelBuildKit.Group("Level Gameplay");
@@ -127,6 +128,24 @@ public static class Level3Builder
             "Picnic at the Duck Pond, Pesto Park", new Vector3(20f, 90f, -110f));
         LevelBuildKit.Save(scene);
         Debug.Log($"Level3Builder: Level 3 (Pesto Park) gebaut. Bahn u {startU:F2} bis {LevelBuildKit.Lane.EndU:F2}.");
+    }
+
+    // Ziel ohne Haus: Das Goal-Prefab mit Kundenhaus (aus der kopierten Szene) gegen das Picknick tauschen. Es heißt weiter
+    // "Goal", damit OpenAndClear und SetupEssentials es finden
+    private static void UsePicnicGoal()
+    {
+        const string picnicPath = ParkSetup.PrefabFolder + "/Picnic Goal.prefab";
+        GameObject old = GameObject.Find("Goal");
+        if (old != null && PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(old) == picnicPath)
+        {
+            return;
+        }
+        if (old != null)
+        {
+            Object.DestroyImmediate(old);
+        }
+        var goal = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(picnicPath));
+        goal.name = "Goal";
     }
 
     // Neue Szene als Kopie von Level 2 (bringt die festen Objekte mit), hinter Level 2 in die Build Settings

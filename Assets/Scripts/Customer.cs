@@ -1,7 +1,8 @@
 using System.Collections;
 using UnityEngine;
 
-// Der Kunde am Ziel: wartet in seinem Haus, kommt heraus, wenn der Spieler nahe ist, winkt, nimmt beim Abliefern den Karton
+// Der Kunde am Ziel: wartet in seinem Haus (oder sitzt auf einer Picknickdecke), kommt heraus bzw. steht auf, wenn der
+// Spieler nahe ist, winkt, nimmt beim Abliefern den Karton
 // und tanzt je nach Trinkgeld (1-3 Münzen) unterschiedlich wild. Alles prozedural im Code, ohne Animation-Clips.
 // Aufgebaut von Tools > Jump and Run > Build Customer into Goal Prefab.
 public class Customer : MonoBehaviour
@@ -30,6 +31,14 @@ public class Customer : MonoBehaviour
     [Tooltip("Ab diesem Abstand (in X) öffnet er die Tür und kommt heraus")]
     [SerializeField] private float comeOutDistance = 8f;
     [SerializeField] private float walkOutDuration = 0.8f;
+
+    [Header("Picknick (ohne Haus)")]
+    [Tooltip("Sitzt auf einer Picknickdecke statt im Haus zu warten: steht auf, wenn der Spieler nahe ist, und setzt sich " +
+             "nach einem Respawn (und nach dem Intro) wieder hin")]
+    [SerializeField] private bool sitsOnBlanket;
+    [Tooltip("So weit sinkt der Körper im Sitzen ein (die Figur hat keine Beine)")]
+    [SerializeField] private float sitDrop = 0.45f;
+    [SerializeField] private float standUpDuration = 0.5f;
 
     [Header("Warten")]
     [Tooltip("Ab diesem Abstand (in X) winkt der Kunde dem Spieler zu")]
@@ -118,7 +127,7 @@ public class Customer : MonoBehaviour
         }
 
         // Hat das Intro ihn schon nach draußen gestellt (kann im selben Frame vor diesem Start passieren), dort lassen
-        if (homeDoor != null && !introWave)
+        if ((homeDoor != null || sitsOnBlanket) && !introWave)
         {
             GoBackInside();
         }
@@ -149,20 +158,53 @@ public class Customer : MonoBehaviour
         GoBackInside();
     }
 
-    // Startzustand mit Haus: drinnen hinter der geschlossenen Tür (unsichtbar im dunklen Raum).
-    // Auch beim Respawn des Spielers, solange noch nicht geliefert wurde
+    // Startzustand mit Haus: drinnen hinter der geschlossenen Tür (unsichtbar im dunklen Raum). Beim Picknick: sitzt auf
+    // der Decke. Auch beim Respawn des Spielers, solange noch nicht geliefert wurde
     private void GoBackInside()
     {
-        if (homeDoor == null || state == State.Receiving || state == State.Dancing)
+        if ((homeDoor == null && !sitsOnBlanket) || state == State.Receiving || state == State.Dancing)
         {
             return;
         }
         StopAllCoroutines();
-        homeDoor.SnapClosed();
-        transform.position = homeDoor.InsidePosition;
+        if (homeDoor != null)
+        {
+            homeDoor.SnapClosed();
+            transform.position = homeDoor.InsidePosition;
+            rig.localPosition = Vector3.zero;
+            rig.localRotation = Quaternion.identity;
+        }
+        else
+        {
+            SitPose();
+        }
+        state = State.Inside;
+    }
+
+    // Sitzen: Körper eingesunken und leicht nach hinten gelehnt (Drehung um X kippt den Kopf von der Kamera weg),
+    // Hände liegen vorne auf den "Knien"
+    private void SitPose()
+    {
+        rig.localPosition = Vector3.down * sitDrop;
+        rig.localRotation = Quaternion.Euler(8f, 0f, 0f);
+        SetHoldPose(35f, 10f);
+    }
+
+    // Picknick statt Tür: aufstehen (mit kleinem Schwung über die Standhöhe hinaus), dann warten und winken
+    private IEnumerator StandUp()
+    {
+        state = State.ComingOut;
+        for (float t = 0f; t < standUpDuration; t += Time.deltaTime)
+        {
+            float k = t / standUpDuration;
+            float y = Mathf.Lerp(-sitDrop, 0f, Mathf.SmoothStep(0f, 1f, k)) + Mathf.Sin(k * Mathf.PI) * 0.12f;
+            rig.localPosition = Vector3.up * y;
+            rig.localRotation = Quaternion.Slerp(Quaternion.Euler(8f, 0f, 0f), Quaternion.identity, k);
+            yield return null;
+        }
         rig.localPosition = Vector3.zero;
         rig.localRotation = Quaternion.identity;
-        state = State.Inside;
+        state = State.Waiting;
     }
 
     private IEnumerator ComeOut()
@@ -190,7 +232,7 @@ public class Customer : MonoBehaviour
             case State.Inside:
                 if (player != null && FlatDistanceToPlayer() < comeOutDistance)
                 {
-                    StartCoroutine(ComeOut());
+                    StartCoroutine(homeDoor != null ? ComeOut() : StandUp());
                 }
                 break;
             case State.Waiting:
@@ -227,12 +269,16 @@ public class Customer : MonoBehaviour
     private void OnPizzaDelivered(int earnedCoins)
     {
         coins = earnedCoins;
-        // Noch drinnen oder unterwegs (Spieler war sehr schnell): sofort draußen hinstellen
-        if (homeDoor != null && (state == State.Inside || state == State.ComingOut))
+        // Noch drinnen oder unterwegs (Spieler war sehr schnell): sofort draußen hinstellen bzw. aufstehen
+        if (state == State.Inside || state == State.ComingOut)
         {
             StopAllCoroutines();
-            transform.position = homeDoor.OutsidePosition;
-            homeDoor.SnapClosed();
+            if (homeDoor != null)
+            {
+                transform.position = homeDoor.OutsidePosition;
+                homeDoor.SnapClosed();
+            }
+            rig.localPosition = Vector3.zero;
         }
         StartCoroutine(ReceiveCarton());
     }
