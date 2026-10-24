@@ -94,6 +94,9 @@ public class DeliveryGuy : MonoBehaviour
     // Sitzt benommen auf dem Boden (Sturz vom Board)
     private bool dazed;
 
+    // Tod: 0 = steht, 1 = liegt flach auf dem Gesicht. Setzt PlayerLife Frame für Frame (darf kurz über 1 gehen = Nachfedern)
+    public float FallAmount { get; set; }
+
     private void Awake()
     {
         player = GetComponent<PlayerController>();
@@ -182,6 +185,11 @@ public class DeliveryGuy : MonoBehaviour
 
         // Kinematisch = Skript bewegt ihn (Tür, Tod), dort läuft keine Bodenprüfung, er gilt als am Boden
         bool grounded = body.isKinematic || player.IsGrounded;
+        if (FallAmount > 0f)
+        {
+            UpdateFall();
+            return;
+        }
         if (dazed)
         {
             UpdateDazed(dt, blend);
@@ -271,6 +279,39 @@ public class DeliveryGuy : MonoBehaviour
         }
 
         UpdateArms(0f, pose);
+    }
+
+    // Fällt aufs Gesicht: Das ganze Modell kippt um die Füße nach vorn (in Blickrichtung), Arme nach vorn gestreckt (liegend
+    // = über den Kopf), Beine gerade. Gedreht wird Model selbst: Gier wie beim Laufen, dazu Kippen um seine X-Achse
+    // (das Modell schaut nach -Z, nach vorn kippen = negative Drehung). Drehpunkt sind die Füße (y -0.5), darum die Verschiebung
+    private void UpdateFall()
+    {
+        float k = FallAmount;
+        float pitch = -90f * k;
+        Quaternion turn = Quaternion.Euler(0f, yaw, 0f);
+        Quaternion tip = Quaternion.Euler(pitch, 0f, 0f);
+        model.localRotation = turn * tip;
+        // Füße bleiben am Boden: p - R·p mit p = Füße. Liegend ruht der Körper auf seiner Dicke (0.22 über dem Boden)
+        Vector3 feet = new Vector3(0f, -0.5f, 0f);
+        Vector3 offset = feet - tip * feet + Vector3.up * (0.22f * Mathf.Clamp01(k));
+        model.localPosition = turn * offset;
+        rig.localPosition = rigStart;
+        rig.localRotation = Quaternion.identity;
+        legLeft.localRotation = Quaternion.identity;
+        legRight.localRotation = Quaternion.identity;
+        armLeft.localRotation = Quaternion.Euler(160f * Mathf.Clamp01(k), 0f, 10f);
+        armRight.localRotation = Quaternion.Euler(150f * Mathf.Clamp01(k), 0f, -10f);
+        // Nach dem Respawn sauber weiterlaufen
+        legLeftAngle = legRightAngle = 0f;
+        armAngle = armSwing = 0f;
+    }
+
+    // Nach dem Tod wieder hinstellen (PlayerLife beim Respawn)
+    public void ResetFall()
+    {
+        FallAmount = 0f;
+        model.localPosition = Vector3.zero;
+        model.localRotation = Quaternion.Euler(0f, yaw, 0f);
     }
 
     // Sitzt auf dem Boden: Hüfte runter, Beine waagerecht nach vorn (Drehung um X, positiv = Fuß nach vorn), Oberkörper

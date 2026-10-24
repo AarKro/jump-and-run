@@ -110,6 +110,15 @@ public static class PlayerModelSetup
             stars.gameObject.SetActive(false);
 
             PizzaCarton carton = root.GetComponentInChildren<PizzaCarton>(true);
+            // Für die Todesanimation: Deckel mit Scharnier und eine Pizza im Karton, dazu der "Splat" beim Aufprall
+            BuildCartonPizza(carton.transform);
+            ParticleSystem splat = BuildSplat(root.transform);
+            if (root.TryGetComponent(out PlayerLife life))
+            {
+                var lifeSettings = new SerializedObject(life);
+                lifeSettings.FindProperty("splat").objectReferenceValue = splat;
+                lifeSettings.ApplyModifiedPropertiesWithoutUndo();
+            }
             var cartonSettings = new SerializedObject(carton);
             cartonSettings.FindProperty("holdPoint").objectReferenceValue = hold;
             cartonSettings.ApplyModifiedPropertiesWithoutUndo();
@@ -144,6 +153,71 @@ public static class PlayerModelSetup
         {
             PrefabUtility.UnloadPrefabContents(root);
         }
+    }
+
+    // Deckel bekommt ein Scharnier an der Hinterkante (zum Körper hin, lokal +Z): klappt beim Tod im Flug auf.
+    // Darin liegt eine Pizza (aus, wird erst beim Tod sichtbar): Boden, Käse, Peperoni
+    private static void BuildCartonPizza(Transform carton)
+    {
+        Transform hinge = carton.Find("Lid Hinge");
+        Transform lid = hinge != null ? hinge.Find("Lid") : carton.Find("Lid");
+        if (hinge == null)
+        {
+            hinge = PrimitiveKit.Pivot("Lid Hinge", carton, new Vector3(0f, 0.05f, 0.25f));
+            lid.SetParent(hinge, true);
+        }
+        hinge.localRotation = Quaternion.identity;
+        Transform old = carton.Find("Pizza");
+        if (old != null)
+        {
+            Object.DestroyImmediate(old.gameObject);
+        }
+        Material crust = Mat("Pizza Crust", new Color(0.88f, 0.66f, 0.38f), 0.2f);
+        Material cheese = Mat("Pizza Cheese", new Color(1f, 0.8f, 0.35f), 0.35f);
+        Material pepperoni = Mat("Pepperoni", new Color(0.72f, 0.12f, 0.1f), 0.3f);
+        Transform pizza = PrimitiveKit.Pivot("Pizza", carton, new Vector3(0f, 0.01f, 0f));
+        PrimitiveKit.Part("Crust", PrimitiveType.Cylinder, pizza, Vector3.zero, new Vector3(0.42f, 0.012f, 0.42f), crust);
+        PrimitiveKit.Part("Cheese", PrimitiveType.Cylinder, pizza, new Vector3(0f, 0.008f, 0f), new Vector3(0.36f, 0.008f, 0.36f), cheese);
+        for (int i = 0; i < 7; i++)
+        {
+            float angle = i * 51.4f * Mathf.Deg2Rad;
+            float r = i == 6 ? 0f : 0.11f;
+            PrimitiveKit.Part("Pepperoni", PrimitiveType.Cylinder, pizza, new Vector3(Mathf.Cos(angle) * r, 0.014f, Mathf.Sin(angle) * r), new Vector3(0.07f, 0.004f, 0.07f), pepperoni);
+        }
+        pizza.gameObject.SetActive(false);
+    }
+
+    // Tomaten- und Käsespritzer, wenn die Pizza mit dem Käse nach unten aufklatscht. Nur Emit, Welt-Raum (bleibt am Boden)
+    private static ParticleSystem BuildSplat(Transform root)
+    {
+        Transform old = root.Find("Splat");
+        if (old != null)
+        {
+            Object.DestroyImmediate(old.gameObject);
+        }
+        var splatObject = new GameObject("Splat");
+        splatObject.transform.SetParent(root, false);
+        var splat = splatObject.AddComponent<ParticleSystem>();
+        splat.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        ParticleSystem.MainModule main = splat.main;
+        main.playOnAwake = false;
+        main.loop = false;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.6f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(1.5f, 3.5f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.11f);
+        main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.85f, 0.12f, 0.08f), new Color(1f, 0.8f, 0.3f));
+        main.gravityModifier = 1.5f;
+        main.maxParticles = 40;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        ParticleSystem.EmissionModule emission = splat.emission;
+        emission.rateOverTime = 0f;
+        ParticleSystem.ShapeModule shape = splat.shape;
+        shape.shapeType = ParticleSystemShapeType.Hemisphere;
+        shape.radius = 0.2f;
+        splatObject.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+        splatObject.GetComponent<ParticleSystemRenderer>().sharedMaterial =
+            AssetDatabase.LoadAssetAtPath<Material>("Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat");
+        return splat;
     }
 
     // Rotes Deck mit weißem Streifen an der Kante (Farben der Pizzeria wie Polo, Kappe und Karton), schwarzes Griptape oben,

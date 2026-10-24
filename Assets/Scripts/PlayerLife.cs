@@ -2,18 +2,29 @@ using System.Collections;
 using UnityEngine;
 
 // Tod und Wiederauftauchen des Spielers. GameManager ruft das beim Respawn und beim Levelstart auf:
-// Tod = einfrieren, plattdrücken, drehen, in einer Rauchwolke verschwinden.
+// Tod = einfrieren, aufs Gesicht fallen, der Karton fliegt im Bogen nach vorn und klappt auf, die Pizza dreht sich heraus
+// und landet mit dem Käse nach unten ("Splat"). Er bleibt kurz liegen, dann schließt sich die Iris über ihm.
 // Danach läuft er aus einer Tür (SpawnDoor) heraus, oder ploppt ohne Tür am Respawn-Punkt auf.
 // Während beides läuft, ist der Rigidbody kinematisch: Die Physik hält sich raus, der Code bewegt ihn.
 [RequireComponent(typeof(PlayerController))]
 public class PlayerLife : MonoBehaviour
 {
     [Header("Tod")]
-    [SerializeField] private float squashDuration = 0.35f;
-    [SerializeField] private float vanishDuration = 0.15f;
-    [Tooltip("Pause nach dem Verschwinden, bevor er wieder auftaucht")]
-    [SerializeField] private float deadPause = 0.35f;
-    [SerializeField] private float spinSpeed = 900f;
+    [Tooltip("So lange kippt er aufs Gesicht (mit kurzem Nachfedern)")]
+    [SerializeField] private float fallDuration = 0.45f;
+    [Tooltip("So lange bleibt er liegen, bevor sich die Iris schließt")]
+    [SerializeField] private float lieTime = 0.8f;
+    [SerializeField] private float irisCloseDuration = 0.5f;
+    [SerializeField] private float irisOpenDuration = 0.5f;
+    [Tooltip("Flug des Kartons: so weit nach vorn, so hoch, so lange")]
+    [SerializeField] private float cartonThrowDistance = 2.2f;
+    [SerializeField] private float cartonThrowHeight = 1.2f;
+    [SerializeField] private float cartonFlightTime = 0.7f;
+    [Tooltip("Die Pizza fliegt aus dem offenen Karton noch ein Stück weiter")]
+    [SerializeField] private float pizzaExtraDistance = 0.9f;
+    [SerializeField] private ParticleSystem splat;
+    [SerializeField] private int splatParticles = 24;
+    [Tooltip("Ohne Iris im Level (Fallback): Rauchwolke und verschwinden wie früher")]
     [SerializeField] private ParticleSystem poof;
     [SerializeField] private int poofParticles = 24;
 
@@ -39,6 +50,17 @@ public class PlayerLife : MonoBehaviour
     private Rigidbody body;
     private Vector3 normalScale;
     private DeliveryGuy guy;
+    // Karton, Deckel-Scharnier und Pizza: werden beim Tod weggeworfen und beim Respawn zurückgeholt
+    private PizzaCarton carton;
+    private Transform cartonParent;
+    private Vector3 cartonLocalPosition;
+    private Quaternion cartonLocalRotation;
+    private Transform lidHinge;
+    private Transform pizza;
+    private Vector3 pizzaLocalPosition;
+    // Die Iris hat sich beim Tod geschlossen: beim Wiederauftauchen (Tür oder Aufploppen) wieder öffnen
+    private bool irisClosed;
+    private Coroutine throwRoutine;
     // Gerade vom Board gefallen (bis er wieder draufsteht)
     public bool IsCrashing { get; private set; }
 
@@ -48,6 +70,19 @@ public class PlayerLife : MonoBehaviour
         body = GetComponent<Rigidbody>();
         guy = GetComponent<DeliveryGuy>();
         normalScale = transform.localScale;
+        carton = GetComponentInChildren<PizzaCarton>(true);
+        if (carton != null)
+        {
+            cartonParent = carton.transform.parent;
+            cartonLocalPosition = carton.transform.localPosition;
+            cartonLocalRotation = carton.transform.localRotation;
+            lidHinge = carton.transform.Find("Lid Hinge");
+            pizza = carton.transform.Find("Pizza");
+            if (pizza != null)
+            {
+                pizzaLocalPosition = pizza.localPosition;
+            }
+        }
     }
 
     // ---------- Sturz vom Skateboard ----------
@@ -166,33 +201,200 @@ public class PlayerLife : MonoBehaviour
         controller.Freeze();
         body.linearVelocity = Vector3.zero;
         body.isKinematic = true;
+        float facing = controller.FacingDirection;
 
-        Vector3 squashed = new Vector3(normalScale.x * 1.35f, normalScale.y * 0.55f, normalScale.z * 1.35f);
-        for (float t = 0f; t < squashDuration; t += Time.deltaTime)
+        ScreenIris iris = FindAnyObjectByType<ScreenIris>();
+        Camera view = Camera.main;
+        if (iris == null || guy == null || view == null)
         {
-            float k = t / squashDuration;
-            transform.localScale = Vector3.Lerp(normalScale, squashed, Mathf.Sin(k * Mathf.PI * 0.5f));
-            transform.Rotate(0f, 0f, spinSpeed * Time.deltaTime);
-            body.rotation = transform.rotation;
-            yield return null;
+            yield return PoofAway();
+            yield break;
         }
 
+        // Karton fliegt aus den Händen (parallel zum Hinfallen)
+        throwRoutine = StartCoroutine(ThrowPizza(facing));
+
+        // Aufs Gesicht kippen: beschleunigt (wie ein fallendes Brett), am Ende kurz nachfedern
+        for (float t = 0f; t < fallDuration; t += Time.deltaTime)
+        {
+            float k = t / fallDuration;
+            float fall = k < 0.8f ? Mathf.Pow(k / 0.8f, 2f) : 1f + Mathf.Sin((k - 0.8f) / 0.2f * Mathf.PI) * 0.06f;
+            guy.FallAmount = Mathf.Max(0.001f, fall);
+            yield return null;
+        }
+        guy.FallAmount = 1f;
+
+        yield return new WaitForSeconds(lieTime);
+        yield return iris.Close(view, transform.position + Vector3.up * 0.2f, irisCloseDuration);
+        irisClosed = true;
+    }
+
+    // Karton im Bogen nach vorn (in Blickrichtung), überschlägt sich, der Deckel klappt auf. Kurz nach dem Abwurf dreht sich
+    // die Pizza heraus und landet etwas weiter vorn mit dem Käse nach unten: Spritzer, flachgedrückt
+    private IEnumerator ThrowPizza(float facing)
+    {
+        if (carton == null)
+        {
+            yield break;
+        }
+        carton.enabled = false;
+        Transform box = carton.transform;
+        ParticleSystem steam = box.GetComponentInChildren<ParticleSystem>();
+        if (steam != null)
+        {
+            steam.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+        }
+        box.SetParent(null, true);
+
+        float u = Lane.Project(transform.position);
+        Vector3 axis = Lane.Back(u) * facing;   // Überschlag nach vorn: Drehachse quer zur Laufrichtung
+        Vector3 boxFrom = box.position;
+        Quaternion boxRotation = box.rotation;
+        Vector3 boxTo = GroundPoint(u + facing * cartonThrowDistance, transform.position.y) + Vector3.up * 0.04f;
+        Vector3 pizzaTo = GroundPoint(u + facing * (cartonThrowDistance + pizzaExtraDistance), transform.position.y) + Vector3.up * 0.02f;
+
+        bool pizzaOut = false;
+        Vector3 pizzaFrom = Vector3.zero;
+        Quaternion pizzaRotation = Quaternion.identity;
+        float pizzaStart = cartonFlightTime * 0.3f;
+        float pizzaFlight = cartonFlightTime * 0.85f;
+        bool splatted = false;
+
+        float total = Mathf.Max(cartonFlightTime, pizzaStart + pizzaFlight);
+        for (float t = 0f; t <= total; t += Time.deltaTime)
+        {
+            // Karton: 1.5 Überschläge, landet umgedreht; Deckel bis zur Mitte des Flugs ganz auf
+            float k = Mathf.Clamp01(t / cartonFlightTime);
+            Vector3 position = Vector3.Lerp(boxFrom, boxTo, k) + Vector3.up * (4f * cartonThrowHeight * k * (1f - k));
+            box.SetPositionAndRotation(position, Quaternion.AngleAxis(-540f * k, axis) * boxRotation);
+            if (lidHinge != null)
+            {
+                lidHinge.localRotation = Quaternion.Euler(110f * Mathf.Clamp01(k * 2f), 0f, 0f);
+            }
+
+            // Pizza: verlässt den Karton im Flug, ein halber Überschlag plus Drehung um sich selbst, landet mit dem Käse unten
+            if (!pizzaOut && t >= pizzaStart && pizza != null)
+            {
+                pizzaOut = true;
+                pizza.gameObject.SetActive(true);
+                pizza.SetParent(null, true);
+                pizzaFrom = pizza.position;
+                pizzaRotation = Quaternion.LookRotation(Vector3.Cross(axis, Vector3.up), Vector3.up);
+            }
+            if (pizzaOut)
+            {
+                float p = Mathf.Clamp01((t - pizzaStart) / pizzaFlight);
+                Vector3 pizzaPosition = Vector3.Lerp(pizzaFrom, pizzaTo, p) + Vector3.up * (4f * (cartonThrowHeight + 0.4f) * p * (1f - p));
+                pizza.SetPositionAndRotation(pizzaPosition, Quaternion.AngleAxis(-180f * p, axis) * Quaternion.AngleAxis(300f * p, Vector3.up) * pizzaRotation);
+                if (p >= 1f && !splatted)
+                {
+                    splatted = true;
+                    pizza.localScale = new Vector3(1.15f, 0.6f, 1.15f);
+                    if (splat != null)
+                    {
+                        splat.transform.SetParent(null, true);
+                        splat.transform.position = pizzaTo;
+                        splat.Emit(splatParticles);
+                    }
+                }
+            }
+            yield return null;
+        }
+    }
+
+    // Boden unter der Stelle u (Strahl von oben), sonst die Füße des Spielers
+    private Vector3 GroundPoint(float u, float centerY)
+    {
+        Vector3 point = Lane.Point(u);
+        Vector3 origin = new Vector3(point.x, centerY + 1.5f, point.z);
+        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 6f, crashGroundLayer, QueryTriggerInteraction.Ignore))
+        {
+            return hit.point;
+        }
+        return new Vector3(point.x, centerY - 0.5f, point.z);
+    }
+
+    // Karton, Deckel und Pizza zurück in die Hände, Pizza versteckt im Karton, Spieler steht wieder (beim Respawn)
+    private void RestoreAfterDeath()
+    {
+        if (guy != null)
+        {
+            guy.ResetFall();
+        }
+        if (carton == null || carton.enabled)
+        {
+            return;
+        }
+        if (throwRoutine != null)
+        {
+            StopCoroutine(throwRoutine);
+            throwRoutine = null;
+        }
+        Transform box = carton.transform;
+        box.SetParent(cartonParent, false);
+        box.localPosition = cartonLocalPosition;
+        box.localRotation = cartonLocalRotation;
+        if (lidHinge != null)
+        {
+            lidHinge.localRotation = Quaternion.identity;
+        }
+        if (pizza != null)
+        {
+            pizza.SetParent(box, false);
+            pizza.localPosition = pizzaLocalPosition;
+            pizza.localRotation = Quaternion.identity;
+            pizza.localScale = Vector3.one;
+            pizza.gameObject.SetActive(false);
+        }
+        if (splat != null && splat.transform.parent != transform)
+        {
+            splat.transform.SetParent(transform, false);
+        }
+        ParticleSystem steam = box.GetComponentInChildren<ParticleSystem>();
+        if (steam != null)
+        {
+            steam.Play();
+        }
+        carton.enabled = true;
+    }
+
+    // Iris nach dem Tod wieder auf, um den Punkt, an dem er gleich auftaucht. Die Kamera springt vorher hin (sonst sähe man sie
+    // quer durch die Stadt zur Tür schwenken)
+    private void OpenIrisAt(Vector3 worldPoint)
+    {
+        if (!irisClosed)
+        {
+            return;
+        }
+        irisClosed = false;
+        ScreenIris iris = FindAnyObjectByType<ScreenIris>();
+        Camera view = Camera.main;
+        if (view != null && view.TryGetComponent(out ThirdPersonCamera follow))
+        {
+            follow.SnapToTarget();
+        }
+        if (iris != null && view != null)
+        {
+            StartCoroutine(iris.Open(view, worldPoint, irisOpenDuration));
+        }
+    }
+
+    // Alter Tod ohne Iris: plattdrücken, Rauchwolke, verschwinden
+    private IEnumerator PoofAway()
+    {
+        Vector3 squashed = new Vector3(normalScale.x * 1.35f, normalScale.y * 0.55f, normalScale.z * 1.35f);
+        for (float t = 0f; t < 0.35f; t += Time.deltaTime)
+        {
+            transform.localScale = Vector3.Lerp(normalScale, squashed, Mathf.Sin(t / 0.35f * Mathf.PI * 0.5f));
+            yield return null;
+        }
         if (poof != null)
         {
-            // Emit statt Play: einmalig eine Ladung Partikel ausstoßen, unabhängig von der Emissionsrate
             poof.transform.SetParent(null, true);
             poof.Emit(poofParticles);
         }
-
-        Vector3 start = transform.localScale;
-        for (float t = 0f; t < vanishDuration; t += Time.deltaTime)
-        {
-            transform.localScale = Vector3.Lerp(start, Vector3.zero, t / vanishDuration);
-            yield return null;
-        }
         transform.localScale = Vector3.zero;
-
-        yield return new WaitForSeconds(deadPause);
+        yield return new WaitForSeconds(0.4f);
     }
 
     // Läuft aus der Tür heraus auf die Laufbahn, danach hat der Spieler wieder die Kontrolle
@@ -202,6 +404,7 @@ public class PlayerLife : MonoBehaviour
         body.isKinematic = true;
         ResetLook(door.OutsidePosition);
         Teleport(door.InsidePosition);
+        OpenIrisAt(door.OutsidePosition + Vector3.up * 0.8f);
 
         yield return door.Open();
 
@@ -242,6 +445,7 @@ public class PlayerLife : MonoBehaviour
         body.isKinematic = true;
         ResetLook(position);
         Teleport(position);
+        OpenIrisAt(position);
 
         const float popDuration = 0.25f;
         for (float t = 0f; t < popDuration; t += Time.deltaTime)
@@ -290,6 +494,7 @@ public class PlayerLife : MonoBehaviour
         body.rotation = frame;
         transform.rotation = frame;
         transform.localScale = normalScale;
+        RestoreAfterDeath();
         if (poof != null && poof.transform.parent != transform)
         {
             // Die Rauchwolke wurde zum Abspielen abgekoppelt (sonst würde sie mit dem Spieler schrumpfen), zurückholen
