@@ -566,7 +566,9 @@ public static class CityPropsSetup
 
     // ---------- Begehbares ----------
 
-    // Balkon an der Fassade, ragt bis über die Laufbahn. Oberkante bei Wurzel + 0.5 (Wurzel = ganze Meter)
+    // Balkon an der Fassade, ragt bis über die Laufbahn. Oberkante bei Wurzel + 0.5 (Wurzel = ganze Meter).
+    // Keine Balkontür: Die Fenster der Stadthäuser kommen aus dem Fassaden-Shader, eine Tür läge zufällig darüber
+
     private static void BuildBalcony()
     {
         var root = new GameObject("Balcony");
@@ -585,7 +587,6 @@ public static class CityPropsSetup
             PrimitiveKit.Box("Post " + (i + 1), t, new Vector3(-1.45f + i * 0.725f, 0.975f, depthFront + 0.05f), new Vector3(0.05f, 0.95f, 0.05f), iron);
         }
         PrimitiveKit.Box("Flower Box", t, new Vector3(0.6f, 1.55f, depthFront + 0.05f), new Vector3(0.9f, 0.18f, 0.2f), leaves);
-        PrimitiveKit.Quad("Balcony Door", t, new Vector3(0f, 1.5f, FacadeZ - 0.02f), new Vector2(1.1f, 2f), windowDark);
         PrimitiveKit.Box("Bracket L", t, new Vector3(-1.2f, -0.1f, FacadeZ - 0.3f), new Vector3(0.1f, 0.6f, 0.6f), iron);
         PrimitiveKit.Box("Bracket R", t, new Vector3(1.2f, -0.1f, FacadeZ - 0.3f), new Vector3(0.1f, 0.6f, 0.6f), iron);
         PrimitiveKit.AddBoxCollider(root, new Vector3(0f, 0.35f, centerZ), new Vector3(3f, 0.3f, depth));
