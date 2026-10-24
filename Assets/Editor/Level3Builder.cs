@@ -11,7 +11,8 @@ using UnityEngine;
 // Route (der Spieler läuft nach LINKS, also Richtung -u): aus der Pizzeria nach Westen, rechts in den Mozzarella Blvd
 // (Ostseite, x -33, Baustelle mit Gruben), über die Crust Street (Autos), in einer S-Kurve südlich und westlich um die
 // Gründer-Statue herum (sie bleibt rechts, die Kamera also außen über der Straße), dann den diagonalen Parkweg hinauf
-// zum Brunnen, im Uhrzeigersinn halb um den Brunnen und den Südwest-Weg hinunter zum Ententeich (Kunde: Picknick).
+// zum Brunnen, gegen den Uhrzeigersinn nördlich um den Brunnen (die Südhälfte des Rings ist ein Heckengarten) und den
+// Südwest-Weg hinunter, über den Holzsteg am Ententeich zum Kunden (Picknick).
 // Die Bahn ist in +u-Richtung definiert (Häuser bzw. Brunnen links davon): Sie beginnt beim Kunden und endet hinter
 // der Pizzeria. Auf der Margherita Avenue ist u = Welt-X, auf dem Mozzarella Blvd u = -31 - z.
 //
@@ -77,6 +78,15 @@ public static class Level3Builder
     private static readonly float[] RoadClosureZ = { 9f, 103f };
     //   z  94–102    Baugrundstück mit Bauwagen = Checkpoint (ersetzt das Eckhaus an der Crust Street, Tor bei z 98)
     private const float SiteOfficeZ = 98f;
+
+    // Brunnenring: Skater fährt ab 3 m nach der Südost-Einmündung auf 22 m hin und her
+    private const float SkaterFromRingEnd = 3f;
+    private const float SkaterRange = 22f;
+    // Kamera auf dem Ring: außerhalb des Rings (hinter der Bahn, lokal +Z), Blick nach innen auf den Spieler und den
+    // Brunnen dahinter. Beim Ein- und Ausbiegen kreist sie hinter dem Spieler herum (orbitSide +1 = +u-Seite)
+    private static readonly Vector3 FountainCameraOffset = new Vector3(0f, 6f, 9f);
+    private const float FountainCameraLookHeight = 2.5f;
+    private const float FountainCameraBlend = 6f;
 
     private static Transform groundParent, gameplayParent, propParent;
 
@@ -181,9 +191,10 @@ public static class Level3Builder
         float filletReach = Mathf.Sqrt((ring + RingFilletRadius) * (ring + RingFilletRadius) - RingFilletRadius * RingFilletRadius);
         float filletOffset = Mathf.Atan2(RingFilletRadius, filletReach) * Mathf.Rad2Deg;
         float filletTurn = 90f - filletOffset;
-        // Ring vom Südost- bis zum Südwest-Weg (über die Südseite), an beiden Enden um den Bogen verkürzt
+        // Ring vom Südwest- bis zum Südost-Weg über die Nordseite (in +u-Richtung im Uhrzeigersinn, also Rechtskurve),
+        // an beiden Enden um den Bogen verkürzt
         float seAngle = Mathf.Atan2(DiagonalSE.y, DiagonalSE.x) * Mathf.Rad2Deg;
-        float ringTurn = 180f + 2f * seAngle - 2f * filletOffset;
+        float ringTurn = 180f - 2f * seAngle - 2f * filletOffset;
 
         // Von Norden auf den Diagonalweg Richtung Brunnen: so weit nach links drehen
         float parkTurn = Mathf.Asin(DiagonalSE.x) * Mathf.Rad2Deg;
@@ -198,10 +209,10 @@ public static class Level3Builder
 
         var pieces = new List<LanePath.Piece>
         {
-            LevelBuildKit.Straight(LaneStartFromCenter - filletReach),   // Südwest-Weg (Kunde, Enten)
-            LevelBuildKit.Arc(RingFilletRadius, -filletTurn),
-            LevelBuildKit.Arc(ring, ringTurn),                           // halb um den Brunnen (Hund)
-            LevelBuildKit.Arc(RingFilletRadius, -filletTurn),
+            LevelBuildKit.Straight(LaneStartFromCenter - filletReach),   // Südwest-Weg (Kunde, Steg mit Enten)
+            LevelBuildKit.Arc(RingFilletRadius, filletTurn),
+            LevelBuildKit.Arc(ring, -ringTurn),                          // nördlich um den Brunnen (Hund, Skater)
+            LevelBuildKit.Arc(RingFilletRadius, filletTurn),
             LevelBuildKit.Straight(diagonalLength),                      // Diagonalweg (Frisbee)
             LevelBuildKit.Arc(ParkTurnRadius, -parkTurn),
             LevelBuildKit.Straight(northLength),                         // westlich an der Statue vorbei
@@ -271,20 +282,29 @@ public static class Level3Builder
         // Founder's Circle liegt über der Kreuzung (nur Optik, die Fahrbahn darunter hat keinen Collider), die Parkwege
         // sind auch nur Optik: unsichtbarer Laufboden ab dem Überweg bis zum Bahn-Anfang. Auf dem Pflaster 0.51, auf den
         // Wegen 0.6; dazwischen steigt er während des Bogens auf den Diagonalweg langsam an
-        // An den Bächen auf dem Südwest-Weg hört er auf: Die Stadt hat dort Brücken, die der Ausschnitt entfernt
+        // An den Lücken im Holzsteg hört er auf, auf dem Steg liegt er auf dessen Oberkante (kurze Rampe an den Enden)
         float rampFrom = pieceStartU[5], rampTo = pieceStartU[6];
-        System.Func<float, float> top = u => Mathf.Lerp(ParkPathTop, PavingTop, Mathf.InverseLerp(rampFrom, rampTo, u));
+        float boardwalkLow = ParkU(CityLayout.BoardwalkTo), boardwalkHigh = ParkU(CityLayout.BoardwalkFrom);
+        System.Func<float, float> top = u =>
+        {
+            if (u > boardwalkLow - 0.5f && u < boardwalkHigh + 0.5f)
+            {
+                float edge = Mathf.Min(u - (boardwalkLow - 0.5f), (boardwalkHigh + 0.5f) - u);
+                return Mathf.Lerp(ParkPathTop, CityLayout.BoardwalkTop, Mathf.Clamp01(edge));
+            }
+            return Mathf.Lerp(ParkPathTop, PavingTop, Mathf.InverseLerp(rampFrom, rampTo, u));
+        };
         float from = startU - 0.5f;
         // Weiter weg vom Brunnen = kleineres u, also absteigend nach s durchgehen
-        var streams = new List<float>(CityLayout.ParkStreamsAlongPath);
-        streams.Sort((x, y) => y.CompareTo(x));
-        foreach (float s in streams)
+        var gaps = new List<float>(CityLayout.BoardwalkGaps);
+        gaps.Sort((x, y) => y.CompareTo(x));
+        foreach (float s in gaps)
         {
             float gapCenter = ParkU(s);
-            float half = CityLayout.ParkStreamWidth / 2f;
+            float half = CityLayout.BoardwalkGapWidth / 2f;
             WalkGround(from, gapCenter - half, top);
             from = gapCenter + half;
-            Stream(link, s);
+            BoardwalkGap(link, s);
         }
         WalkGround(from, MozzarellaU(CrustNorthCurb) + 0.5f, top);
     }
@@ -361,20 +381,21 @@ public static class Level3Builder
     // Stelle u auf dem Südwest-Weg im Abstand s von der Brunnenmitte (das erste Bahn-Stück, u wächst zum Brunnen hin)
     private static float ParkU(float s) => startU + (LaneStartFromCenter - s);
 
-    // Bach-Lücke im Südwest-Weg: Ausschnitt nimmt die Brücke der Stadt und den Boden darunter weg (sonst stünde man auf
-    // der Gehweg-Platte unter dem Park, und die Enten liefen darüber). Hineinfallen = Respawn, Auslöser knapp unter
-    // der Wasseroberfläche wie bei den Bachmündungen in Level 2
-    private static void Stream(Transform link, float s)
+    // Lücke im Holzsteg am Ententeich: Ein kleiner Ausschnitt nimmt das Deck-Stück der Stadt weg (seine Mitte liegt genau
+    // auf der Lücke; das Loch, das er in den Rasen darunter schneidet, liegt unter dem Wasser). Hineinfallen = Respawn: Der
+    // Auslöser reicht bis knapp über die Wasseroberfläche, darunter liegt noch die Gehweg-Platte des Parks (0.5)
+    private static void BoardwalkGap(Transform link, float s)
     {
         Vector2 at = CityLayout.ParkPathSW(s);
-        float half = CityLayout.ParkBridgeCutoutHalf;
-        LevelBuildKit.Cutout(link, $"Stream {s:F0}", at.x - half, at.x + half, at.y - half, at.y + half);
+        float half = CityLayout.BoardwalkGapCutoutHalf;
+        LevelBuildKit.Cutout(link, $"Boardwalk Gap {s:F0}", at.x - half, at.x + half, at.y - half, at.y + half);
 
         float u = ParkU(s);
-        var trap = new GameObject($"Stream Kill {s:F0}");
+        const float bottom = CityLayout.Surface - 0.3f, triggerTop = CityLayout.ParkLawnTop + 0.06f;
+        var trap = new GameObject($"Boardwalk Gap Kill {s:F0}");
         trap.transform.SetParent(groundParent, false);
-        trap.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + Vector3.up * (CityLayout.ParkLawnTop - 0.6f), LevelBuildKit.Frame(u));
-        PrimitiveKit.AddBoxCollider(trap, Vector3.zero, new Vector3(CityLayout.ParkStreamWidth - 0.2f, 1f, 3f), isTrigger: true);
+        trap.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + Vector3.up * ((bottom + triggerTop) / 2f), LevelBuildKit.Frame(u));
+        PrimitiveKit.AddBoxCollider(trap, Vector3.zero, new Vector3(CityLayout.BoardwalkGapWidth - 0.3f, triggerTop - bottom, 3f), isTrigger: true);
         trap.AddComponent<KillZone>();
     }
 
@@ -487,7 +508,9 @@ public static class Level3Builder
 
     // ---------- Park (Laufrichtung = -u) ----------
     // Diagonalweg (Bahn-Stück 4): drei Frisbee-Paare (das mittlere wirft quer über den Weg), über dem letzten Chili 3 (nur
-    // vom Kopf eines Spielers erreichbar). Brunnenring (Stück 2): Hund zwischen zwei Bänken. Südwest-Weg: Entenfamilie
+    // vom Kopf eines Spielers erreichbar). Brunnenring (Stück 2, der Spieler läuft vom Südost- zum Südwest-Ende): erst ein
+    // Skater, der auf einem festen Stück hin und her fährt, dann ein Hund zwischen zwei Bänken. Die Kamera steht dort außen
+    // und schaut über den Spieler auf den Brunnen. Südwest-Weg: Entenfamilie auf dem Holzsteg mit den drei Lücken
     private static void BuildParkGameplay()
     {
         float diagonalStart = pieceStartU[5];   // am Founder's Circle (dort kommt der Spieler her)
@@ -498,30 +521,58 @@ public static class Level3Builder
         Frisbee(secondPair, 0.85f, false);
         LevelBuildKit.HeatPickup(secondPair, 6, gameplayParent);
 
+        // Ring, ~53 m: Skater-Strecke 22 m ab kurz nach der Einmündung, Bank als Trenner, Hund bis zur Bank vor dem Südwest-Ende
         float ringStart = pieceStartU[2], ringEnd = pieceStartU[3];
-        LevelBuildKit.Place("Bench", Mathf.Round(ringEnd - 3.5f), 0, gameplayParent);
-        GameObject dog = LevelBuildKit.Dog(Mathf.Round((ringStart + ringEnd) / 2f), 1f, gameplayParent);
+        float skaterU = Mathf.Round(ringEnd - SkaterFromRingEnd - SkaterRange / 2f);
+        Skater(skaterU, SkaterRange / 2f);
+        float benchA = Mathf.Round(ringEnd - SkaterFromRingEnd - SkaterRange - 3f);
+        float benchB = Mathf.Round(ringStart + 3.5f);
+        LevelBuildKit.Place("Bench", benchA, 0, gameplayParent);
+        GameObject dog = LevelBuildKit.Dog(Mathf.Round((benchA + benchB) / 2f), 1f, gameplayParent);
         // Im Park gibt es keinen Bordstein: Draufgesprungen läuft er eben über den Rasen davon
         var dogSettings = new SerializedObject(dog.GetComponent<Dog>());
         dogSettings.FindProperty("curbDrop").floatValue = 0f;
         dogSettings.FindProperty("curbHopHeight").floatValue = 0f;
         dogSettings.ApplyModifiedPropertiesWithoutUndo();
-        LevelBuildKit.Place("Bench", Mathf.Round(ringStart + 3.5f), 0, gameplayParent);
+        LevelBuildKit.Place("Bench", benchB, 0, gameplayParent);
 
-        // Südwest-Weg (Abstand s vom Brunnen): eine Entenfamilie mit fünf Küken, startet zwischen den Bächen und schaut
-        // dem ankommenden Spieler entgegen (+u). Sie patrouilliert ohne Hindernisse in einem festen Bereich von kurz nach
-        // dem Brunnenring (s 20) bis kurz vor das Picknick (s 44) und flattert dabei über beide Bäche
-        DuckFamily(31f, 1f, 20f, 44f);
+        // Kamera steht auf dem Ring auf der anderen Seite der Bahn (außen) und schaut auf den Brunnen; rechts/links folgt
+        // dort dem Bildschirm (PlayerController.inputSign)
+        var zone = new SerializedObject(new GameObject("Fountain Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
+        zone.FindProperty("fromU").floatValue = ringStart;
+        zone.FindProperty("toU").floatValue = ringEnd;
+        zone.FindProperty("blend").floatValue = FountainCameraBlend;
+        zone.FindProperty("offset").vector3Value = FountainCameraOffset;
+        zone.FindProperty("lookHeight").floatValue = FountainCameraLookHeight;
+        zone.ApplyModifiedPropertiesWithoutUndo();
+        ((CameraZone)zone.targetObject).transform.SetParent(gameplayParent, false);
+
+        // Südwest-Weg (Abstand s vom Brunnen): Entenfamilie auf dem Holzsteg, startet auf dem letzten Deck-Stück und schaut
+        // dem ankommenden Spieler entgegen (+u). Patrouilliert über den ganzen Steg und flattert über die Lücken
+        DuckFamily(44f, 1f, CityLayout.BoardwalkFrom + 1.5f, CityLayout.BoardwalkTo - 0.5f, CityLayout.BoardwalkTop - ParkPathTop);
+    }
+
+    // Skater bei u, fährt range Meter in beide Richtungen und startet dem Spieler entgegen (+u)
+    private static void Skater(float u, float range)
+    {
+        GameObject skater = LevelBuildKit.PlaceAsset($"{ParkSetup.PrefabFolder}/Skater.prefab", u, 1, gameplayParent);
+        var patrol = new SerializedObject(skater.GetComponent<GroundPatrol>());
+        patrol.FindProperty("startDirection").floatValue = 1f;
+        patrol.FindProperty("patrolLimits").vector2Value = new Vector2(-range, range);
+        patrol.ApplyModifiedPropertiesWithoutUndo();
     }
 
     // Entenfamilie: Mutter bei s, Küken dahinter auf der Spur, die sie beim Start vorbelegt (Duck.ResetTrail).
     // Dort stehen sie auch im Editor, damit EnemyDamage dieselbe Startposition kennt
-    // Patrouillen-Bereich von nearS (zum Brunnen hin, größeres u) bis farS (zum Picknick hin)
-    private static void DuckFamily(float s, float startDirection, float nearS, float farS)
+    // Patrouillen-Bereich von nearS (zum Brunnen hin, größeres u) bis farS (zum Picknick hin). lift: so viel höher als der
+    // Parkweg (auf dem Steg). Die Wurzel rastet auf ganze Meter ein, darum werden die Tiere darin verschoben
+    private static void DuckFamily(float s, float startDirection, float nearS, float farS, float lift)
     {
         float u = Mathf.Round(ParkU(s));
         GameObject family = LevelBuildKit.PlaceAsset($"{ParkSetup.PrefabFolder}/Duck Family.prefab", u, 1, gameplayParent);
-        var patrol = new SerializedObject(family.GetComponentInChildren<GroundPatrol>());
+        GroundPatrol mother = family.GetComponentInChildren<GroundPatrol>();
+        mother.transform.localPosition += Vector3.up * lift;
+        var patrol = new SerializedObject(mother);
         patrol.FindProperty("startDirection").floatValue = startDirection;
         patrol.FindProperty("usePatrolLimits").boolValue = true;
         patrol.FindProperty("patrolLimits").vector2Value = new Vector2(ParkU(farS) - u, ParkU(nearS) - u);
@@ -529,7 +580,7 @@ public static class Level3Builder
         Duckling[] ducklings = family.GetComponentsInChildren<Duckling>();
         for (int i = 0; i < ducklings.Length; i++)
         {
-            ducklings[i].transform.localPosition = new Vector3(-startDirection * ParkSetup.DucklingSpacing[i], 0f, 0f);
+            ducklings[i].transform.localPosition = new Vector3(-startDirection * ParkSetup.DucklingSpacing[i], lift, 0f);
         }
     }
 

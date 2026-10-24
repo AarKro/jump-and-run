@@ -183,30 +183,27 @@ public static class CityLayout
     // Punkt auf dem Südwest-Weg im Abstand s von der Brunnenmitte
     public static Vector2 ParkPathSW(float s) => ParkCenter + ParkDirSW * s;
 
-    // Ententeich: Oval mit der langen Achse entlang des Südwest-Wegs, nordwestlich davon. Südöstlich des Wegs (Kameraseite
-    // von Level 3) ein kleiner Teich; zwei Bäche verbinden beide und kreuzen dabei den Weg (Fußgängerbrücken, die Level 3
-    // ausschneidet: dort sind es Lücken). Alles als Abstand s entlang des Südwest-Wegs
-    public const float PondAlongPath = 36f;
-    public const float PondOffPath = 13f;
+    // Ententeich: Oval mit der langen Achse entlang des Südwest-Wegs, nordwestlich davon. Seine Südostkante reicht über
+    // den Weg hinaus (bis ~2 m vor die Bahn), dort führt ein Holzsteg (Boardwalk) übers Wasser. Alles als Abstand s
+    // entlang des Südwest-Wegs
+    public const float PondAlongPath = 35f;
+    public const float PondOffPath = 4f;
     public const float PondHalfLength = 12f;
     public const float PondHalfWidth = 7f;
     public static Vector2 PondCenter => ParkPathSW(PondAlongPath) + ParkNormalNW * PondOffPath;
-    public static readonly float[] ParkStreamsAlongPath = { 27f, 37f };
-    public const float ParkStreamWidth = 3f;
+    // Steg: deckt den Weg ab, wo er übers Wasser und über den Steinrand des Teichs läuft. Oberkante knapp über dem Wasser
+    public const float BoardwalkFrom = PondAlongPath - 12.5f;
+    public const float BoardwalkTo = PondAlongPath + 12.5f;
+    public const float BoardwalkTop = ParkLawnTop + 0.1f;
+    // Lücken im Steg für Level 3: Die Stadt baut dort je ein eigenes Deck-Stück (Mitte genau auf der Lücke), das Level 3
+    // mit einem kleinen Ausschnitt (BoardwalkGapCutoutHalf) entfernt. Alle anderen Teile liegen mit ihrer Mitte außerhalb
+    public static readonly float[] BoardwalkGaps = { PondAlongPath - 6f, PondAlongPath, PondAlongPath + 6f };
+    public const float BoardwalkGapWidth = 3f;
+    public const float BoardwalkGapCutoutHalf = 0.6f;
     // Hier stellt Level 3 etwas neben die Bahn (Abstand s vom Brunnen): keine Laternen, Bänke, Beete der Park-Deko.
-    // Südost-Weg: das quer werfende Frisbee-Paar; Südwest-Weg: die zwei Bäche und das Picknick
+    // Südost-Weg: das quer werfende Frisbee-Paar; Südwest-Weg: das Picknick
     public static readonly float[] ParkDecorKeepClearSE = { 42.5f };
-    public static readonly float[] ParkDecorKeepClearSW = { 27f, 37f, 50f };
-    // Kleiner Teich: Mitte zwischen den Bächen, so weit südöstlich des Wegs (negativ entlang ParkNormalNW). Sein Steinrand
-    // endet genau an der Wegkante: Die Kamera von Level 3 sieht nur ~3 m vor die Bahn, weiter weg läge er außerhalb des Bilds
-    public const float SmallPondAlongPath = 32f;
-    public const float SmallPondOffPath = 4.5f;
-    public const float SmallPondHalfLength = 6.5f;
-    public const float SmallPondHalfWidth = 2.5f;
-    public static Vector2 SmallPondCenter => ParkPathSW(SmallPondAlongPath) - ParkNormalNW * SmallPondOffPath;
-    // Halbe Kantenlänge des Ausschnitts, mit dem Level 3 eine Brücke entfernt. Alle Brückenteile liegen mit ihrer Mitte
-    // innerhalb, Bachwasser und Ufer außerhalb
-    public const float ParkBridgeCutoutHalf = 1.6f;
+    public static readonly float[] ParkDecorKeepClearSW = { 50f };
 
     // Sehenswürdigkeiten
     public static readonly Vector2 LeaningTower = new Vector2(-200f, 50f);
