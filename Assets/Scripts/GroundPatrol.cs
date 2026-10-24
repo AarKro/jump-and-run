@@ -25,6 +25,13 @@ public class GroundPatrol : MonoBehaviour
              "über den Hund wegzulaufen, bevor er hinterherkommt")]
     [SerializeField] private float turnDuration = 0.3f;
 
+    [Header("Patrouillen-Bereich")]
+    [Tooltip("Nur auf Patrouille: dreht an den Grenzen dieses Bereichs um, auch ohne Wand oder Kante (Enten im Park). " +
+             "Beim Verfolgen darf er ihn verlassen und kehrt danach zurück")]
+    [SerializeField] private bool usePatrolLimits;
+    [Tooltip("Grenzen relativ zur Startposition entlang der Bahn (x = Richtung -u, y = Richtung +u), in Metern")]
+    [SerializeField] private Vector2 patrolLimits = new Vector2(-10f, 10f);
+
     [Header("Boden und Wände")]
     [SerializeField] private LayerMask groundLayer = 1 << 3;
     [Tooltip("So weit vor der Körperkante wird nach Boden gesucht. Kein Boden = Kante, umdrehen")]
@@ -199,6 +206,14 @@ public class GroundPatrol : MonoBehaviour
             return;
         }
 
+        // Ende des Patrouillen-Bereichs erreicht (und läuft weiter hinaus): umdrehen wie an einer Wand
+        if (!IsChasing && OutsidePatrolLimits(FacingDirection))
+        {
+            speed = 0f;
+            StartTurn();
+            return;
+        }
+
         if (flapOverGaps && !HasGroundAhead(FacingDirection) && !HasWallAhead(FacingDirection) && TryFindLanding(FacingDirection, out float landing))
         {
             // Über die Lücke flattern: Ziel so, dass der ganze Körper hinter der Kante landet
@@ -241,6 +256,15 @@ public class GroundPatrol : MonoBehaviour
         }
         rb.MovePosition(Lane.Point(u) + Vector3.up * (height + HopOffset));
         rb.MoveRotation(Lane.Frame(u));
+    }
+
+    private bool OutsidePatrolLimits(float direction)
+    {
+        if (!usePatrolLimits)
+        {
+            return false;
+        }
+        return direction > 0f ? u >= startU + patrolLimits.y : u <= startU + patrolLimits.x;
     }
 
     // Kommt hinter der Kante (innerhalb von maxFlapGap) wieder Boden? landing = Abstand der vorderen Körperkante bis dorthin

@@ -7,7 +7,9 @@ using UnityEngine;
 // das sieht man nicht). Menü: Tools > Jump and Run > City > Build Park Prefabs.
 //  - "Frisbee Players": zwei Leute 8 m auseinander auf der Bahn (feste Hindernisse, man kann auf ihnen stehen, "HEY!"),
 //    dazwischen die Frisbee (Trigger mit KillZone), gesteuert von FrisbeePlayers
-//  - "Duck Family": weiße Entenmutter (GroundPatrol + EnemyDamage + Duck) und drei gelbe Küken (Duckling), die ihre Spur
+//  - "Frisbee Players Across": dieselben zwei, aber vor und hinter der Bahn; die Frisbee fliegt quer über den Weg
+//    (Timing wie bei den Autos, die Leute stehen nicht im Weg)
+//  - "Duck Family": weiße Entenmutter (GroundPatrol + EnemyDamage + Duck) und fünf gelbe Küken (Duckling), die ihre Spur
 //    mit Verzögerung nachlaufen. Wurzel 1 m über der Plattform-Mitte wie beim Hund
 //  - "Picnic Goal": Ziel von Level 3 ohne Haus: Picknickdecke mit Korb, der Kunde (Customer, sitzt) und eine Freundin
 //    (PicnicFriend). Level 3 setzt es statt des Goal-Prefabs mit Kundenhaus ein (Name bleibt "Goal")
@@ -19,7 +21,7 @@ public static class ParkSetup
     public const string PrefabFolder = "Assets/Prefabs/Park";
 
     private static Material figure, frisbeeRed, bubbleWhite, duckWhite, duckOrange, ducklingYellow, eyeBlack;
-    public static readonly float[] DucklingSpacing = { 0.7f, 1.4f, 2.1f };
+    public static readonly float[] DucklingSpacing = { 0.6f, 1.2f, 1.8f, 2.4f, 3.0f };
     public const float DuckPatrolSpeed = 2.5f;
 
     [MenuItem("Tools/Jump and Run/City/Build Park Prefabs")]
@@ -27,7 +29,8 @@ public static class ParkSetup
     {
         PrimitiveKit.EnsureFolder("Assets/Prefabs", "Park");
         CreateMaterials();
-        BuildFrisbeePlayers();
+        BuildFrisbeePlayers(false);
+        BuildFrisbeePlayers(true);
         BuildDuckFamily();
         BuildPicnicGoal();
         AssetDatabase.SaveAssets();
@@ -48,22 +51,38 @@ public static class ParkSetup
 
     // ---------- Frisbee ----------
 
-    private static void BuildFrisbeePlayers()
+    // across = false: beide auf der Bahn (lokal X), across = true: vor (Kameraseite, -Z) und hinter der Bahn (+Z)
+    private static void BuildFrisbeePlayers(bool across)
     {
-        var root = new GameObject("Frisbee Players");
+        var root = new GameObject(across ? "Frisbee Players Across" : "Frisbee Players");
         Transform t = root.transform;
-        const float apart = 4f;
-
-        // Beide schauen schräg zueinander und zur Kamera (die Figur schaut bei Drehung 0 nach -Z, zur Kamera).
-        // Geworfen wird mit dem Arm auf der Kameraseite: bei A der linke, bei B der rechte
-        Figure a = BuildFigure(t, "Player A", new Vector3(-apart, Surface, 0f), -45f);
-        Figure b = BuildFigure(t, "Player B", new Vector3(apart, Surface, 0f), 45f);
-        Hitbox(t, "Hitbox A", -apart);
-        Hitbox(t, "Hitbox B", apart);
+        Figure a, b;
+        Vector3 handA, handB;
+        if (across)
+        {
+            // A steht vorne und dreht der Kamera halb den Rücken zu (schaut zu B), B steht hinten und schaut zu A und zur Kamera
+            const float apart = 3.5f;
+            a = BuildFigure(t, "Player A", new Vector3(0.3f, Surface, -apart), 160f);
+            b = BuildFigure(t, "Player B", new Vector3(-0.3f, Surface, apart), 20f);
+            handA = new Vector3(0.2f, 1.7f, -apart + 0.5f);
+            handB = new Vector3(-0.2f, 1.7f, apart - 0.5f);
+        }
+        else
+        {
+            // Beide schauen schräg zueinander und zur Kamera (die Figur schaut bei Drehung 0 nach -Z, zur Kamera).
+            // Geworfen wird mit dem Arm auf der Kameraseite: bei A der linke, bei B der rechte
+            const float apart = 4f;
+            a = BuildFigure(t, "Player A", new Vector3(-apart, Surface, 0f), -45f);
+            b = BuildFigure(t, "Player B", new Vector3(apart, Surface, 0f), 45f);
+            Hitbox(t, "Hitbox A", -apart);
+            Hitbox(t, "Hitbox B", apart);
+            handA = new Vector3(-3.5f, 1.7f, 0f);
+            handB = new Vector3(3.5f, 1.7f, 0f);
+        }
 
         var frisbeeObject = new GameObject("Frisbee");
         frisbeeObject.transform.SetParent(t, false);
-        frisbeeObject.transform.localPosition = new Vector3(-3.5f, 1.7f, 0f);
+        frisbeeObject.transform.localPosition = handA;
         var body = frisbeeObject.AddComponent<Rigidbody>();
         body.isKinematic = true;
         body.useGravity = false;
@@ -78,8 +97,10 @@ public static class ParkSetup
 
         var serialized = new SerializedObject(root.AddComponent<FrisbeePlayers>());
         serialized.FindProperty("frisbee").objectReferenceValue = body;
+        serialized.FindProperty("handA").vector3Value = handA;
+        serialized.FindProperty("handB").vector3Value = handB;
         serialized.FindProperty("disc").objectReferenceValue = disc;
-        serialized.FindProperty("armA").objectReferenceValue = a.leftArm;
+        serialized.FindProperty("armA").objectReferenceValue = across ? a.rightArm : a.leftArm;
         serialized.FindProperty("armB").objectReferenceValue = b.rightArm;
         PrimitiveKit.SetReferences(serialized, "shirtRenderersA", a.body);
         PrimitiveKit.SetReferences(serialized, "shirtRenderersB", b.body);
@@ -87,7 +108,7 @@ public static class ParkSetup
         PrimitiveKit.SetReferences(serialized, "skinRenderersB", b.head, b.leftArmMesh, b.rightArmMesh);
         serialized.ApplyModifiedPropertiesWithoutUndo();
 
-        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Frisbee Players.prefab");
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/{root.name}.prefab");
     }
 
     // Fester Körper einer Person (Layer Ground: Man kann darauf stehen, Hunde/Enten drehen davor um), ungedreht,

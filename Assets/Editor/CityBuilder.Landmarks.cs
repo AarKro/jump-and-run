@@ -172,13 +172,11 @@ public static partial class CityBuilder
         }
     }
 
-    // Liegt der Punkt im Teich (um margin vergrößert) oder näher als margin an einem Bach?
+    // Liegt der Punkt in einem der Teiche (um margin vergrößert) oder näher als margin an einem Bach?
     private static bool NearPond(Vector2 point, float margin)
     {
-        Vector2 local = point - CityLayout.PondCenter;
-        float along = Vector2.Dot(local, CityLayout.ParkDirSW) / (CityLayout.PondHalfLength + margin);
-        float across = Vector2.Dot(local, CityLayout.ParkNormalNW) / (CityLayout.PondHalfWidth + margin);
-        if (along * along + across * across < 1f)
+        if (InOval(point, CityLayout.PondCenter, CityLayout.PondHalfLength + margin, CityLayout.PondHalfWidth + margin) ||
+            InOval(point, CityLayout.SmallPondCenter, CityLayout.SmallPondHalfLength + margin, CityLayout.SmallPondHalfWidth + margin))
         {
             return true;
         }
@@ -188,12 +186,20 @@ public static partial class CityBuilder
             Vector2 fromCrossing = point - crossing;
             float alongStream = Vector2.Dot(fromCrossing, CityLayout.ParkNormalNW);
             float sideways = Mathf.Abs(Vector2.Dot(fromCrossing, CityLayout.ParkDirSW));
-            if (alongStream > -CityLayout.ParkStreamSpring - margin && alongStream < CityLayout.PondOffPath && sideways < CityLayout.ParkStreamWidth / 2f + margin)
+            if (alongStream > -CityLayout.SmallPondOffPath - margin && alongStream < CityLayout.PondOffPath && sideways < CityLayout.ParkStreamWidth / 2f + margin)
             {
                 return true;
             }
         }
         return false;
+    }
+
+    private static bool InOval(Vector2 point, Vector2 center, float a, float b)
+    {
+        Vector2 local = point - center;
+        float along = Vector2.Dot(local, CityLayout.ParkDirSW) / a;
+        float across = Vector2.Dot(local, CityLayout.ParkNormalNW) / b;
+        return along * along + across * across < 1f;
     }
 
     // Holzbrücke über einen Bach, quer zum Bach entlang des Wegs (Richtung dir). Level 3 schneidet sie aus (CityCutout
@@ -216,76 +222,35 @@ public static partial class CityBuilder
         }
     }
 
-    // Ententeich (Oval) mit Steinrand, Schilf, Seerosen und einem kleinen Steg, dazu die zwei Bäche von ihrer Quelle bis
-    // in den Teich (mit Steinkanten). Wasser etwas über dem Rasen, damit nichts flackert
+    // Ententeich (Oval) mit Steinrand, Schilf, Seerosen und einem kleinen Steg, auf der anderen Seite des Wegs ein kleiner
+    // Teich, dazwischen die zwei Bäche (mit Steinkanten). Wasser etwas über dem Rasen, damit nichts flackert
     private static void BuildPond(Transform parent, System.Random random)
     {
         Material water = Mat("Fountain Water", new Color(0.3f, 0.6f, 0.85f), 0.9f);
         Material stone = Mat("Pond Stone", new Color(0.62f, 0.6f, 0.56f));
-        Material reed = Mat("Reed", new Color(0.33f, 0.5f, 0.2f));
-        Material cattail = Mat("Cattail", new Color(0.4f, 0.26f, 0.14f));
-        Material lily = Mat("Lily Pad", new Color(0.25f, 0.55f, 0.22f));
         Material wood = Mat("Bridge Wood", new Color(0.55f, 0.38f, 0.22f));
-        Transform pond = new GameObject("Duck Pond").transform;
-        pond.SetParent(parent, false);
-        Vector2 c = CityLayout.PondCenter;
-        Vector2 dir = CityLayout.ParkDirSW;
         Vector2 normal = CityLayout.ParkNormalNW;
-        pond.position = new Vector3(c.x, 0f, c.y);
-        // Lokal X = entlang des Wegs, lokal Z = nach Nordwesten (vom Weg weg)
-        pond.rotation = Quaternion.LookRotation(new Vector3(normal.x, 0f, normal.y), Vector3.up);
+        float waterTop = CityLayout.ParkLawnTop + 0.04f;
         float a = CityLayout.PondHalfLength, b = CityLayout.PondHalfWidth;
 
-        // Lokal X muss entlang dir zeigen: LookRotation(normal) dreht lokal X nach Kreuz(up, normal). Falls das gegen dir
-        // zeigt, ist nur die Reihenfolge der Achsen anders herum, das Oval ist symmetrisch
-        PrimitiveKit.Part("Rim", PrimitiveType.Cylinder, pond, new Vector3(0f, (CityLayout.ParkLawnTop + 0.03f) / 2f, 0f),
-            new Vector3(a * 2f + 1f, (CityLayout.ParkLawnTop + 0.03f) / 2f, b * 2f + 1f), stone);
-        PrimitiveKit.Part("Water", PrimitiveType.Cylinder, pond, new Vector3(0f, (CityLayout.ParkLawnTop + 0.04f) / 2f, 0f),
-            new Vector3(a * 2f, (CityLayout.ParkLawnTop + 0.04f) / 2f, b * 2f), water);
-        float waterTop = CityLayout.ParkLawnTop + 0.04f;
-
-        // Schilf in Büscheln am Rand (nicht an den Bach-Mündungen auf der Wegseite)
-        for (int i = 0; i < 9; i++)
-        {
-            float angle = (i + 0.3f) * Mathf.PI * 2f / 9f;
-            Vector3 edge = new Vector3(Mathf.Cos(angle) * (a - 0.4f), waterTop, Mathf.Sin(angle) * (b - 0.4f));
-            if (edge.z < -b * 0.5f)
-            {
-                continue;
-            }
-            for (int r = 0; r < 6; r++)
-            {
-                float height = 0.6f + (float)random.NextDouble() * 0.6f;
-                Vector3 offset = new Vector3((float)random.NextDouble() - 0.5f, 0f, (float)random.NextDouble() - 0.5f) * 0.8f;
-                PrimitiveKit.Part("Reed", PrimitiveType.Cylinder, pond, edge + offset + Vector3.up * height / 2f, new Vector3(0.05f, height / 2f, 0.05f), reed);
-                if (r % 2 == 0)
-                {
-                    PrimitiveKit.Part("Cattail", PrimitiveType.Capsule, pond, edge + offset + Vector3.up * (height + 0.05f), new Vector3(0.09f, 0.12f, 0.09f), cattail);
-                }
-            }
-        }
-        // Seerosenblätter
-        for (int i = 0; i < 10; i++)
-        {
-            var spot = new Vector3(((float)random.NextDouble() * 2f - 1f) * a * 0.7f, waterTop + 0.01f, ((float)random.NextDouble() * 2f - 1f) * b * 0.6f);
-            PrimitiveKit.Part("Lily Pad", PrimitiveType.Cylinder, pond, spot, new Vector3(0.7f, 0.01f, 0.7f), lily);
-        }
+        // Großer Teich nordwestlich des Wegs: Weg-Seite ist dort lokal -Z
+        Transform pond = PondBasin(parent, "Duck Pond", CityLayout.PondCenter, a, b, 9, 10, -1f, random);
         // Holzsteg vom Nordufer ins Wasser
         PrimitiveKit.Box("Jetty", pond, new Vector3(a * 0.3f, waterTop + 0.15f, b - 1.5f), new Vector3(1.4f, 0.1f, 4f), wood);
         foreach (float x in new[] { -0.6f, 0.6f })
         {
             PrimitiveKit.Box("Jetty Post", pond, new Vector3(a * 0.3f + x, waterTop - 0.1f, b - 3.3f), new Vector3(0.12f, 0.6f, 0.12f), wood);
         }
+        // Kleiner Teich südöstlich des Wegs (Kameraseite von Level 3): Weg-Seite ist lokal +Z
+        PondBasin(parent, "Small Pond", CityLayout.SmallPondCenter, CityLayout.SmallPondHalfLength, CityLayout.SmallPondHalfWidth, 5, 4, 1f, random);
 
-        // Bäche: von der Quelle südöstlich des Wegs quer über den Weg bis in den Teich
+        // Bäche: vom kleinen Teich quer über den Weg in den großen. Start und Ende jeweils ein Stück im Teichwasser
         foreach (float s in CityLayout.ParkStreamsAlongPath)
         {
             Vector2 crossing = CityLayout.ParkPathSW(s);
-            // Wo trifft der Bach (entlang normal) auf das Oval? Ab hier liegt er unter dem Teichwasser
-            float along = s - CityLayout.PondAlongPath;
-            float inside = b * Mathf.Sqrt(Mathf.Max(0f, 1f - along * along / (a * a)));
-            float end = CityLayout.PondOffPath - inside + 0.5f;
-            float start = -CityLayout.ParkStreamSpring;
+            float end = CityLayout.PondOffPath - OvalHalfWidthAt(s - CityLayout.PondAlongPath, a, b) + 0.5f;
+            float start = -CityLayout.SmallPondOffPath + OvalHalfWidthAt(s - CityLayout.SmallPondAlongPath,
+                CityLayout.SmallPondHalfLength, CityLayout.SmallPondHalfWidth) - 0.5f;
             // Lokal Z = entlang des Bachs (0 = Kreuzung mit dem Weg), lokal X = entlang des Wegs
             Transform stream = new GameObject("Stream").transform;
             stream.SetParent(parent, false);
@@ -304,13 +269,60 @@ public static partial class CityBuilder
                     PrimitiveKit.Box("Bank", stream, new Vector3(x, CityLayout.ParkLawnTop + 0.03f, middle), new Vector3(0.2f, 0.08f, to - from), stone);
                 }
             }
-            // Quelle: ein paar Steine am oberen Ende
-            for (int r = 0; r < 4; r++)
+        }
+    }
+
+    // Halbe Breite eines Ovals (Halbachsen a entlang, b quer) im Abstand "along" von seiner Mitte
+    private static float OvalHalfWidthAt(float along, float a, float b) => b * Mathf.Sqrt(Mathf.Max(0f, 1f - along * along / (a * a)));
+
+    // Ovaler Teich: Steinrand, Wasser, Schilf-Büschel am Rand (nicht auf der Seite zum Weg, pathSide = Vorzeichen von
+    // lokal Z dorthin), Seerosenblätter. Lokal X = entlang des Wegs, lokal Z = nach Nordwesten
+    private static Transform PondBasin(Transform parent, string name, Vector2 center, float a, float b, int reedClusters, int lilies,
+        float pathSide, System.Random random)
+    {
+        Material water = Mat("Fountain Water", new Color(0.3f, 0.6f, 0.85f), 0.9f);
+        Material stone = Mat("Pond Stone", new Color(0.62f, 0.6f, 0.56f));
+        Material reed = Mat("Reed", new Color(0.33f, 0.5f, 0.2f));
+        Material cattail = Mat("Cattail", new Color(0.4f, 0.26f, 0.14f));
+        Material lily = Mat("Lily Pad", new Color(0.25f, 0.55f, 0.22f));
+        Vector2 normal = CityLayout.ParkNormalNW;
+        Transform pond = new GameObject(name).transform;
+        pond.SetParent(parent, false);
+        pond.position = new Vector3(center.x, 0f, center.y);
+        // LookRotation(normal) dreht lokal X nach Kreuz(up, normal), also entlang des Wegs (das Oval ist symmetrisch)
+        pond.rotation = Quaternion.LookRotation(new Vector3(normal.x, 0f, normal.y), Vector3.up);
+
+        PrimitiveKit.Part("Rim", PrimitiveType.Cylinder, pond, new Vector3(0f, (CityLayout.ParkLawnTop + 0.03f) / 2f, 0f),
+            new Vector3(a * 2f + 1f, (CityLayout.ParkLawnTop + 0.03f) / 2f, b * 2f + 1f), stone);
+        PrimitiveKit.Part("Water", PrimitiveType.Cylinder, pond, new Vector3(0f, (CityLayout.ParkLawnTop + 0.04f) / 2f, 0f),
+            new Vector3(a * 2f, (CityLayout.ParkLawnTop + 0.04f) / 2f, b * 2f), water);
+        float waterTop = CityLayout.ParkLawnTop + 0.04f;
+
+        for (int i = 0; i < reedClusters; i++)
+        {
+            float angle = (i + 0.3f) * Mathf.PI * 2f / reedClusters;
+            Vector3 edge = new Vector3(Mathf.Cos(angle) * (a - 0.4f), waterTop, Mathf.Sin(angle) * (b - 0.4f));
+            if (edge.z * pathSide > b * 0.5f)
             {
-                Vector3 at = new Vector3(((float)random.NextDouble() - 0.5f) * width, CityLayout.ParkLawnTop + 0.1f, start - 0.3f);
-                PrimitiveKit.Part("Spring Rock", PrimitiveType.Sphere, stream, at, new Vector3(0.7f, 0.4f, 0.6f), stone);
+                continue;
+            }
+            for (int r = 0; r < 6; r++)
+            {
+                float height = 0.6f + (float)random.NextDouble() * 0.6f;
+                Vector3 offset = new Vector3((float)random.NextDouble() - 0.5f, 0f, (float)random.NextDouble() - 0.5f) * 0.8f;
+                PrimitiveKit.Part("Reed", PrimitiveType.Cylinder, pond, edge + offset + Vector3.up * height / 2f, new Vector3(0.05f, height / 2f, 0.05f), reed);
+                if (r % 2 == 0)
+                {
+                    PrimitiveKit.Part("Cattail", PrimitiveType.Capsule, pond, edge + offset + Vector3.up * (height + 0.05f), new Vector3(0.09f, 0.12f, 0.09f), cattail);
+                }
             }
         }
+        for (int i = 0; i < lilies; i++)
+        {
+            var spot = new Vector3(((float)random.NextDouble() * 2f - 1f) * a * 0.7f, waterTop + 0.01f, ((float)random.NextDouble() * 2f - 1f) * b * 0.6f);
+            PrimitiveKit.Part("Lily Pad", PrimitiveType.Cylinder, pond, spot, new Vector3(0.7f, 0.01f, 0.7f), lily);
+        }
+        return pond;
     }
 
     // Parkschild "PESTO PARK" am Eingang beim Founder's Circle, neben dem Weg, Schrift zur Kamera von Level 3

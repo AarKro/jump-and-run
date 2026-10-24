@@ -484,14 +484,16 @@ public static class Level3Builder
     }
 
     // ---------- Park (Laufrichtung = -u) ----------
-    // Diagonalweg (Bahn-Stück 4): zwei Frisbee-Paare, das zweite mit versetztem Takt, darüber Chili 3 (nur vom Kopf
-    // eines Spielers erreichbar). Brunnenring (Stück 2): Hund zwischen zwei Bänken
+    // Diagonalweg (Bahn-Stück 4): drei Frisbee-Paare (das mittlere wirft quer über den Weg), über dem letzten Chili 3 (nur
+    // vom Kopf eines Spielers erreichbar). Brunnenring (Stück 2): Hund zwischen zwei Bänken. Südwest-Weg: Entenfamilie
     private static void BuildParkGameplay()
     {
         float diagonalStart = pieceStartU[5];   // am Founder's Circle (dort kommt der Spieler her)
-        Frisbee(Mathf.Round(diagonalStart - 12f), 0f);
+        Frisbee(Mathf.Round(diagonalStart - 12f), 0f, false);
+        // Dazwischen ein Paar quer zum Weg: die Frisbee kreuzt die Bahn, Timing wie bei den Autos
+        Frisbee(Mathf.Round(diagonalStart - 23f), 0.4f, true);
         float secondPair = Mathf.Round(diagonalStart - 34f);
-        Frisbee(secondPair, 0.85f);
+        Frisbee(secondPair, 0.85f, false);
         LevelBuildKit.HeatPickup(secondPair, 6, gameplayParent);
 
         float ringStart = pieceStartU[2], ringEnd = pieceStartU[3];
@@ -504,23 +506,23 @@ public static class Level3Builder
         dogSettings.ApplyModifiedPropertiesWithoutUndo();
         LevelBuildKit.Place("Bench", Mathf.Round(ringStart + 3.5f), 0, gameplayParent);
 
-        // Südwest-Weg (Abstand s vom Brunnen): zwei Entenfamilien, jede patrouilliert zwischen zwei Bänken über einen Bach
-        // (flattert drüber) und schaut am Anfang dem ankommenden Spieler entgegen (+u). Danach das Picknick
-        LevelBuildKit.Place("Bench", Mathf.Round(ParkU(22f)), 0, gameplayParent);
-        DuckFamily(29.5f, 1f);
-        LevelBuildKit.Place("Bench", Mathf.Round(ParkU(33f)), 0, gameplayParent);
-        DuckFamily(40f, 1f);
-        LevelBuildKit.Place("Bench", Mathf.Round(ParkU(44f)), 0, gameplayParent);
+        // Südwest-Weg (Abstand s vom Brunnen): eine Entenfamilie mit fünf Küken, startet zwischen den Bächen und schaut
+        // dem ankommenden Spieler entgegen (+u). Sie patrouilliert ohne Hindernisse in einem festen Bereich von kurz nach
+        // dem Brunnenring (s 20) bis kurz vor das Picknick (s 44) und flattert dabei über beide Bäche
+        DuckFamily(31f, 1f, 20f, 44f);
     }
 
     // Entenfamilie: Mutter bei s, Küken dahinter auf der Spur, die sie beim Start vorbelegt (Duck.ResetTrail).
     // Dort stehen sie auch im Editor, damit EnemyDamage dieselbe Startposition kennt
-    private static void DuckFamily(float s, float startDirection)
+    // Patrouillen-Bereich von nearS (zum Brunnen hin, größeres u) bis farS (zum Picknick hin)
+    private static void DuckFamily(float s, float startDirection, float nearS, float farS)
     {
         float u = Mathf.Round(ParkU(s));
         GameObject family = LevelBuildKit.PlaceAsset($"{ParkSetup.PrefabFolder}/Duck Family.prefab", u, 1, gameplayParent);
         var patrol = new SerializedObject(family.GetComponentInChildren<GroundPatrol>());
         patrol.FindProperty("startDirection").floatValue = startDirection;
+        patrol.FindProperty("usePatrolLimits").boolValue = true;
+        patrol.FindProperty("patrolLimits").vector2Value = new Vector2(ParkU(farS) - u, ParkU(nearS) - u);
         patrol.ApplyModifiedPropertiesWithoutUndo();
         Duckling[] ducklings = family.GetComponentsInChildren<Duckling>();
         for (int i = 0; i < ducklings.Length; i++)
@@ -529,9 +531,10 @@ public static class Level3Builder
         }
     }
 
-    private static void Frisbee(float u, float startOffset)
+    private static void Frisbee(float u, float startOffset, bool across)
     {
-        GameObject pair = LevelBuildKit.PlaceAsset($"{ParkSetup.PrefabFolder}/Frisbee Players.prefab", u, 0, gameplayParent);
+        string prefab = across ? "Frisbee Players Across" : "Frisbee Players";
+        GameObject pair = LevelBuildKit.PlaceAsset($"{ParkSetup.PrefabFolder}/{prefab}.prefab", u, 0, gameplayParent);
         var serialized = new SerializedObject(pair.GetComponent<FrisbeePlayers>());
         serialized.FindProperty("startOffset").floatValue = startOffset;
         serialized.ApplyModifiedPropertiesWithoutUndo();
