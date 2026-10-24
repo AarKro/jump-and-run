@@ -3,6 +3,8 @@ using UnityEngine;
 // Bodengegner (z.B. der Hund): läuft hin und her und dreht an Kanten und Wänden um, ganz ohne Wegpunkte.
 // Sieht den Spieler nur in Blickrichtung (Reichweite + Höhe + freie Sichtlinie) und verfolgt ihn dann,
 // bis er ihn eine Weile nicht mehr sieht. Fällt nie von einer Kante: Beim Verfolgen bleibt er dort stehen.
+// Umdrehen dauert: erst abbremsen, dann im Stand umdrehen (Optik dreht sich über die Kamera-Seite), dann wieder
+// beschleunigen. Wer über den Hund springt, hat so einen Moment Vorsprung.
 // Bewegt wird ein kinematischer Rigidbody entlang der Laufbahn (Lane, Koordinate u). Die Höhe bleibt, wie sie im
 // Level gesetzt ist. Ohne LanePath in der Szene ist die Bahn die X-Achse (altes Verhalten).
 [RequireComponent(typeof(Rigidbody))]
@@ -15,6 +17,13 @@ public class GroundPatrol : MonoBehaviour
     [SerializeField] private float startDirection = 1f;
     [Tooltip("Näher als das läuft er beim Verfolgen nicht mehr weiter (verhindert Zittern direkt unter dem Spieler)")]
     [SerializeField] private float stoppingDistance = 0.3f;
+    [Tooltip("Beschleunigung in m/s². 20 = von 0 auf Verfolgungstempo (5 m/s) in 0.25 s")]
+    [SerializeField] private float acceleration = 20f;
+    [Tooltip("Bremsen in m/s². 25 = aus Verfolgungstempo in 0.2 s zum Stehen")]
+    [SerializeField] private float deceleration = 25f;
+    [Tooltip("So lange dauert das Umdrehen im Stand. Mit dem Abbremsen davor ~0.5 s: Zeit, nach einem Sprung " +
+             "über den Hund wegzulaufen, bevor er hinterherkommt")]
+    [SerializeField] private float turnDuration = 0.3f;
 
     [Header("Boden und Wände")]
     [SerializeField] private LayerMask groundLayer = 1 << 3;
@@ -47,6 +56,11 @@ public class GroundPatrol : MonoBehaviour
     private Transform player;
     private Vector3 startPosition;
     private Vector3 flipStartScale;
+    private Quaternion flipStartRotation;
+    // Aktuelles Tempo in Blickrichtung (nie negativ: rückwärts läuft er nicht, er dreht sich erst um)
+    private float speed;
+    // >= 0 = dreht sich gerade um (Sekunden seit Beginn), sonst -1
+    private float turnTimer = -1f;
     private float lostSightTimer;
     // Position entlang der Bahn und feste Höhe
     private float u;
@@ -62,6 +76,7 @@ public class GroundPatrol : MonoBehaviour
             flipTarget = transform;
         }
         flipStartScale = flipTarget.localScale;
+        flipStartRotation = flipTarget.localRotation;
         startPosition = transform.position;
         startU = Lane.Project(startPosition);
         u = startU;
@@ -92,6 +107,9 @@ public class GroundPatrol : MonoBehaviour
         IsChasing = false;
         HoldPosition = false;
         lostSightTimer = 0f;
+        speed = 0f;
+        turnTimer = -1f;
+        flipTarget.localRotation = flipStartRotation;
         SetFacing(startDirection >= 0f ? 1f : -1f);
     }
 
@@ -99,43 +117,100 @@ public class GroundPatrol : MonoBehaviour
     {
         UpdateSight();
 
-        if (HoldPosition)
+        if (turnTimer >= 0f)
         {
-            if (IsChasing)
+            turnTimer += Time.fixedDeltaTime;
+            if (turnTimer >= turnDuration)
             {
-                FacePlayer();
+                turnTimer = -1f;
+                SetFacing(-FacingDirection);
             }
             return;
         }
 
-        float direction = FacingDirection;
-        float speed = patrolSpeed;
+        // Wohin will er und wie schnell? Patrouille: weiter in Blickrichtung. Verfolgen: zum Spieler,
+        // direkt unter ihm stehen bleiben. Beim Bellen (HoldPosition) steht er, schaut aber zum Spieler
+        float wanted = FacingDirection;
+        float targetSpeed = patrolSpeed;
         if (IsChasing)
         {
-            speed = chaseSpeed;
+            targetSpeed = chaseSpeed;
             float du = Lane.Project(player.position) - u;
             if (Mathf.Abs(du) <= stoppingDistance)
             {
-                return;
+                targetSpeed = 0f;
             }
-            direction = Mathf.Sign(du);
-            SetFacing(direction);
+            else
+            {
+                wanted = Mathf.Sign(du);
+            }
+        }
+        if (HoldPosition)
+        {
+            speed = 0f;
+            targetSpeed = 0f;
         }
 
-        if (!HasGroundAhead(direction) || HasWallAhead(direction))
+        if (wanted != FacingDirection)
         {
-            // Beim Patrouillieren umdrehen. Beim Verfolgen an der Kante stehen bleiben und weiter zum Spieler schauen
+            // Spieler ist hinter ihm (z.B. drübergesprungen): erst abbremsen, im Stand umdrehen
+            speed = Mathf.MoveTowards(speed, 0f, deceleration * Time.fixedDeltaTime);
+            if (speed <= 0f)
+            {
+                StartTurn();
+                return;
+            }
+        }
+        else
+        {
+            float rate = targetSpeed > speed ? acceleration : deceleration;
+            speed = Mathf.MoveTowards(speed, targetSpeed, rate * Time.fixedDeltaTime);
+        }
+        if (speed <= 0f)
+        {
+            return;
+        }
+
+        if (!HasGroundAhead(FacingDirection) || HasWallAhead(FacingDirection))
+        {
+            // Sofort stehen (sonst rutscht er über die Kante). Beim Patrouillieren umdrehen,
+            // beim Verfolgen an der Kante stehen bleiben (umdrehen nur, wenn der Spieler hinter ihm ist)
+            speed = 0f;
             if (!IsChasing)
             {
-                SetFacing(-direction);
+                StartTurn();
             }
             return;
         }
 
         // Entlang der Bahn weiter, auch durch Kurven: neue Stelle u ausrechnen, Position und Drehung daraus
-        u += direction * speed * Time.fixedDeltaTime;
+        u += FacingDirection * speed * Time.fixedDeltaTime;
         rb.MovePosition(Lane.Point(u) + Vector3.up * height);
         rb.MoveRotation(Lane.Frame(u));
+    }
+
+    private void StartTurn()
+    {
+        speed = 0f;
+        turnTimer = 0f;
+    }
+
+    // Die Dreh-Optik läuft in Update statt in FixedUpdate: Physik tickt nur 50-mal pro Sekunde, gerendert wird öfter.
+    // Den Winkel nur pro Physik-Schritt zu setzen, sähe ruckelig aus. Darum wird die Zeit seit dem letzten
+    // Physik-Schritt (Time.time - Time.fixedTime) dazugerechnet, so dreht er in jedem Frame ein Stück weiter.
+    private void Update()
+    {
+        if (turnTimer < 0f)
+        {
+            return;
+        }
+
+        float t = Mathf.Clamp01((turnTimer + (Time.time - Time.fixedTime)) / turnDuration);
+        // Über die Kamera-Seite drehen: Die Optik schaut nach lokal +X (gespiegelt -X). +90° um Y dreht +X zur Kamera (-Z),
+        // für die gespiegelte Optik braucht es -90°. Nach 180° sieht er genauso aus wie gespiegelt ohne Drehung
+        // (der Hund ist links/rechts symmetrisch), darum übernimmt am Ende SetFacing ohne sichtbaren Sprung
+        float angle = Mathf.SmoothStep(0f, 180f, t) * FacingDirection;
+        flipTarget.localRotation = flipStartRotation * Quaternion.Euler(0f, angle, 0f);
     }
 
     private void UpdateSight()
@@ -179,6 +254,11 @@ public class GroundPatrol : MonoBehaviour
         {
             return false;
         }
+        // Mitten im Umdrehen entdeckt er niemanden (er würde sonst fertig vom Spieler wegdrehen und gleich zurück)
+        if (requireFacing && turnTimer >= 0f)
+        {
+            return false;
+        }
 
         // Sichtlinie: Liegt eine Plattform oder Wand dazwischen, sieht er nichts
         Vector3 eye = rb.position + Vector3.up * 0.2f;
@@ -203,18 +283,10 @@ public class GroundPatrol : MonoBehaviour
         return Physics.Raycast(origin, Lane.Tangent(u) * direction, HalfLength + 0.05f, groundLayer, QueryTriggerInteraction.Ignore);
     }
 
-    private void FacePlayer()
-    {
-        float du = Lane.Project(player.position) - u;
-        if (Mathf.Abs(du) > 0.05f)
-        {
-            SetFacing(Mathf.Sign(du));
-        }
-    }
-
     private void SetFacing(float direction)
     {
         FacingDirection = direction;
+        flipTarget.localRotation = flipStartRotation;
         Vector3 scale = flipStartScale;
         scale.x = Mathf.Abs(flipStartScale.x) * direction;
         flipTarget.localScale = scale;
