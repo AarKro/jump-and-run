@@ -30,7 +30,8 @@ public class PizzaHud : MonoBehaviour
     [Header("Trinkgeld-Stufen am Balken")]
     [Tooltip("Münzgruppen unter den Balken-Dritteln, von links: 1, 2, 3 Münzen")]
     [SerializeField] private RectTransform[] tipGroups;
-    [SerializeField] private Color tipLostColor = new Color(0.35f, 0.35f, 0.35f, 0.7f);
+    [Tooltip("Verlorene Stufe: grau, aber auf der dunklen Platte noch erkennbar")]
+    [SerializeField] private Color tipLostColor = new Color(0.45f, 0.45f, 0.45f, 0.9f);
 
     [Header("Chili-Flug")]
     [Tooltip("Ausgeschaltete Vorlage: fliegt von der Chili zum Ende der Füllung")]
@@ -78,13 +79,6 @@ public class PizzaHud : MonoBehaviour
         GameManager.PizzaCold += ShowCold;
         HeatPickup.Collected += OnChiliCollected;
 
-        tipCoins = new Image[tipGroups.Length][];
-        tipGroupPositions = new Vector2[tipGroups.Length];
-        for (int i = 0; i < tipGroups.Length; i++)
-        {
-            tipCoins[i] = tipGroups[i].GetComponentsInChildren<Image>(true);
-            tipGroupPositions[i] = tipGroups[i].anchoredPosition;
-        }
         if (heatHint != null)
         {
             heatHint.alpha = 0f;
@@ -201,6 +195,18 @@ public class PizzaHud : MonoBehaviour
     // wird sie grau und wackelt ("dieses Trinkgeld ist weg"), kommt sie zurück (Chili), ploppt sie wieder auf
     private void UpdateTipTier(float heat)
     {
+        // Erst bei Bedarf anlegen statt in Awake: Kompiliert Unity im Play Mode neu, sind nicht serialisierte Felder
+        // wieder leer, ohne dass Awake nochmal läuft
+        if (tipCoins == null)
+        {
+            tipCoins = new Image[tipGroups.Length][];
+            tipGroupPositions = new Vector2[tipGroups.Length];
+            for (int i = 0; i < tipGroups.Length; i++)
+            {
+                tipCoins[i] = tipGroups[i].GetComponentsInChildren<Image>(true);
+                tipGroupPositions[i] = tipGroups[i].anchoredPosition;
+            }
+        }
         int tier = GameManager.CoinsForHeat(heat);
         if (tier == shownTier)
         {

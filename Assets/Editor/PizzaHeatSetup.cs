@@ -143,8 +143,20 @@ public static class PizzaHeatSetup
 
     private static void BuildHeatBar(Transform parent, SerializedObject hud)
     {
+        // Dunkle Platte hinter Pizza-Symbol, Balken und Münzen: lesbar vor jeder Fassade (Kontrast).
+        // Als Erstes erzeugt, liegt sie hinter allem anderen. Reicht von x -400 bis 335, y -24 bis -122
+        Plate("Heat Plate", parent, new Vector2(0.5f, 1f), new Vector2(-32.5f, -73f), new Vector2(735f, 98f));
+
         // Oben mittig verankert, Pivot an der Oberkante: y = -40 heißt 40 px unter dem Bildschirmrand
-        RectTransform bar = CreateImage("Heat Bar", parent, new Color(0.08f, 0.06f, 0.06f, 0.85f));
+        // Heller Rahmen hinter dem Balken (2 px größer), damit er sich von der dunklen Platte abhebt.
+        // Kein Outline-Effekt: der zeichnet Kopien des Bildes, die durch einen halbtransparenten Balken durchscheinen
+        RectTransform frame = CreateImage("Heat Bar Frame", parent, new Color(1f, 1f, 1f, 0.6f));
+        frame.anchorMin = frame.anchorMax = new Vector2(0.5f, 1f);
+        frame.pivot = new Vector2(0.5f, 1f);
+        frame.sizeDelta = new Vector2(644f, 40f);
+        frame.anchoredPosition = new Vector2(0f, -38f);
+
+        RectTransform bar = CreateImage("Heat Bar", parent, new Color(0.08f, 0.06f, 0.06f, 1f));
         bar.anchorMin = bar.anchorMax = new Vector2(0.5f, 1f);
         bar.pivot = new Vector2(0.5f, 1f);
         bar.sizeDelta = new Vector2(640f, 36f);
@@ -221,13 +233,13 @@ public static class PizzaHeatSetup
         {
             RectTransform group = CreateRect($"Tip {i + 1}", parent);
             group.anchorMin = group.anchorMax = new Vector2(0.5f, 1f);
-            group.sizeDelta = new Vector2(90f, 26f);
+            group.sizeDelta = new Vector2(96f, 30f);
             group.anchoredPosition = new Vector2((i - 1) * third, -98f);
             int count = i + 1;
             for (int c = 0; c < count; c++)
             {
                 // Münzen nebeneinander, die Gruppe mittig unter dem Drittel
-                Circle($"Coin {c + 1}", group, new Vector2((c - (count - 1) / 2f) * 22f, 0f), 22f, new Color(1f, 0.8f, 0.15f), circle);
+                Circle($"Coin {c + 1}", group, new Vector2((c - (count - 1) / 2f) * 31f, 0f), 28f, new Color(1f, 0.8f, 0.15f), circle);
             }
             groups.GetArrayElementAtIndex(i).objectReferenceValue = group;
         }
@@ -245,21 +257,39 @@ public static class PizzaHeatSetup
         hud.FindProperty("flameTemplate").objectReferenceValue = flame;
     }
 
-    // "Keep the pizza hot!" unter den Münzen, nur kurz zu Levelbeginn (PizzaHud blendet ein und aus)
+    // "Keep the pizza hot!" auf einer eigenen dunklen Pille unter der Wärme-Platte, nur kurz zu Levelbeginn (PizzaHud blendet ein und aus)
     private static void BuildHeatHint(Transform parent, SerializedObject hud)
     {
         var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
         RectTransform hint = CreateRect("Heat Hint", parent);
         hint.anchorMin = hint.anchorMax = new Vector2(0.5f, 1f);
         hint.sizeDelta = new Vector2(900f, 60f);
-        hint.anchoredPosition = new Vector2(0f, -150f);
+        hint.anchoredPosition = new Vector2(0f, -170f);
         var group = hint.gameObject.AddComponent<CanvasGroup>();
         group.alpha = 0f;
         group.interactable = false;
         group.blocksRaycasts = false;
+        Plate("Plate", hint, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(520f, 70f));
         TextMeshProUGUI text = CreateText("Text", hint, "Keep the pizza hot!", 46f, new Color(1f, 0.85f, 0.35f), Vector2.zero, outline);
         text.rectTransform.sizeDelta = new Vector2(900f, 60f);
         hud.FindProperty("heatHint").objectReferenceValue = group;
+    }
+
+    // Abgerundete dunkle Platte (eingebautes UI-Sprite, 9-Slice: die Ecken bleiben rund, egal wie groß).
+    // Fast deckendes Schwarz mit etwas Wärme, darauf haben Weiß, Gelb und Gold hohen Kontrast. 92%, weil das Projekt im
+    // Linear-Farbraum mischt: Dort wirkt eine halbtransparente dunkle Fläche vor hellen Fassaden viel heller (82% sah aus wie 50%)
+    private static RectTransform Plate(string name, Transform parent, Vector2 anchor, Vector2 position, Vector2 size)
+    {
+        RectTransform plate = CreateImage(name, parent, new Color(0.07f, 0.05f, 0.05f, 0.92f));
+        var image = plate.GetComponent<Image>();
+        image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
+        image.type = Image.Type.Sliced;
+        // Kleiner Multiplikator = größere Ecken
+        image.pixelsPerUnitMultiplier = 0.35f;
+        plate.anchorMin = plate.anchorMax = anchor;
+        plate.sizeDelta = size;
+        plate.anchoredPosition = position;
+        return plate;
     }
 
     private static void Circle(string name, Transform parent, Vector2 position, float size, Color color, Sprite sprite)
@@ -282,14 +312,17 @@ public static class PizzaHeatSetup
     private static void BuildDeliveredPanel(Transform parent, SerializedObject hud)
     {
         // Kompakt im oberen Drittel, ohne Abdunkeln: Die Bildmitte bleibt frei für den tanzenden Kunden.
-        // Oben mittig verankert, direkt unter dem Wärmebalken (der endet bei y = -76)
+        // Oben mittig verankert, direkt unter dem Wärmebalken
         RectTransform panel = CreateRect("Delivered Panel", parent);
         panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 1f);
         panel.pivot = new Vector2(0.5f, 1f);
         panel.sizeDelta = new Vector2(1400f, 400f);
-        panel.anchoredPosition = new Vector2(0f, -100f);
+        // Unter der Wärme-Platte (endet bei y -122)
+        panel.anchoredPosition = new Vector2(0f, -135f);
 
         var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
+        // Dunkle Karte hinter dem Inhalt (Titel bis Hinweis), kompakt: Die Szene mit dem tanzenden Kunden bleibt sichtbar
+        Plate("Card", panel, new Vector2(0.5f, 0.5f), new Vector2(0f, 28f), new Vector2(620f, 330f));
         // Positionen relativ zur Panel-Mitte (200 px unter der Panel-Oberkante)
         CreateText("Title", panel, "Delivered!", 84f, Color.white, new Vector2(0f, 130f), outline);
         CreateText("Tip Label", panel, "Tip", 32f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, 60f), outline);
@@ -316,8 +349,9 @@ public static class PizzaHeatSetup
 
     private static void BuildColdPanel(Transform parent, SerializedObject hud)
     {
-        RectTransform panel = CreateImage("Cold Panel", parent, new Color(0.1f, 0.2f, 0.4f, 0.45f));
+        RectTransform panel = CreateImage("Cold Panel", parent, new Color(0.05f, 0.12f, 0.28f, 0.6f));
         Stretch(panel, 0f);
+        Plate("Card", panel, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(860f, 200f));
 
         CreateText("Title", panel, "Pizza's cold!", 120f, new Color(0.75f, 0.9f, 1f), Vector2.zero);
 
@@ -339,6 +373,7 @@ public static class PizzaHeatSetup
         canvasGroup.interactable = false;
         canvasGroup.blocksRaycasts = false;
 
+        Plate("Plate", group, new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(1000f, 150f));
         CreateText("Label", group, "Deliver to", 38f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, 40f), outline);
         TextMeshProUGUI address = CreateText("Address", group, "No. 42, Pepperoni Parkway", 64f, new Color(1f, 0.85f, 0.35f), new Vector2(0f, -20f), outline);
 
