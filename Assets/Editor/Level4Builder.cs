@@ -381,44 +381,79 @@ public static class Level4Builder
     }
 
     // ---------- Zu Fuß: Margherita Avenue, Strandpromenade, Oregano Street bis zum Board-Shop ----------
-    //   x -27 … -23     Baugrube (wie Level 2)
-    //   x -46 … -34     Überweg Mozzarella Blvd (BuildGround), danach Strandpromenade mit einer Möwe
-    //   Oregano z 18    Container, z 26 Hund, z 34 Bank, z 42/46 Balkone (3 und 6 m) mit Chili 1, z 66 Board-Shop
+    // Bis zur Oregano-Ecke genau wie Level 2 (gleiche Positionen, gleiche Bausteine aus LevelBuildKit):
+    //   x -27 … -23     Baugrube
+    //   x -46 … -34     Überweg Mozzarella Blvd (BuildGround), danach Strandpromenade
+    //   x -60 … -56     Bachmündung
+    //   x -66 / -76 / -86  Container, Hund, Bank
+    //   x -92 / -96     Balkone (3 und 6 m), Chili 1 über dem oberen; zwei Möwen über dem Strand
+    // Oregano Street (zeigt schon, was das Skateboard kann):
+    //   z 18 / 26 / 34  Container, Hund, Bank
+    //   z 42, z 55      Kinder auf Skateboards (wie der Rollschuhfahrer in Level 3: seitlich = Respawn, von oben abfedern)
+    //   z 38 … 52       Skate-Spot hinter der Bahn (leeres Grundstück: Quarterpipe, Rail, Kinder machen Tricks)
+    //   z 12, z 57      Plakate "Ollie's Board Shop" mit Pfeil, z 66 der Board-Shop
     private const float MargheritaPitFrom = -26.75f, MargheritaPitTo = -23.25f;
+    private static readonly (float z, float range, float speed, float direction)[] SkaterKids = { (42f, 3f, 3.5f, 1f), (55f, 3.5f, 4.2f, -1f) };
+    private const float SkateSpotZ = 45f;
+    private static readonly float[] PosterZ = { 12f, 57f };
 
     private static void BuildOnFoot()
     {
         Transform foot = new GameObject("On Foot").transform;
         foot.SetParent(gameplayParent, false);
-        MargheritaPit(MargheritaPitFrom, MargheritaPitTo);
+        Transform link = GameObject.Find("City Link").transform;
 
-        // Eine Möwe über dem Strand-Stück bis zur Oregano-Ecke
-        GameObject gull = LevelBuildKit.PlaceAsset("Assets/Prefabs/Seagull.prefab", -75, 10, foot);
-        var gullSettings = new SerializedObject(gull.GetComponent<Seagull>());
-        gullSettings.FindProperty("territoryFrom").floatValue = -98f;
-        gullSettings.FindProperty("territoryTo").floatValue = -46f;
-        gullSettings.FindProperty("firstDelay").floatValue = 2f;
-        gullSettings.FindProperty("cooldown").floatValue = 5f;
-        gullSettings.ApplyModifiedPropertiesWithoutUndo();
+        // Wie Level 2
+        LevelBuildKit.RingPit(link, MargheritaPitFrom, MargheritaPitTo, groundParent);
+        PitKill(MargheritaPitFrom, MargheritaPitTo, -12f, 3f);
+        LevelBuildKit.BeachCreek(link, -59.75f, -56.25f, groundParent);
+        LevelBuildKit.Place("Dumpster", -66, 0, foot);
+        LevelBuildKit.BeachDog(-76, foot);
+        LevelBuildKit.Place("Bench", -86, 0, foot);
+        LevelBuildKit.Place("Balcony", -92, 3, foot);
+        LevelBuildKit.Place("Balcony", -96, 6, foot);
+        LevelBuildKit.HeatPickup(-96, 8, foot);
+        // Zwei Möwen zeitversetzt über dem Strand-Stück bis zur Oregano-Ecke
+        LevelBuildKit.Seagull(-80, 2f, -98f, -45f, foot);
+        LevelBuildKit.Seagull(-95, 4.5f, -98f, -45f, foot);
 
-        // Oregano Street: Hund zwischen Container und Bank (schaut dem Spieler entgegen, +u), Balkone mit Chili 1
+        // Oregano Street
         LevelBuildKit.Place("Dumpster", Mathf.Round(OreganoU(18f)), 0, foot);
         StreetDog(OreganoU(26f), foot);
         LevelBuildKit.Place("Bench", Mathf.Round(OreganoU(34f)), 0, foot);
-        LevelBuildKit.Place("Balcony", Mathf.Round(OreganoU(42f)), 3, foot);
-        LevelBuildKit.Place("Balcony", Mathf.Round(OreganoU(46f)), 6, foot);
-        LevelBuildKit.HeatPickup(Mathf.Round(OreganoU(46f)), 8, foot);
+        foreach (var kid in SkaterKids)
+        {
+            GameObject skater = LevelBuildKit.PlaceAsset($"{MarketSetup.PrefabFolder}/Skater Kid.prefab", Mathf.Round(OreganoU(kid.z)), 1, foot);
+            var patrol = new SerializedObject(skater.GetComponent<GroundPatrol>());
+            patrol.FindProperty("startDirection").floatValue = kid.direction;
+            patrol.FindProperty("patrolLimits").vector2Value = new Vector2(-kid.range, kid.range);
+            patrol.FindProperty("patrolSpeed").floatValue = kid.speed;
+            patrol.FindProperty("chaseSpeed").floatValue = kid.speed;
+            patrol.ApplyModifiedPropertiesWithoutUndo();
+        }
+        // Skate-Spot: die Häuser auf dem Grundstück verschwinden (Cutout), der Spot bringt seinen eigenen Boden mit
+        LevelBuildKit.PlaceAsset($"{MarketSetup.PrefabFolder}/Skate Spot.prefab", Mathf.Round(OreganoU(SkateSpotZ)), 0, propParent);
+        LevelBuildKit.Cutout(link, "Skate Spot Lot", OreganoX + 3f, OreganoX + 17f, SkateSpotZ - 7f, SkateSpotZ + 7f);
+        foreach (float z in PosterZ)
+        {
+            LevelBuildKit.PlaceAsset($"{MarketSetup.PrefabFolder}/Shop Poster.prefab", Mathf.Round(OreganoU(z)), 0, propParent);
+        }
 
-        // Laternen und Bäume an der Margherita Avenue und auf der Promenade (nicht in der Grube, auf dem Überweg, vor der
-        // Pizzeria-Tür, an der Ecke), Laternen an der Oregano Street
-        var blocked = new List<(float from, float to)> { (-30f, -20f), (-48f, -32f), (-11f, -4f), (-100f, -94f) };
+        // Deko wie in Level 2: Laternen und Bäume (nicht in Grube/Bach, auf dem Überweg, vor der Pizzeria-Tür, unter den
+        // Balkonen), Hydrant, Mülleimer; Laternen an der Oregano Street
+        var blocked = new List<(float from, float to)> { (-30f, -20f), (-48f, -32f), (-63f, -53f), (-11f, -4f), (-100f, -88f) };
         bool Free(float u) => blocked.TrueForAll(zone => u < zone.from || u > zone.to);
-        for (int u = -14; u > -96; u -= 12)
+        for (int u = -14; u > -98; u -= 12)
         {
             if (Free(u)) LevelBuildKit.Place("Street Lamp", u, 0, propParent);
             if (Free(u - 6)) LevelBuildKit.Place("Tree", u - 6, 0, propParent);
         }
-        foreach (float z in new[] { 10f, 54f, 76f, 98f, 110f })
+        if (Free(-52)) LevelBuildKit.Place("Hydrant", -52, 0, propParent);
+        foreach (int u in new[] { -17, -70 })
+        {
+            if (Free(u)) LevelBuildKit.Place("Trash Can", u, 0, propParent);
+        }
+        foreach (float z in new[] { 10f, 30f, 76f, 98f, 110f })
         {
             LevelBuildKit.Place("Street Lamp", Mathf.Round(OreganoU(z)), 0, propParent);
         }
@@ -437,25 +472,6 @@ public static class Level4Builder
         settings.FindProperty("curbDistance").floatValue = 1f;
         settings.ApplyModifiedPropertiesWithoutUndo();
         return dog;
-    }
-
-    // Baugrube auf der Margherita Avenue (Ringstraße, u = Welt-X) wie in Level 2: Cutout bis zur Strandkante, Wände 0.1 m in
-    // der Lücke, Absperrungen an beiden Kanten, Todes-Trigger knapp über der Grubensohle
-    private static void MargheritaPit(float fromX, float toX)
-    {
-        Transform link = GameObject.Find("City Link").transform;
-        float center = (fromX + toX) / 2f;
-        LevelBuildKit.Stretched("Construction Pit", center, 0, toX - fromX + 1f, groundParent);
-        LevelBuildKit.Place("Barrier", Mathf.Round(toX + 1f), 0, groundParent);
-        LevelBuildKit.Place("Barrier", Mathf.Round(fromX - 1f), 0, groundParent);
-        LevelBuildKit.Cutout(link, $"Pit {center:F0}", fromX, toX, -12f, 3f);
-        Material foundation = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Foundation.mat");
-        foreach (float x in new[] { fromX + 0.1f, toX - 0.1f })
-        {
-            PrimitiveKit.Box("Pit Wall Walk", groundParent, new Vector3(x, (-4f + 0.49f) / 2f, 0.5f), new Vector3(0.2f, 4.49f, 5f), foundation);
-            PrimitiveKit.Box("Pit Wall Road", groundParent, new Vector3(x, (-4f + 0.29f) / 2f, -7f), new Vector3(0.2f, 4.29f, 10f), foundation);
-        }
-        PitKill(fromX, toX, -12f, 3f);
     }
 
     // Todes-Trigger in einer Grube (u von/bis, lokal z von/bis), knapp über der Sohle (-3.9): Man sieht noch, wie er hineinfällt

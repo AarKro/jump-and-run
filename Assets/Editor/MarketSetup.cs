@@ -47,6 +47,9 @@ public static class MarketSetup
         BuildLemonadeStand();
         BuildKicker();
         BuildBollard();
+        BuildSkaterKid();
+        BuildSkateSpot();
+        BuildShopPoster();
         AssetDatabase.SaveAssets();
         Debug.Log("MarketSetup: Markt-Prefabs gebaut.");
     }
@@ -535,6 +538,184 @@ public static class MarketSetup
         obstacle.FindProperty("passableAfterCrash").boolValue = false;
         obstacle.ApplyModifiedPropertiesWithoutUndo();
         PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Street Bollard.prefab");
+    }
+
+    // ---------- Oregano Street vor dem Board-Shop: Kinder auf Skateboards ----------
+
+    // Skateboard aus Grundformen (Deck, Rollen) unter den Füßen, lokal entlang X. Gibt den Drehpunkt zurück (Boden)
+    private static Transform KidBoard(Transform parent, Vector3 at, Material deck)
+    {
+        Transform board = PrimitiveKit.Pivot("Board", parent, at);
+        PrimitiveKit.Box("Deck", board, new Vector3(0f, 0.09f, 0f), new Vector3(0.62f, 0.03f, 0.2f), deck);
+        foreach (float x in new[] { -0.2f, 0.2f })
+        {
+            foreach (float z in new[] { -0.08f, 0.08f })
+            {
+                PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, board, new Vector3(x, 0.035f, z), new Vector3(0.06f, 0.02f, 0.06f), white)
+                    .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            }
+        }
+        return board;
+    }
+
+    // Kind auf dem Skateboard, rollt mit GroundPatrol auf dem Gehweg hin und her (Grenzen setzt der Level-Generator).
+    // Wie der Rollschuhfahrer in Level 3 (Skater): seitlich = Respawn, von oben = abfedern, das Kind rudert ("WHOA!")
+    private static void BuildSkaterKid()
+    {
+        const float feet = -0.5f, boardHeight = 0.11f, scale = 0.78f;
+        var root = new GameObject("Skater Kid");
+        Transform t = root.transform;
+        PrimitiveKit.AddBoxCollider(root, new Vector3(0f, feet + 0.7f, 0f), new Vector3(0.7f, 1.4f, 0.6f));
+        AddKinematicBody(root);
+
+        Transform body = PrimitiveKit.Pivot("Body", t, Vector3.zero);
+        KidBoard(body, new Vector3(0f, feet, 0f), Lit("Kid Board Green", new Color(0.3f, 0.75f, 0.35f)));
+        ParkSetup.Figure f = ParkSetup.BuildFigure(body, "Figure", new Vector3(0f, feet + boardHeight, 0f), -90f);
+        f.root.localScale = Vector3.one * scale;
+        Material figureMaterial = f.head.sharedMaterial;
+        Renderer helmet = PrimitiveKit.Part("Helmet", PrimitiveType.Sphere, f.rig, new Vector3(0f, 1.45f, 0.02f), new Vector3(0.5f, 0.36f, 0.52f), figureMaterial);
+        // Basecap verkehrt herum (Schirm hinten) statt Visier: Kind, kein Rollschuh-Profi
+        Renderer cap = PrimitiveKit.Part("Cap Brim", PrimitiveType.Cylinder, f.rig, new Vector3(0f, 1.45f, 0.24f), new Vector3(0.28f, 0.012f, 0.22f), figureMaterial);
+        GameObject whoa = ParkSetup.SpeechBubble(t, new Vector3(0.4f, feet + 1.9f, -0.3f), "WHOA!");
+
+        var patrol = new SerializedObject(root.AddComponent<GroundPatrol>());
+        patrol.FindProperty("patrolSpeed").floatValue = 3.5f;
+        patrol.FindProperty("chaseSpeed").floatValue = 3.5f;
+        patrol.FindProperty("acceleration").floatValue = 6f;
+        patrol.FindProperty("deceleration").floatValue = 8f;
+        patrol.FindProperty("turnDuration").floatValue = 0.4f;
+        patrol.FindProperty("sightRange").floatValue = 0f;
+        patrol.FindProperty("usePatrolLimits").boolValue = true;
+        patrol.FindProperty("waitAtLimits").floatValue = 0.3f;
+        patrol.FindProperty("flipTarget").objectReferenceValue = body;
+        patrol.ApplyModifiedPropertiesWithoutUndo();
+
+        var skater = new SerializedObject(root.AddComponent<Skater>());
+        skater.FindProperty("rig").objectReferenceValue = f.rig;
+        skater.FindProperty("leftArm").objectReferenceValue = f.leftArm;
+        skater.FindProperty("rightArm").objectReferenceValue = f.rightArm;
+        skater.FindProperty("whoaBubble").objectReferenceValue = whoa;
+        skater.FindProperty("fullSpeed").floatValue = 3.5f;
+        skater.FindProperty("strideLength").floatValue = 2.5f;
+        skater.FindProperty("shirtColor").colorValue = new Color(0.95f, 0.45f, 0.15f);
+        skater.FindProperty("helmetColor").colorValue = new Color(0.2f, 0.35f, 0.75f);
+        PrimitiveKit.SetReferences(skater, "shirtRenderers", f.body);
+        PrimitiveKit.SetReferences(skater, "skinRenderers", f.head, f.leftArmMesh, f.rightArmMesh);
+        PrimitiveKit.SetReferences(skater, "helmetRenderers", helmet, cap);
+        skater.ApplyModifiedPropertiesWithoutUndo();
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Skater Kid.prefab");
+    }
+
+    // Skate-Spot auf einem leeren Grundstück hinter der Bahn (lokal z 3 … 17, x -7 … 7; der Level-Generator schneidet die
+    // Häuser dort aus): Betonboden, niedriger Zaun zur Straße mit Lücke, Quarterpipe am +X-Ende, Rail, bemalte Rückwand,
+    // drei Kinder (SkateSpotKid: Quarterpipe, Ollies, Zuschauer). Reine Kulisse ohne Collider
+    private static void BuildSkateSpot()
+    {
+        Material concrete = Lit("Skate Concrete", new Color(0.7f, 0.7f, 0.68f));
+        Material ramp = Lit("Ramp Wood", new Color(0.62f, 0.45f, 0.28f));
+        Material rail = Lit("Rail Steel", new Color(0.75f, 0.77f, 0.8f), 0.7f);
+        Color[] paint = { new Color(0.95f, 0.3f, 0.5f), new Color(0.2f, 0.75f, 0.85f), new Color(1f, 0.82f, 0.15f), new Color(0.5f, 0.35f, 0.85f), new Color(0.3f, 0.8f, 0.4f) };
+        var root = new GameObject("Skate Spot");
+        Transform t = root.transform;
+        const float z0 = 3.05f, z1 = 17f, x0 = -7f, x1 = 7f;
+        PrimitiveKit.Box("Floor", t, new Vector3(0f, Surface - 0.2f + 0.005f, (z0 + z1) / 2f), new Vector3(x1 - x0, 0.4f, z1 - z0), concrete);
+
+        // Zaun zur Straße: Pfosten und oberer Holm, mit einer Lücke in der Mitte (Einfahrt)
+        for (float x = x0 + 0.1f; x <= x1; x += 2f)
+        {
+            if (Mathf.Abs(x) < 1.5f) continue;
+            PrimitiveKit.Box("Fence Post", t, new Vector3(x, Surface + 0.6f, z0 + 0.1f), new Vector3(0.06f, 1.2f, 0.06f), iron);
+        }
+        PrimitiveKit.Box("Fence Rail", t, new Vector3((x0 - 1.4f) / 2f, Surface + 1.15f, z0 + 0.1f), new Vector3(-1.4f - x0, 0.05f, 0.05f), iron);
+        PrimitiveKit.Box("Fence Rail", t, new Vector3((x1 + 1.4f) / 2f, Surface + 1.15f, z0 + 0.1f), new Vector3(x1 - 1.4f, 0.05f, 0.05f), iron);
+
+        // Bemalte Rückwand (Graffiti als bunte Flächen)
+        PrimitiveKit.Box("Back Wall", t, new Vector3(0f, Surface + 1.6f, z1 - 0.2f), new Vector3(x1 - x0, 3.2f, 0.3f), concrete);
+        for (int i = 0; i < 7; i++)
+        {
+            Renderer tag = PrimitiveKit.Box("Graffiti", t, new Vector3(x0 + 1f + i * 2f, Surface + 1.2f + (i % 3) * 0.5f, z1 - 0.37f),
+                new Vector3(1.6f, 0.7f + (i % 2) * 0.4f, 0.02f), Lit("Graffiti " + (i % paint.Length + 1), paint[i % paint.Length]));
+            tag.transform.localRotation = Quaternion.Euler(0f, 0f, (i % 2 == 0 ? 8f : -6f));
+        }
+
+        // Quarterpipe am +X-Ende: Viertelkreis aus schmalen Segmenten, darüber ein Deck mit Kante
+        const float radius = 2.4f, rampX = 3.6f, rampZ = 9f, rampWidth = 5f;
+        int segments = 8;
+        for (int i = 0; i < segments; i++)
+        {
+            float a0 = i * 80f / segments * Mathf.Deg2Rad, a1 = (i + 1) * 80f / segments * Mathf.Deg2Rad;
+            Vector3 p0 = new Vector3(rampX + Mathf.Sin(a0) * radius, Surface + radius - Mathf.Cos(a0) * radius, rampZ);
+            Vector3 p1 = new Vector3(rampX + Mathf.Sin(a1) * radius, Surface + radius - Mathf.Cos(a1) * radius, rampZ);
+            Renderer segment = PrimitiveKit.Box("Ramp Segment", t, (p0 + p1) / 2f, new Vector3(Vector3.Distance(p0, p1) + 0.05f, 0.08f, rampWidth), ramp);
+            segment.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(p1.y - p0.y, p1.x - p0.x) * Mathf.Rad2Deg);
+        }
+        float top = Surface + radius - Mathf.Cos(80f * Mathf.Deg2Rad) * radius;
+        PrimitiveKit.Box("Ramp Back", t, new Vector3(rampX + radius + 0.4f, (Surface + top) / 2f, rampZ), new Vector3(0.8f, top - Surface, rampWidth), ramp);
+        PrimitiveKit.Box("Ramp Deck", t, new Vector3(rampX + radius + 0.4f, top + 0.04f, rampZ), new Vector3(1f, 0.08f, rampWidth), ramp);
+        PrimitiveKit.Box("Coping", t, new Vector3(rampX + Mathf.Sin(80f * Mathf.Deg2Rad) * radius, top, rampZ), new Vector3(0.08f, 0.08f, rampWidth), rail);
+
+        // Rail auf zwei Füßen, schräg im Bild
+        PrimitiveKit.Box("Rail", t, new Vector3(-2.5f, Surface + 0.45f, 13f), new Vector3(4f, 0.06f, 0.06f), rail);
+        foreach (float x in new[] { -4.2f, -0.8f })
+        {
+            PrimitiveKit.Box("Rail Foot", t, new Vector3(x, Surface + 0.22f, 13f), new Vector3(0.06f, 0.45f, 0.06f), rail);
+        }
+
+        SpotKid(t, "Ramp Kid", new Vector3(0f, Surface, rampZ - 1f), SkateSpotKid.Trick.QuarterPipe, new Color(0.2f, 0.6f, 0.9f), rampX, radius);
+        SpotKid(t, "Ollie Kid", new Vector3(-3f, Surface, 11f), SkateSpotKid.Trick.Ollies, new Color(0.95f, 0.8f, 0.2f), rampX, radius);
+        SpotKid(t, "Watching Kid", new Vector3(rampX + radius + 0.5f, top + 0.08f, rampZ + 1.2f), SkateSpotKid.Trick.Watching, new Color(0.9f, 0.3f, 0.35f), rampX, radius);
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Skate Spot.prefab");
+    }
+
+    // Ein Kind im Skate-Spot: Wurzel = Fußpunkt (SkateSpotKid bewegt sie), darin Board und Figur (0.75 groß)
+    private static void SpotKid(Transform parent, string name, Vector3 at, SkateSpotKid.Trick trick, Color shirt, float rampX, float radius)
+    {
+        Transform kid = PrimitiveKit.Pivot(name, parent, at);
+        Transform board = trick == SkateSpotKid.Trick.Watching ? null : KidBoard(kid, Vector3.zero, Lit("Kid Board " + name, shirt * 0.8f));
+        ParkSetup.Figure f = ParkSetup.BuildFigure(kid, "Figure", new Vector3(0f, trick == SkateSpotKid.Trick.Watching ? 0f : 0.11f, 0f), 0f);
+        f.root.localScale = Vector3.one * 0.75f;
+        // Eigene Materialien statt MaterialPropertyBlock: Ein im Editor gesetzter Block wird nicht im Prefab gespeichert (die
+        // Figuren mit eigenem Skript setzen ihn zur Laufzeit, diese Kinder haben keins dafür)
+        f.body.sharedMaterial = Lit("Kid Shirt " + name, shirt);
+        Material skin = Lit("Kid Skin", new Color(0.92f, 0.74f, 0.6f));
+        f.head.sharedMaterial = skin;
+        f.leftArmMesh.sharedMaterial = skin;
+        f.rightArmMesh.sharedMaterial = skin;
+        var script = new SerializedObject(kid.gameObject.AddComponent<SkateSpotKid>());
+        script.FindProperty("trick").enumValueIndex = (int)trick;
+        script.FindProperty("rig").objectReferenceValue = f.root;
+        script.FindProperty("leftArm").objectReferenceValue = f.leftArm;
+        script.FindProperty("rightArm").objectReferenceValue = f.rightArm;
+        script.FindProperty("board").objectReferenceValue = board;
+        // Weg relativ zur Startposition des Kinds: Rampenfuß bei rampX (Spot-Koordinaten) minus Startposition
+        script.FindProperty("rampStartX").floatValue = rampX - at.x;
+        script.FindProperty("flatFromX").floatValue = -4f - at.x;
+        script.FindProperty("rampRadius").floatValue = radius;
+        script.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    // Plakat an einer Hausfassade (lokal z 2.96, knapp davor): "OLLIE'S BOARD SHOP" mit Pfeil in Laufrichtung (lokal -X)
+    private static void BuildShopPoster()
+    {
+        Material orange = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/Board Shop Orange.mat");
+        Material teal = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/Board Shop Teal.mat");
+        var root = new GameObject("Shop Poster");
+        Transform t = root.transform;
+        const float z = 2.95f, y = Surface + 2.1f;
+        PrimitiveKit.Box("Poster", t, new Vector3(0f, y, z), new Vector3(2.2f, 1.4f, 0.03f), teal);
+        PrimitiveKit.Box("Frame", t, new Vector3(0f, y, z + 0.01f), new Vector3(2.35f, 1.55f, 0.02f), white);
+        var title = PrimitiveKit.Text("Title", t, new Vector3(0.15f, y + 0.25f, z - 0.03f), new Vector2(1.7f, 0.5f), "OLLIE'S", new Color(1f, 0.6f, 0.15f));
+        title.fontSizeMax = 6f;
+        var subtitle = PrimitiveKit.Text("Subtitle", t, new Vector3(0.15f, y - 0.2f, z - 0.03f), new Vector2(1.7f, 0.35f), "BOARD SHOP  AHEAD", Color.white);
+        subtitle.fontSizeMax = 3f;
+        // Pfeil nach -X (Laufrichtung): Schaft und zwei schräge Spitzen
+        PrimitiveKit.Box("Arrow Shaft", t, new Vector3(-0.75f, y - 0.5f, z - 0.03f), new Vector3(0.5f, 0.08f, 0.01f), orange);
+        foreach (float angle in new[] { 40f, -40f })
+        {
+            Renderer tip = PrimitiveKit.Box("Arrow Tip", t, new Vector3(-0.93f, y - 0.5f + (angle > 0f ? 0.07f : -0.07f), z - 0.035f), new Vector3(0.22f, 0.07f, 0.01f), orange);
+            tip.transform.localRotation = Quaternion.Euler(0f, 0f, angle);
+        }
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Shop Poster.prefab");
     }
 
     // ---------- Marktstände (Kulisse hinter der Bahn) ----------

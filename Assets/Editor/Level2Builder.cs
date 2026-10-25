@@ -121,68 +121,9 @@ public static class Level2Builder
         }
     }
 
-    private static void Pit(Transform link, float fromX, float toX)
-    {
-        float center = (fromX + toX) / 2f;
-        LevelBuildKit.Stretched("Construction Pit", center, 0, toX - fromX + 1f, groundParent);
-        LevelBuildKit.Place("Barrier", Mathf.Round(toX + 1f), 0, groundParent);
-        LevelBuildKit.Place("Barrier", Mathf.Round(fromX - 1f), 0, groundParent);
-        // Nur bis zur Strandkante (z -12): Davor liegt in der Stadt der Strand, er deckt das vordere Ende der Grube ab
-        LevelBuildKit.Cutout(link, $"Pit {center:F0}", fromX, toX, -12f, 3f);
-
-        // Seitenwände: Ohne sie sähe man in der Grube die Schnittkanten der Stadt-Platten darunter (Wiese, Straßenbelag).
-        // Unter dem Gehweg bis zu dessen Oberkante, unter der Straße nur bis zu deren Oberkante (sonst stünde eine Kante vor).
-        // Die Wände stehen 0.2 m in der Lücke: Läge ihre Fläche genau auf der Schnittkante, flackerten beide (Z-Fighting)
-        Material foundation = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Foundation.mat");
-        foreach (float x in new[] { fromX + 0.1f, toX - 0.1f })
-        {
-            PrimitiveKit.Box("Pit Wall Walk", groundParent, new Vector3(x, (-4f + 0.49f) / 2f, 0.5f), new Vector3(0.2f, 4.49f, 5f), foundation);
-            PrimitiveKit.Box("Pit Wall Road", groundParent, new Vector3(x, (-4f + 0.29f) / 2f, -7f), new Vector3(0.2f, 4.29f, 10f), foundation);
-        }
-    }
-
-    // Bach, der unter der Häuserreihe hervorkommt und über den Strand ins Meer fließt. Die Lücke im Plattenweg ist so breit
-    // wie eine Baugrube; wer hineinfällt, landet im Wasser (Respawn). Der Cutout nimmt Weg, Kante, Sand und alles darunter
-    // (auch das Meer) heraus, das Wasser füllt das Loch wieder auf
-    private static void Creek(Transform link, float fromX, float toX)
-    {
-        float center = (fromX + toX) / 2f;
-        float width = toX - fromX;
-        const float front = CityLayout.SandFrontZ, back = CityLayout.PromenadeBackZ;
-        const float waterTop = 0.05f;
-        LevelBuildKit.Cutout(link, $"Creek {center:F0}", fromX, toX, front, back);
-
-        Material water = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Sea.mat");
-        Material stone = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Curb.mat");
-        Material dark = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Interior Dark.mat");
-
-        // Wasser knapp unter dem Sand: Zum Strand hin sieht es aus, als flösse der Bach einfach hinaus
-        PrimitiveKit.Box("Creek Water", groundParent, new Vector3(center, (waterTop - 3f) / 2f, (front + back) / 2f), new Vector3(width, waterTop + 3f, back - front), water);
-        // Ufermauern unter dem Plattenweg, 0.1 m in der Lücke (lägen sie genau auf der Schnittkante, flackerten beide)
-        foreach (float x in new[] { fromX + 0.1f, toX - 0.1f })
-        {
-            PrimitiveKit.Box("Creek Wall", groundParent, new Vector3(x, 0f, (CityLayout.PromenadeFrontZ + back) / 2f), new Vector3(0.2f, 1f, back - CityLayout.PromenadeFrontZ), stone);
-        }
-        // Auslass unter der Häuserreihe: dunkle Öffnung mit Steinrahmen. 5 cm vor der Schnittkante (z = 3): Dort endet der
-        // Stadt-Boden unter den Häusern, eine Fläche genau auf dieser Ebene flackert mit ihm (Z-Fighting)
-        PrimitiveKit.Box("Culvert", groundParent, new Vector3(center, 0.27f, back - 0.03f), new Vector3(width - 0.8f, 0.44f, 0.04f), dark);
-        PrimitiveKit.Box("Culvert Lintel", groundParent, new Vector3(center, 0.53f, back - 0.05f), new Vector3(width - 0.4f, 0.12f, 0.12f), stone);
-
-        // Rinnsal den Abhang hinunter bis ins Meer, knapp über der Schräge
-        CityLayout.BeachSlope(out Vector3 surfaceCenter, out Quaternion rotation, out float length, out float waterlineZ);
-        float stripLength = length / 2f - waterlineZ + 0.3f;
-        Vector3 local = new Vector3(0f, 0.02f, length / 2f - stripLength / 2f);
-        surfaceCenter.x = center;
-        Renderer stream = PrimitiveKit.Box("Creek Stream", groundParent, surfaceCenter + rotation * local, new Vector3(width - 0.8f, 0.02f, stripLength), water);
-        stream.transform.rotation = rotation;
-
-        // Ins Wasser fallen = Respawn: Auslöser knapp über der Wasseroberfläche, nur unter dem Plattenweg
-        var trap = new GameObject("Creek Kill");
-        trap.transform.SetParent(groundParent, false);
-        trap.transform.position = new Vector3(center, waterTop - 0.5f, (CityLayout.PromenadeFrontZ + back) / 2f);
-        PrimitiveKit.AddBoxCollider(trap, Vector3.zero, new Vector3(width, 1.1f, back - CityLayout.PromenadeFrontZ), isTrigger: true);
-        trap.AddComponent<KillZone>();
-    }
+    // Baugrube und Bachmündung: gemeinsam mit Level 4 (dessen Anfang ist genau wie hier), siehe LevelBuildKit
+    private static void Pit(Transform link, float fromX, float toX) => LevelBuildKit.RingPit(link, fromX, toX, groundParent);
+    private static void Creek(Transform link, float fromX, float toX) => LevelBuildKit.BeachCreek(link, fromX, toX, groundParent);
 
     private static void Crossing(float u, float spawnZ)
     {
@@ -261,26 +202,10 @@ public static class Level2Builder
         Seagull(-155, 2f, -170f, -138f);
     }
 
-    // Hund auf der Promenade: Draufgesprungen läuft er zum Meer, von der Promenade 0.3 m hinunter auf den Sand
-    // (statt 0.2 auf die Straße)
-    private static void BeachDog(float u)
-    {
-        GameObject dog = LevelBuildKit.Dog(u, 1f, gameplayParent);
-        var dogSettings = new SerializedObject(dog.GetComponent<Dog>());
-        dogSettings.FindProperty("curbDrop").floatValue = 0.5f - CityLayout.SandTop;
-        dogSettings.ApplyModifiedPropertiesWithoutUndo();
-    }
+    private static void BeachDog(float u) => LevelBuildKit.BeachDog(u, gameplayParent);
 
-    private static void Seagull(float u, float firstDelay, float territoryFrom, float territoryTo)
-    {
-        GameObject gull = LevelBuildKit.PlaceAsset("Assets/Prefabs/Seagull.prefab", u, 10, gameplayParent);
-        var serialized = new SerializedObject(gull.GetComponent<Seagull>());
-        serialized.FindProperty("territoryFrom").floatValue = territoryFrom;
-        serialized.FindProperty("territoryTo").floatValue = territoryTo;
-        serialized.FindProperty("firstDelay").floatValue = firstDelay;
-        serialized.FindProperty("cooldown").floatValue = 5f;
-        serialized.ApplyModifiedPropertiesWithoutUndo();
-    }
+    private static void Seagull(float u, float firstDelay, float territoryFrom, float territoryTo) =>
+        LevelBuildKit.Seagull(u, firstDelay, territoryFrom, territoryTo, gameplayParent);
 
     // ---------- Deko ----------
 

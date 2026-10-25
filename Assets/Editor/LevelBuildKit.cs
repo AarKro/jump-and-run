@@ -116,6 +116,91 @@ public static class LevelBuildKit
         }
     }
 
+    // Baugrube auf der Margherita Avenue (Ringstraße, u = Welt-X), Lücke von/bis in Welt-X (Level 2 und 4). Das Prefab ist
+    // 1 m länger und steckt unter den Gehwegkanten; der Cutout schneidet Gehweg, Straße und alles darunter in der Lücke aus,
+    // nur bis zur Strandkante (z -12, davor liegt der Strand). Seitenwände 0.1 m in der Lücke (genau auf der Schnittkante
+    // flackerten sie mit dem Stadt-Boden): unter dem Gehweg bis zu dessen Oberkante, unter der Straße bis zu deren Oberkante
+    public static void RingPit(Transform link, float fromX, float toX, Transform parent)
+    {
+        float center = (fromX + toX) / 2f;
+        Stretched("Construction Pit", center, 0, toX - fromX + 1f, parent);
+        Place("Barrier", Mathf.Round(toX + 1f), 0, parent);
+        Place("Barrier", Mathf.Round(fromX - 1f), 0, parent);
+        Cutout(link, $"Pit {center:F0}", fromX, toX, -12f, 3f);
+        Material foundation = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Foundation.mat");
+        foreach (float x in new[] { fromX + 0.1f, toX - 0.1f })
+        {
+            PrimitiveKit.Box("Pit Wall Walk", parent, new Vector3(x, (-4f + 0.49f) / 2f, 0.5f), new Vector3(0.2f, 4.49f, 5f), foundation);
+            PrimitiveKit.Box("Pit Wall Road", parent, new Vector3(x, (-4f + 0.29f) / 2f, -7f), new Vector3(0.2f, 4.29f, 10f), foundation);
+        }
+    }
+
+    // Bach auf der Strandpromenade (Level 2 und 4): kommt unter der Häuserreihe hervor und fließt über den Strand ins Meer.
+    // Die Lücke im Plattenweg ist so breit wie eine Baugrube; wer hineinfällt, landet im Wasser (Respawn). Der Cutout nimmt
+    // Weg, Kante, Sand und alles darunter (auch das Meer) heraus, das Wasser füllt das Loch wieder auf
+    public static void BeachCreek(Transform link, float fromX, float toX, Transform parent)
+    {
+        float center = (fromX + toX) / 2f;
+        float width = toX - fromX;
+        const float front = CityLayout.SandFrontZ, back = CityLayout.PromenadeBackZ;
+        const float waterTop = 0.05f;
+        Cutout(link, $"Creek {center:F0}", fromX, toX, front, back);
+
+        Material water = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Sea.mat");
+        Material stone = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Curb.mat");
+        Material dark = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Interior Dark.mat");
+
+        // Wasser knapp unter dem Sand: Zum Strand hin sieht es aus, als flösse der Bach einfach hinaus
+        PrimitiveKit.Box("Creek Water", parent, new Vector3(center, (waterTop - 3f) / 2f, (front + back) / 2f), new Vector3(width, waterTop + 3f, back - front), water);
+        // Ufermauern unter dem Plattenweg, 0.1 m in der Lücke (lägen sie genau auf der Schnittkante, flackerten beide)
+        foreach (float x in new[] { fromX + 0.1f, toX - 0.1f })
+        {
+            PrimitiveKit.Box("Creek Wall", parent, new Vector3(x, 0f, (CityLayout.PromenadeFrontZ + back) / 2f), new Vector3(0.2f, 1f, back - CityLayout.PromenadeFrontZ), stone);
+        }
+        // Auslass unter der Häuserreihe: dunkle Öffnung mit Steinrahmen. 3 cm vor der Schnittkante (z = 3): Dort endet der
+        // Stadt-Boden unter den Häusern, eine Fläche genau auf dieser Ebene flackert mit ihm (Z-Fighting)
+        PrimitiveKit.Box("Culvert", parent, new Vector3(center, 0.27f, back - 0.03f), new Vector3(width - 0.8f, 0.44f, 0.04f), dark);
+        PrimitiveKit.Box("Culvert Lintel", parent, new Vector3(center, 0.53f, back - 0.05f), new Vector3(width - 0.4f, 0.12f, 0.12f), stone);
+
+        // Rinnsal den Abhang hinunter bis ins Meer, knapp über der Schräge
+        CityLayout.BeachSlope(out Vector3 surfaceCenter, out Quaternion rotation, out float length, out float waterlineZ);
+        float stripLength = length / 2f - waterlineZ + 0.3f;
+        Vector3 local = new Vector3(0f, 0.02f, length / 2f - stripLength / 2f);
+        surfaceCenter.x = center;
+        Renderer stream = PrimitiveKit.Box("Creek Stream", parent, surfaceCenter + rotation * local, new Vector3(width - 0.8f, 0.02f, stripLength), water);
+        stream.transform.rotation = rotation;
+
+        // Ins Wasser fallen = Respawn: Auslöser knapp über der Wasseroberfläche, nur unter dem Plattenweg
+        var trap = new GameObject("Creek Kill");
+        trap.transform.SetParent(parent, false);
+        trap.transform.position = new Vector3(center, waterTop - 0.5f, (CityLayout.PromenadeFrontZ + back) / 2f);
+        PrimitiveKit.AddBoxCollider(trap, Vector3.zero, new Vector3(width, 1.1f, back - CityLayout.PromenadeFrontZ), isTrigger: true);
+        trap.AddComponent<KillZone>();
+    }
+
+    // Möwe über einem Strand-Stück: greift nur an, solange der Spieler im Revier (u von/bis) ist; firstDelay staffelt mehrere
+    public static GameObject Seagull(float u, float firstDelay, float territoryFrom, float territoryTo, Transform parent)
+    {
+        GameObject gull = PlaceAsset("Assets/Prefabs/Seagull.prefab", u, 10, parent);
+        var serialized = new SerializedObject(gull.GetComponent<Seagull>());
+        serialized.FindProperty("territoryFrom").floatValue = territoryFrom;
+        serialized.FindProperty("territoryTo").floatValue = territoryTo;
+        serialized.FindProperty("firstDelay").floatValue = firstDelay;
+        serialized.FindProperty("cooldown").floatValue = 5f;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        return gull;
+    }
+
+    // Hund auf der Strandpromenade: Draufgesprungen läuft er zum Meer, von der Promenade 0.3 m hinunter auf den Sand
+    public static GameObject BeachDog(float u, Transform parent)
+    {
+        GameObject dog = Dog(u, 1f, parent);
+        var settings = new SerializedObject(dog.GetComponent<Dog>());
+        settings.FindProperty("curbDrop").floatValue = CityLayout.Surface - CityLayout.SandTop;
+        settings.ApplyModifiedPropertiesWithoutUndo();
+        return dog;
+    }
+
     // "City Link": LevelCity lädt die Stadt und richtet die festen Gebäude ein (Start-Tür, benutzte Checkpoints/Mikrowelle)
     public static Transform CityLink(string startLandmark, params string[] usedLandmarks)
     {
