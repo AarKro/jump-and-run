@@ -54,6 +54,52 @@ public static partial class CityBuilder
         Cylinder("Crater Rim", parent, new Vector3(at.x, RoadTop + 0.1f, at.y), radius + 1.2f, 0.3f, Mat("Rubble"));
     }
 
+    // ---------- Für Level 5 ----------
+
+    // Teile der beiden Monster, damit Level 5 sie steuern kann (Wüten mit Feueratem, Ankunft des Roboters, Kampf, Sieg)
+    public struct KaijuParts
+    {
+        public Transform root, lizard, lizardUpper, lizardHead, lizardArmLeft, lizardArmRight, robot, robotUpper, robotHead, robotArmLeft, robotArmRight;
+        public Transform[] lizardTail;
+        public Renderer robotVisor;
+        public KaijuFight fight;
+    }
+
+    // Baut beide Monster wie früher in der Stadt (Füße bei x ± FootSpread um die Straßenmitte, Echse 16 m südlich, Roboter
+    // 20 m nördlich von "at"), mit KaijuFight. Für ein Level: Die Wurzel kommt in dessen Szene, Materialien wie in der Stadt
+    public static KaijuParts BuildKaijuForLevel(Transform parent, Vector2 at)
+    {
+        Transform fight = new GameObject("Kaiju").transform;
+        fight.SetParent(parent, false);
+        fight.position = new Vector3(at.x, Surface, at.y);
+        var lizard = BuildLizard(fight, new Vector3(0f, 0f, -16f));
+        var robot = BuildRobot(fight, new Vector3(0f, 0f, 20f));
+        var fightScript = fight.gameObject.AddComponent<KaijuFight>();
+        var serialized = new SerializedObject(fightScript);
+        serialized.FindProperty("lizardUpper").objectReferenceValue = lizard.upper;
+        serialized.FindProperty("lizardHead").objectReferenceValue = lizard.head;
+        serialized.FindProperty("lizardArmLeft").objectReferenceValue = lizard.armLeft;
+        serialized.FindProperty("lizardArmRight").objectReferenceValue = lizard.armRight;
+        PrimitiveKit.SetReferences(serialized, "lizardTail", lizard.tail);
+        serialized.FindProperty("robotUpper").objectReferenceValue = robot.upper;
+        serialized.FindProperty("robotHead").objectReferenceValue = robot.head;
+        serialized.FindProperty("robotArmLeft").objectReferenceValue = robot.armLeft;
+        serialized.FindProperty("robotArmRight").objectReferenceValue = robot.armRight;
+        serialized.FindProperty("robotVisor").objectReferenceValue = robot.visor;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        return new KaijuParts
+        {
+            root = fight, lizard = lizard.upper.parent, lizardUpper = lizard.upper, lizardHead = lizard.head,
+            lizardArmLeft = lizard.armLeft, lizardArmRight = lizard.armRight, lizardTail = lizard.tail,
+            robot = robot.upper.parent, robotUpper = robot.upper, robotHead = robot.head, robotArmLeft = robot.armLeft,
+            robotArmRight = robot.armRight, robotVisor = robot.visor, fight = fightScript,
+        };
+    }
+
+    // Fassaden-Material der Stadthäuser (Fenster aus der Objekt-Skalierung): Umgestürzte Türme in Level 5 sehen damit aus
+    // wie die stehenden in den anderen Leveln
+    public static Material FacadeMaterialAsset => FacadeMaterial();
+
     // ---------- Kampf ----------
 
     private static void BuildKaiju(Transform parent)
