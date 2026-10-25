@@ -75,7 +75,7 @@ public static class MarketSetup
     // ---------- Personen ----------
 
     // Figur wie der Kunde, mit Haaren, als CrowdFigure (Farben und Animation zur Laufzeit). Füße bei localPosition
-    private static CrowdFigure Person(Transform parent, string name, Vector3 localPosition, float yaw, float gesture = 1f, float armsForward = 0f)
+    public static CrowdFigure Person(Transform parent, string name, Vector3 localPosition, float yaw, float gesture = 1f, float armsForward = 0f)
     {
         ParkSetup.Figure f = ParkSetup.BuildFigure(parent, name, localPosition, yaw);
         Material figureMaterial = f.head.sharedMaterial;

@@ -28,6 +28,8 @@ public class CrowdFigure : MonoBehaviour
     [SerializeField] private float gesture = 1f;
     [Tooltip("Arme dauerhaft so weit nach vorn (Grad), z.B. der Händler, der seinen Karren schiebt")]
     [SerializeField] private float armsForward;
+    [Tooltip("In Panik (Level 5): rennt vorgebeugt mit hochgerissenen, fuchtelnden Armen")]
+    [SerializeField] private bool panic;
 
     // 0 = steht normal, 1 = ganz weggeduckt
     public float Duck { get; set; }
@@ -112,6 +114,15 @@ public class CrowdFigure : MonoBehaviour
             swing *= 0.15f;
             talk = 0f;
             wave = 0f;
+        }
+        if (panic)
+        {
+            // Arme über dem Kopf, fuchteln schnell gegengleich; Oberkörper nach vorn (negative X-Drehung)
+            float flail = Mathf.Sin(time * 14f) * 25f;
+            rig.localRotation = Quaternion.Euler(-12f * walking, 0f, sway);
+            leftArm.localRotation = Quaternion.Euler(160f + flail, 0f, -20f);
+            rightArm.localRotation = Quaternion.Euler(160f - flail, 0f, 20f);
+            return;
         }
         leftArm.localRotation = Quaternion.Euler(armsForward + swing + cover, 0f, -6f);
         rightArm.localRotation = Quaternion.Euler(armsForward - swing + cover + 40f * talk + wave, 0f, 6f + 20f * talk);

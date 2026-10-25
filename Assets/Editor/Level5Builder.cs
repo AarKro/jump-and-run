@@ -103,6 +103,7 @@ public static class Level5Builder
         BuildRuins(link);
         BuildKaiju();
         BuildGameplay();
+        BuildPanic();
 
         LevelBuildKit.SetupEssentials(Mathf.Round(MozzarellaU(GoalZ)), "1", KeepWarmTime,
             new Vector3(MozzarellaX, -20f, 150f), new Vector3(40f, 1f, 340f),
@@ -682,6 +683,40 @@ public static class Level5Builder
             PrimitiveKit.Box("Block", chunk.transform, Vector3.zero, new Vector3(1.6f, 1.2f, 2.2f), rubble);
             PrimitiveKit.Box("Top", chunk.transform, new Vector3(0.3f, 0.7f, 0.2f), new Vector3(1f, 0.5f, 1.4f), rubble).transform.localRotation = Quaternion.Euler(0f, 0f, 12f);
             PrimitiveKit.AddBoxCollider(chunk, Vector3.zero, new Vector3(1.6f, 1.2f, 2.2f));
+        }
+    }
+
+    // Leute in Panik: fliehen auf einem Streifen 2.4 m hinter der Bahn (zwischen Bahn und Häusern/Ruinen, neben Schutt und
+    // Bussen vorbei) nach Süden, dem Spieler entgegen, der zur Echse läuft. Nicht zwischen den Füßen der Monster
+    private static readonly (float fromZ, float toZ, int count)[] PanicStrips = { (244f, 214f, 4), (162f, 108f, 6) };
+    private const float PanicX = MozzarellaX + 2.4f;
+
+    private static void BuildPanic()
+    {
+        Transform crowd = new GameObject("Panicking People").transform;
+        crowd.SetParent(propParent, false);
+        var random = new System.Random(77);
+        foreach ((float fromZ, float toZ, int count) in PanicStrips)
+        {
+            float length = fromZ - toZ;
+            for (int i = 0; i < count; i++)
+            {
+                float offset = (i + (float)random.NextDouble() * 0.6f) * length / count;
+                float x = PanicX + ((float)random.NextDouble() - 0.5f) * 0.6f;
+                var from = new Vector3(x, CityLayout.Surface, fromZ);
+                CrowdFigure figure = MarketSetup.Person(crowd, "Panicking Person", from + Vector3.back * offset, 180f, 0f);
+                var figureData = new SerializedObject(figure);
+                figureData.FindProperty("panic").boolValue = true;
+                figureData.FindProperty("strideLength").floatValue = 1.6f;
+                figureData.FindProperty("bobHeight").floatValue = 0.1f;
+                figureData.ApplyModifiedPropertiesWithoutUndo();
+                var runner = new SerializedObject(figure.gameObject.AddComponent<PanicRunner>());
+                runner.FindProperty("from").vector3Value = from;
+                runner.FindProperty("to").vector3Value = new Vector3(x, CityLayout.Surface, toZ);
+                runner.FindProperty("speed").floatValue = 4.2f + (float)random.NextDouble() * 1.6f;
+                runner.FindProperty("startOffset").floatValue = offset;
+                runner.ApplyModifiedPropertiesWithoutUndo();
+            }
         }
     }
 
