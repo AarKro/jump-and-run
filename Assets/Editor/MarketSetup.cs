@@ -45,6 +45,8 @@ public static class MarketSetup
         BuildIceCreamCart();
         BuildBalloonSeller();
         BuildLemonadeStand();
+        BuildKicker();
+        BuildBollard();
         AssetDatabase.SaveAssets();
         Debug.Log("MarketSetup: Markt-Prefabs gebaut.");
     }
@@ -480,6 +482,59 @@ public static class MarketSetup
         Person(t, "Lemonade Kid", new Vector3(0f, Surface, z + 0.7f), 0f, 1f).transform.localScale = Vector3.one * 0.72f;
         Person(t, "Lemonade Customer", new Vector3(1.1f, Surface, z - 0.3f), -50f, 0.6f);
         PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Lemonade Stand.prefab");
+    }
+
+    // ---------- Skate-Strecke (Oregano, Crust Street) ----------
+
+    // Holzrampe vor einer Baugrube: 4 m lang, steigt in Laufrichtung (lokal -X) auf 0.6 m an, die Kante liegt bei lokal x -2
+    // (= Grubenkante). Begehbar (Layer Ground), an der Kante ein Trigger mit KickerRamp
+    private static void BuildKicker()
+    {
+        Material plank = Lit("Ramp Plank", new Color(0.66f, 0.48f, 0.28f));
+        Material stripe = Lit("Hazard Yellow", new Color(1f, 0.82f, 0.1f));
+        var root = new GameObject("Kicker Ramp");
+        Transform t = root.transform;
+        const float length = 4f, height = 0.6f;
+        float angle = Mathf.Atan2(height, length) * Mathf.Rad2Deg;
+        float slope = Mathf.Sqrt(length * length + height * height);
+        // Schräge Platte: um Z gedreht, negativer Winkel hebt das -X-Ende an
+        var deck = new GameObject("Deck") { layer = GroundLayer };
+        deck.transform.SetParent(t, false);
+        deck.transform.localPosition = new Vector3(0f, Surface + height / 2f - 0.1f, 0f);
+        deck.transform.localRotation = Quaternion.Euler(0f, 0f, -angle);
+        PrimitiveKit.Box("Planks", deck.transform, Vector3.zero, new Vector3(slope, 0.2f, 2f), plank);
+        PrimitiveKit.Box("Lip Stripe", deck.transform, new Vector3(-slope / 2f + 0.2f, 0.105f, 0f), new Vector3(0.4f, 0.01f, 2f), stripe);
+        PrimitiveKit.AddBoxCollider(deck, Vector3.zero, new Vector3(slope, 0.2f, 2f));
+        // Seitenwangen (Dreiecke angedeutet durch zwei Klötze) und die senkrechte Rückwand an der Kante
+        foreach (float z in new[] { -1f, 1f })
+        {
+            PrimitiveKit.Box("Side", t, new Vector3(-length / 4f, Surface + height / 3f, z), new Vector3(length / 2f, height * 0.66f, 0.06f), plank);
+        }
+        PrimitiveKit.Box("Back", t, new Vector3(-length / 2f + 0.03f, Surface + height / 2f, 0f), new Vector3(0.06f, height, 2f), plank);
+        // Auslöser an der Kante: der Spieler fährt die Schräge hinauf und hinein
+        var lip = new GameObject("Launch Trigger");
+        lip.transform.SetParent(t, false);
+        // Schmal und genau an der Kante: Löste er früher aus, flöge er von weiter hinten ab und käme zu kurz
+        PrimitiveKit.AddBoxCollider(lip, new Vector3(-length / 2f + 0.25f, Surface + height + 0.8f, 0f), new Vector3(0.5f, 1.6f, 2f), true);
+        lip.AddComponent<KickerRamp>();
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Kicker Ramp.prefab");
+    }
+
+    // Poller auf der Bahn zum Drüberspringen (0.9 m). Auf dem Board seitlich angefahren = vom Board fallen (wie auf dem Markt)
+    private static void BuildBollard()
+    {
+        Material red = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/Pizzeria Red.mat");
+        var root = new GameObject("Street Bollard") { layer = GroundLayer };
+        Transform t = root.transform;
+        PrimitiveKit.Part("Post", PrimitiveType.Cylinder, t, new Vector3(0f, Surface + 0.45f, 0f), new Vector3(0.28f, 0.45f, 0.28f), iron);
+        PrimitiveKit.Part("Band", PrimitiveType.Cylinder, t, new Vector3(0f, Surface + 0.72f, 0f), new Vector3(0.3f, 0.06f, 0.3f), red);
+        PrimitiveKit.Part("Cap", PrimitiveType.Sphere, t, new Vector3(0f, Surface + 0.9f, 0f), new Vector3(0.28f, 0.1f, 0.28f), iron);
+        PrimitiveKit.AddBoxCollider(root, new Vector3(0f, Surface + 0.45f, 0f), new Vector3(0.4f, 0.9f, 0.4f));
+        var obstacle = new SerializedObject(root.AddComponent<CrowdObstacle>());
+        obstacle.FindProperty("bounceOnTop").boolValue = false;
+        obstacle.FindProperty("passableAfterCrash").boolValue = false;
+        obstacle.ApplyModifiedPropertiesWithoutUndo();
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Street Bollard.prefab");
     }
 
     // ---------- Marktstände (Kulisse hinter der Bahn) ----------

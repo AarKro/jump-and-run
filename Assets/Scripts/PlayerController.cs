@@ -71,6 +71,8 @@ public class PlayerController : MonoBehaviour
     public bool IsGrounded => isGrounded;
     // Fährt Skateboard (Level 4: vom Board-Shop bis zum Kiosk). Ändert nur Tempo und Bremsen, gesprungen wird gleich hoch
     public bool IsSkating { get; private set; }
+    // Sprungtaste gehalten (z.B. Rampe: höher abheben)
+    public bool JumpHeld => jumpHeld;
     // Wird gerade schneller (Taste gehalten, noch nicht auf Höchsttempo): Auf dem Board stößt er sich dann mit dem Fuß ab
     public bool IsSpeedingUp { get; private set; }
 
