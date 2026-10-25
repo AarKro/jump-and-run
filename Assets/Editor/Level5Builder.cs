@@ -61,6 +61,12 @@ public static class Level5Builder
     private static readonly Vector3 BreathTarget = new Vector3(-40f, CityLayout.Surface, 186f);
     private static readonly Rect BurnArea = Rect.MinMaxRect(-80f, 166f, -46f, 208f);
 
+    // ---------- Roboter ----------
+    //   z 210   Spieler überquert die Four Cheese Avenue: Zwischensequenz, der Roboter stürzt herab, die Echse dreht sich um,
+    //           ab dann ringen beide (kein Feuer mehr)
+    //   z 285   Spieler zwischen den Beinen des Roboters: Zwischensequenz, Aufwärtshaken, die Echse kippt nach Westen um
+    private const float RobotArrivalZ = 210f, FinaleZ = 285f;
+
     // Mittelpunkt der Monster wie früher in der Stadt (CityLayout.KaijuFight): Echse 16 m südlich davon, Roboter 20 m nördlich
     private static Vector2 KaijuCenter => CityLayout.KaijuFight;
 
@@ -401,13 +407,75 @@ public static class Level5Builder
         kaiju.fight.enabled = false;
 
         FireBreath breath = BuildFireBreath(kaiju);
+        Material particles = AssetDatabase.LoadAssetAtPath<Material>("Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat");
+        // Düsen unter den Füßen des Roboters (Flammen nach unten) und ein Rauchschweif am Rücken, nur während er herabstürzt
+        var thrusters = new List<ParticleSystem>();
+        foreach (float x in new[] { -14f, 14f })
+        {
+            Transform foot = PrimitiveKit.Pivot("Thruster", kaiju.robot, new Vector3(x, 0f, 2f));
+            ParticleSystem flame = Particles("Flame", foot, particles, new Color(1f, 0.5f, 0.1f, 0.95f), new Color(0.6f, 0.85f, 1f, 0.95f),
+                lifetime: 0.5f, speed: 35f, size: new Vector2(3f, 6f), rate: 90f, radius: 2f, growth: 1f);
+            flame.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            thrusters.Add(Stopped(flame));
+        }
+        ParticleSystem trail = Particles("Smoke Trail", PrimitiveKit.Pivot("Trail", kaiju.robot, new Vector3(0f, 45f, -6f)), particles,
+            new Color(0.4f, 0.4f, 0.42f, 0.8f), new Color(0.75f, 0.75f, 0.78f, 0.6f), lifetime: 4f, speed: 2f, size: new Vector2(8f, 16f), rate: 60f, radius: 4f, growth: 1.5f);
+        thrusters.Add(Stopped(trail));
+
+        // Staubwolken: beim Aufschlag des Roboters und wo die Echse hinfällt (nur Emit)
+        Vector3 robotLanding = kaiju.robot.position;
+        ParticleSystem landingDust = Dust(gameplayParent, "Landing Dust", robotLanding, 16f, particles);
+        ParticleSystem fallDust = Dust(gameplayParent, "Fall Dust", new Vector3(KaijuCenter.x - 40f, CityLayout.Surface, KaijuCenter.y - 16f), 30f, particles);
+
         var battle = new SerializedObject(kaiju.root.gameObject.AddComponent<KaijuBattle>());
+        battle.FindProperty("lizardRoot").objectReferenceValue = kaiju.lizard;
         battle.FindProperty("lizardUpper").objectReferenceValue = kaiju.lizardUpper;
         battle.FindProperty("lizardHead").objectReferenceValue = kaiju.lizardHead;
         battle.FindProperty("breath").objectReferenceValue = breath;
+        battle.FindProperty("robotRoot").objectReferenceValue = kaiju.robot;
+        battle.FindProperty("robotUpper").objectReferenceValue = kaiju.robotUpper;
+        battle.FindProperty("robotArmLeft").objectReferenceValue = kaiju.robotArmLeft;
+        battle.FindProperty("robotArmRight").objectReferenceValue = kaiju.robotArmRight;
+        battle.FindProperty("fight").objectReferenceValue = kaiju.fight;
+        PrimitiveKit.SetReferences(battle, "thrusters", thrusters.ToArray());
+        battle.FindProperty("landingDust").objectReferenceValue = landingDust;
+        battle.FindProperty("fallDust").objectReferenceValue = fallDust;
         battle.FindProperty("breathFromU").floatValue = MozzarellaU(BreathZoneToZ);
         battle.FindProperty("breathToU").floatValue = MozzarellaU(BreathZoneFromZ);
+        battle.FindProperty("arrivalU").floatValue = MozzarellaU(RobotArrivalZ);
+        battle.FindProperty("finaleU").floatValue = MozzarellaU(FinaleZ);
         battle.ApplyModifiedPropertiesWithoutUndo();
+
+        // Bildschirm-Wackeln an der Kamera
+        GameObject mainCamera = GameObject.Find("Main Camera");
+        if (mainCamera != null && mainCamera.GetComponent<CameraShake>() == null)
+        {
+            mainCamera.AddComponent<CameraShake>();
+        }
+    }
+
+    // Partikelsystem, das erst auf Befehl startet
+    private static ParticleSystem Stopped(ParticleSystem system)
+    {
+        ParticleSystem.MainModule main = system.main;
+        main.playOnAwake = false;
+        system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        return system;
+    }
+
+    // Staubwolke: graue Brocken quellen in einer Halbkugel auf und sinken langsam, nur per Emit
+    private static ParticleSystem Dust(Transform parent, string name, Vector3 at, float radius, Material material)
+    {
+        ParticleSystem dust = Particles(name, parent, material, new Color(0.55f, 0.52f, 0.48f, 0.85f), new Color(0.75f, 0.72f, 0.68f, 0.7f),
+            lifetime: 3.5f, speed: 14f, size: new Vector2(6f, 14f), rate: 0f, radius: radius, growth: 1.5f);
+        dust.transform.position = at;
+        ParticleSystem.ShapeModule shape = dust.shape;
+        shape.shapeType = ParticleSystemShapeType.Hemisphere;
+        shape.radius = radius;
+        ParticleSystem.MainModule main = dust.main;
+        main.gravityModifier = 0.15f;
+        main.maxParticles = 400;
+        return Stopped(dust);
     }
 
     // Maul mit Glut am Kopf, Strahl (drei immer dickere Zylinder = Kegel), Flammen am Boden auf der Bahn, an der Aufschlagstelle
