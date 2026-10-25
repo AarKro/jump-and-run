@@ -84,6 +84,15 @@ public static class CityLayout
     public const float MarketWaterX = West - 22f;   // Außenkante der Kaimauer
     public const float MarketBlockEdgeX = West - 2f; // Bordstein = Ende der Gehweg-Platten der Blöcke
 
+    // Containerhafen (Level 4): Die Route läuft bei z 286 von der Marinara Promenade nach Westen bis an den Kai (x -380).
+    // Ein Band um die Route bleibt frei von Containerstapeln und Hallen (die Kamera steht südlich der Bahn), dahinter (Norden)
+    // stehen sie als Kulisse. Mitten im Hafen ein Hafenbecken, über das Kräne Container fahren
+    public const float PortRouteZ = 286f;
+    public const float PortClearFromZ = 258f;
+    public const float PortClearToZ = 292f;
+    public static readonly Rect PortBasin = Rect.MinMaxRect(-340f, 264f, -300f, 310f);
+    public const float PortTop = 0.6f;
+
     public static readonly Street[] Streets =
     {
         // Außenring

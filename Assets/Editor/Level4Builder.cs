@@ -40,7 +40,7 @@ public static class Level4Builder
     private const float MarinaraNorthX = -250f;
     private const float KioskZ = 249f;
     private const float SBendNorthZ = 245f;
-    private const float PortZ = 286f;
+    private const float PortZ = CityLayout.PortRouteZ;
     private const float PortEndX = -380f;
     private const float MainEndX = 16f;
 
@@ -115,6 +115,7 @@ public static class Level4Builder
     {
         EnsureScene();
         var scene = LevelBuildKit.OpenAndClear(ScenePath);
+        UseCrewGoal();
         BuildLane();
         groundParent = LevelBuildKit.Group("Level Ground");
         gameplayParent = LevelBuildKit.Group("Level Gameplay");
@@ -124,13 +125,33 @@ public static class Level4Builder
         BuildGround();
         BuildGameplay();
 
-        LevelBuildKit.SetupEssentials(Mathf.Round(PortU(-374f)), "", KeepWarmTime,
-            new Vector3(-320f, -3f, PortZ), new Vector3(140f, 1f, 40f),
-            "Lunch Break at the Port", new Vector3(60f, 90f, -120f));
+        // KillZone = Wasser im Hafenbecken (knapp unter der Oberfläche, -0.5)
+        Rect basin = CityLayout.PortBasin;
+        LevelBuildKit.SetupEssentials(Mathf.Round(PortU(GoalX)), "", KeepWarmTime,
+            new Vector3(basin.center.x, -0.9f, basin.center.y), new Vector3(basin.width, 1f, basin.height),
+            "Lunch for the crew, Pier 3, Crust Harbor", new Vector3(60f, 80f, -110f));
         LevelBuildKit.Save(scene);
         Debug.Log($"Level4Builder: Level 4 (Port) gebaut. Bahn u {LevelBuildKit.Lane.StartU:F2} bis {LevelBuildKit.Lane.EndU:F2}. " +
                   $"Oregano u(z) = {OreganoU(0f):F2} - z, Crust u(x) = x + {CrustU(0f):F2}, Markt u(z) = {MarinaraU(0f):F2} - z, " +
                   $"Marinara Nord u(z) = {MarinaraNorthU(0f):F2} - z, Hafen u(x) = x + {PortU(0f):F2}, S-Kurve z {SBendSouthZ:F2}–{SBendNorthZ:F2}");
+    }
+
+    // Ziel ohne Haus: die Bauarbeiter auf dem Stahlträger statt des Goal-Prefabs mit Kundenhaus (aus der kopierten Szene).
+    // Heißt weiter "Goal", damit OpenAndClear und SetupEssentials es finden
+    private static void UseCrewGoal()
+    {
+        const string crewPath = PortSetup.PrefabFolder + "/Crew Goal.prefab";
+        GameObject old = GameObject.Find("Goal");
+        if (old != null && PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(old) == crewPath)
+        {
+            return;
+        }
+        if (old != null)
+        {
+            Object.DestroyImmediate(old);
+        }
+        var goal = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(crewPath));
+        goal.name = "Goal";
     }
 
     // Neue Szene als Kopie von Level 2 (bringt die festen Objekte mit, Ziel mit Kundenhaus), hinter Level 3 in die Build Settings
@@ -208,9 +229,9 @@ public static class Level4Builder
         LevelBuildKit.WalkGround("Walk Crust Corner", pieceStartU[8] - 0.5f, pieceStartU[9] + 0.5f, CityLayout.Surface, groundParent);
         // Nördlich der Marktpromenade liegt die Bahn auf der Ringstraße (bis zur Abzweigung in den Hafen)
         LevelBuildKit.WalkGround("Walk Salami", pieceStartU[2] - 0.5f, MarinaraNorthU(CityLayout.MarketToZ - 0.5f), CityLayout.Surface, groundParent);
-        // Bogen über die Ringstraße auf Gehweghöhe, dann Hafen-Beton (Oberkante 0.6)
+        // Bogen über die Ringstraße auf Gehweghöhe, dann das Stück Ringstraße bis zum Hafen-Beton (der hat eigene Collider)
         LevelBuildKit.WalkGround("Walk Port Corner", pieceStartU[1], pieceStartU[2] + 0.5f, CityLayout.Surface, groundParent);
-        LevelBuildKit.WalkGround("Walk Port", pieceStartU[0] - 1f, pieceStartU[1], 0.6f, groundParent);
+        LevelBuildKit.WalkGround("Walk Port Road", PortU(CityLayout.West - 13f), pieceStartU[1], CityLayout.PortTop, groundParent);
     }
 
     // Erhöhter Überweg über eine 12 m breite Avenue mit zwei Spuren. spawnZ/despawnZ: wo die Autos auftauchen und
@@ -359,6 +380,98 @@ public static class Level4Builder
         }
     }
 
+    // ---------- Hafen (zu Fuß) ----------
+    //   Hof: Container-Treppe (1, 2 hoch), 4 m Lücke, 2 hoch, 3 hoch als Absprung (Oberkante 8.3)
+    //   Becken (x -300 … -340): Fähre 1 (waagerecht), Aufzug (senkrecht, Chili 3 über der oberen Stellung), Fähre 2, dann der Kai
+    //   Kai: Bauarbeiter auf dem Stahlträger (Ziel)
+    // Ein Container ist 6 m lang, Stapel stehen Kante an Kante, wo es eine Treppe sein soll. Welt-x = Mitte
+    private static readonly (float x, int levels)[] YardStacks = { (-273f, 1), (-279f, 2), (-289f, 2), (-295f, 3) };
+    // Kran-Container: Mitte von/bis (Welt-x) und Wurzel-Höhe von/bis (Oberkante = Wurzel + 0.5)
+    private static readonly (float fromX, float toX, float fromY, float toY)[] CraneRides =
+    {
+        (-304f, -312f, 5f, 5f),     // Fähre 1
+        (-320f, -320f, 5f, 10f),    // Aufzug
+        (-328f, -336f, 5f, 5f),     // Fähre 2
+    };
+    // Hoch genug, dass die Kamera über dem Becken (steigt mit dem Spieler auf den Containern) unter dem Träger bleibt
+    private const float CraneBeamY = 18f;
+    private const float GoalX = -372f;
+    // Über dem Becken: Kamera weiter weg und höher, damit man die Container, ihre Wege und das Wasser sieht
+    private static readonly Vector3 BasinCameraOffset = new Vector3(0f, 8f, -16f);
+    private const float BasinCameraLookHeight = 2f;
+
+    private static void BuildPort()
+    {
+        Transform port = new GameObject("Port").transform;
+        port.SetParent(gameplayParent, false);
+        foreach (var stack in YardStacks)
+        {
+            LevelBuildKit.PlaceAsset($"{PortSetup.PrefabFolder}/Container Stack {stack.levels}.prefab", Mathf.Round(PortU(stack.x)), 0, port);
+        }
+
+        float liftTop = 0f;
+        foreach (var ride in CraneRides)
+        {
+            float u = Mathf.Round(PortU(ride.fromX));
+            GameObject container = LevelBuildKit.PlaceAsset($"{PortSetup.PrefabFolder}/Crane Container.prefab", u, ride.fromY, port);
+            container.transform.Find("moving platform start").position = LevelBuildKit.Lane.PointAt(u) + Vector3.up * ride.fromY;
+            container.transform.Find("moving platform end").position = LevelBuildKit.Lane.PointAt(Mathf.Round(PortU(ride.toX))) + Vector3.up * ride.toY;
+            var mover = new SerializedObject(container.GetComponent<MovingPlatform>());
+            bool lift = Mathf.Approximately(ride.fromX, ride.toX);
+            mover.FindProperty("speed").floatValue = lift ? 1.6f : 2.2f;
+            mover.FindProperty("waitTime").floatValue = 1f;
+            mover.ApplyModifiedPropertiesWithoutUndo();
+            var cable = new SerializedObject(container.GetComponent<CraneCable>());
+            cable.FindProperty("topY").floatValue = CraneBeamY - 0.4f;
+            cable.ApplyModifiedPropertiesWithoutUndo();
+            if (lift)
+            {
+                liftTop = ride.toY + 0.5f;
+                // Chili 3 über der oberen Stellung des Aufzugs: nur mit ihm erreichbar
+                LevelBuildKit.HeatPickup(u, Mathf.Round(liftTop + 1.5f), port);
+            }
+        }
+        BasinGantry(port);
+
+        var zone = new SerializedObject(new GameObject("Basin Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
+        zone.FindProperty("fromU").floatValue = PortU(CityLayout.PortBasin.xMin - 4f);
+        zone.FindProperty("toU").floatValue = PortU(CityLayout.PortBasin.xMax + 6f);
+        zone.FindProperty("blend").floatValue = 6f;
+        zone.FindProperty("offset").vector3Value = BasinCameraOffset;
+        zone.FindProperty("lookHeight").floatValue = BasinCameraLookHeight;
+        zone.ApplyModifiedPropertiesWithoutUndo();
+        ((CameraZone)zone.targetObject).transform.SetParent(port, false);
+    }
+
+    // Halbportalkran über dem Becken: Träger entlang der Bahn, getragen von zwei Stützen hinter der Bahn (Norden) mit
+    // Auslegern nach vorn. Vorne (Kameraseite) steht nichts, sonst verdeckte eine Stütze den Spieler beim Springen
+    private static void BasinGantry(Transform parent)
+    {
+        Material paint = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Crane Yellow.mat");
+        Material dark = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Crane Steel.mat");
+        Transform gantry = new GameObject("Basin Gantry").transform;
+        gantry.SetParent(parent, false);
+        Rect basin = CityLayout.PortBasin;
+        float x0 = basin.xMin - 4f, x1 = basin.xMax + 4f;
+        const float legZ = PortZ + 9f;
+        // Träger knapp über den Laufkatzen
+        PrimitiveKit.Box("Beam", gantry, new Vector3((x0 + x1) / 2f, CraneBeamY + 0.5f, PortZ), new Vector3(x1 - x0, 1f, 1.2f), paint);
+        PrimitiveKit.Box("Rail", gantry, new Vector3((x0 + x1) / 2f, CraneBeamY - 0.05f, PortZ), new Vector3(x1 - x0, 0.1f, 0.5f), dark);
+        foreach (float x in new[] { x0 + 1f, x1 - 1f })
+        {
+            PrimitiveKit.Box("Leg", gantry, new Vector3(x, (CityLayout.PortTop + CraneBeamY + 2f) / 2f, legZ), new Vector3(1.2f, CraneBeamY + 2f - CityLayout.PortTop, 1.2f), paint);
+            PrimitiveKit.Box("Arm", gantry, new Vector3(x, CraneBeamY + 1.5f, (legZ + PortZ) / 2f), new Vector3(1f, 1f, legZ - PortZ + 1.2f), paint);
+            // Schräge Strebe vom Bein zum Ausleger
+            Vector3 from = new Vector3(x, CraneBeamY - 4f, legZ);
+            Vector3 to = new Vector3(x, CraneBeamY + 1f, PortZ + 2f);
+            Renderer brace = PrimitiveKit.Box("Brace", gantry, (from + to) / 2f, new Vector3(0.5f, 0.5f, Vector3.Distance(from, to)), paint);
+            brace.transform.rotation = Quaternion.LookRotation(to - from);
+            PrimitiveKit.Box("Foot", gantry, new Vector3(x, CityLayout.PortTop + 0.3f, legZ), new Vector3(2f, 0.6f, 2.5f), dark);
+        }
+        PrimitiveKit.Box("Cabin", gantry, new Vector3(x1 - 3f, CraneBeamY - 0.8f, PortZ + 1.6f), new Vector3(2f, 1.6f, 1.8f),
+            AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Window Glass.mat"));
+    }
+
     // ---------- Spiel-Elemente ----------
 
     private static void BuildGameplay()
@@ -387,6 +500,7 @@ public static class Level4Builder
         ((CameraZone)marketZone.targetObject).transform.SetParent(gameplayParent, false);
 
         BuildMarket();
+        BuildPort();
 
         // Crust Street (auf dem Board): zwei Bänke zum Drüberspringen, damit man die Ollie-Weite ausprobieren kann.
         // Rampen über Baugruben, Poller und der Hund kommen mit dem Feinschliff dieses Stücks

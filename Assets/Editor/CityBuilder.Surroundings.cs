@@ -91,23 +91,50 @@ public static partial class CityBuilder
     {
         Material concrete = Mat("Port Concrete", new Color(0.62f, 0.62f, 0.6f));
         float quayX = W - 130f;
-        Slab("Port Ground", port, quayX, N - 70f, W - 12f, N + 70f, -4f, 0.6f, concrete);
-        Slab("Quay Edge", port, quayX - 0.5f, N - 70f, quayX + 1f, N + 70f, -4f, 0.9f, Mat("Curb"));
+        // Hafenboden mit dem Becken als Loch (darunter liegt das Meer), begehbar (Level 4 läuft hier), ausschneidbar
+        Rect basin = CityLayout.PortBasin;
+        foreach (Renderer piece in SlabAround("Port Ground", port, quayX, N - 70f, W - 12f, N + 70f, -4f, CityLayout.PortTop, concrete, basin))
+        {
+            piece.gameObject.layer = GroundLayer;
+            piece.gameObject.AddComponent<BoxCollider>();
+            piece.gameObject.AddComponent<CityGround>();
+        }
+        GameObject quayEdge = Slab("Quay Edge", port, quayX - 0.5f, N - 70f, quayX + 1f, N + 70f, -4f, 0.9f, Mat("Curb")).gameObject;
+        quayEdge.layer = GroundLayer;
+        quayEdge.AddComponent<BoxCollider>();
+        // Kante rund ums Becken (Poller-Optik): niedriger Betonrand, 0.1 m ins Becken hinein, damit nichts flackert
+        Material curbMat = Mat("Curb");
+        Slab("Basin Edge", port, basin.xMin - 0.1f, basin.yMin - 0.3f, basin.xMax + 0.1f, basin.yMin, CityLayout.PortTop - 0.2f, CityLayout.PortTop + 0.12f, curbMat);
+        Slab("Basin Edge", port, basin.xMin - 0.1f, basin.yMax, basin.xMax + 0.1f, basin.yMax + 0.3f, CityLayout.PortTop - 0.2f, CityLayout.PortTop + 0.12f, curbMat);
 
         var random = new System.Random(77);
         int crane = 0;
-        foreach (float z in new[] { N - 45f, N - 5f, N + 35f })
+        // Die südliche Containerbrücke steht südlich des freien Bands um die Route (sonst stünde die Kamera zwischen ihren Beinen)
+        foreach (float z in new[] { N - 62f, N - 5f, N + 35f })
         {
             Crane(port, new Vector3(quayX + 12f, 0.6f, z), crane++ % 2 == 0 ? Mat("Crane Yellow", new Color(0.95f, 0.75f, 0.15f), 0.4f) : Mat("Crane Red", new Color(0.8f, 0.2f, 0.15f), 0.4f));
         }
         Ship(port, new Vector3(quayX - 16f, SeaLevel, N - 30f), 100f, Mat("Ship Hull Red", new Color(0.55f, 0.12f, 0.1f), 0.3f), random);
         Ship(port, new Vector3(quayX - 16f, SeaLevel, N + 62f), 70f, Mat("Ship Hull Blue", new Color(0.15f, 0.25f, 0.45f), 0.3f), random);
 
+        // Hallen: eine hinter der Route am Hof, eine im Norden. Dort keine Containerstapel
+        float[] shedZ = { CityLayout.PortClearToZ + 8f, N + 40f };
+        Rect[] sheds = System.Array.ConvertAll(shedZ, z => Rect.MinMaxRect(W - 38.5f, z - 0.5f, W - 17.5f, z + 22.5f));
+
         // Containerstapel: Reihen aus 6 Stellplätzen nebeneinander, je 1–4 hoch
         for (float x = quayX + 30f; x < W - 40f; x += 22f)
         {
             for (float z = N - 62f; z < N + 55f; z += 16f)
             {
+                // Stapel stehen 12 m lang in Z (z bis z + 12): nicht im freien Band um die Route und nicht im Becken
+                bool inBand = z + 12f > CityLayout.PortClearFromZ && z < CityLayout.PortClearToZ;
+                Rect lot = Rect.MinMaxRect(x - 1.3f, z, x + 5f * 2.7f + 1.3f, z + 12f);
+                bool inBasin = lot.Overlaps(basin);
+                bool inShed = System.Array.Exists(sheds, shed => shed.Overlaps(lot));
+                if (inBand || inBasin || inShed)
+                {
+                    continue;
+                }
                 for (int column = 0; column < 6; column++)
                 {
                     int height = 1 + random.Next(4);
@@ -122,7 +149,8 @@ public static partial class CityBuilder
 
         Material shed = Mat("Shed", new Color(0.72f, 0.74f, 0.76f));
         Material shedRoof = Mat("Shed Roof", new Color(0.25f, 0.4f, 0.55f));
-        foreach (float z in new[] { N - 60f, N + 40f })
+        // Die erste Halle steht hinter der Route (Norden) am Hof, nicht südlich davon (dort steht die Kamera)
+        foreach (float z in shedZ)
         {
             Slab("Warehouse", port, W - 38f, z, W - 18f, z + 22f, 0.6f, 9f, shed);
             Slab("Warehouse Roof", port, W - 38.5f, z - 0.5f, W - 17.5f, z + 22.5f, 9f, 9.6f, shedRoof);

@@ -40,6 +40,14 @@ public class Customer : MonoBehaviour
     [SerializeField] private float sitDrop = 0.45f;
     [SerializeField] private float standUpDuration = 0.5f;
 
+    [Header("Stahlträger (Level 4, ohne Haus)")]
+    [Tooltip("Sitzt auf einem Stahlträger und bleibt sitzen: winkt im Sitzen, nimmt den Karton im Sitzen. Erst beim Tanz mit " +
+             "3 Münzen steht er auf dem Träger auf. sitDrop dafür auf 0 (die Wurzel liegt auf dem Träger)")]
+    [SerializeField] private bool seatedOnBeam;
+    [Tooltip("Beine, die vom Sitz herunterbaumeln (nur auf dem Träger, die Figur hat sonst keine)")]
+    [SerializeField] private Transform leftLeg;
+    [SerializeField] private Transform rightLeg;
+
     [Header("Warten")]
     [Tooltip("Ab diesem Abstand (in X) winkt der Kunde dem Spieler zu")]
     [SerializeField] private float waveDistance = 6f;
@@ -127,7 +135,7 @@ public class Customer : MonoBehaviour
         }
 
         // Hat das Intro ihn schon nach draußen gestellt (kann im selben Frame vor diesem Start passieren), dort lassen
-        if ((homeDoor != null || sitsOnBlanket) && !introWave)
+        if ((homeDoor != null || sitsOnBlanket || seatedOnBeam) && !introWave)
         {
             GoBackInside();
         }
@@ -147,6 +155,10 @@ public class Customer : MonoBehaviour
         }
         rig.localPosition = Vector3.zero;
         rig.localRotation = Quaternion.identity;
+        if (seatedOnBeam)
+        {
+            SitPose();
+        }
         introWave = true;
         state = State.Waiting;
     }
@@ -162,7 +174,7 @@ public class Customer : MonoBehaviour
     // der Decke. Auch beim Respawn des Spielers, solange noch nicht geliefert wurde
     private void GoBackInside()
     {
-        if ((homeDoor == null && !sitsOnBlanket) || state == State.Receiving || state == State.Dancing)
+        if ((homeDoor == null && !sitsOnBlanket && !seatedOnBeam) || state == State.Receiving || state == State.Dancing)
         {
             return;
         }
@@ -188,6 +200,27 @@ public class Customer : MonoBehaviour
         rig.localPosition = Vector3.down * sitDrop;
         rig.localRotation = Quaternion.Euler(8f, 0f, 0f);
         SetHoldPose(35f, 10f);
+        SetLegs(true, Mathf.Sin(Time.time * 2f) * 15f);
+    }
+
+    // Baumelnde Beine (nur auf dem Träger): hängen nach unten, schwingen gegengleich nach vorn und hinten (Grad)
+    private void SetLegs(bool visible, float swing)
+    {
+        foreach (Transform leg in new[] { leftLeg, rightLeg })
+        {
+            if (leg != null && leg.gameObject.activeSelf != visible)
+            {
+                leg.gameObject.SetActive(visible);
+            }
+        }
+        if (leftLeg != null)
+        {
+            leftLeg.localRotation = Quaternion.Euler(20f + swing, 0f, 0f);
+        }
+        if (rightLeg != null)
+        {
+            rightLeg.localRotation = Quaternion.Euler(20f - swing, 0f, 0f);
+        }
     }
 
     // Picknick statt Tür: aufstehen (mit kleinem Schwung über die Standhöhe hinaus), dann warten und winken
@@ -230,7 +263,16 @@ public class Customer : MonoBehaviour
         switch (state)
         {
             case State.Inside:
-                if (player != null && FlatDistanceToPlayer() < comeOutDistance)
+                if (seatedOnBeam)
+                {
+                    // Bleibt sitzen, baumelt mit den Beinen. Kommt der Bote, winkt er im Sitzen (Waiting)
+                    SitPose();
+                    if (player != null && FlatDistanceToPlayer() < comeOutDistance)
+                    {
+                        state = State.Waiting;
+                    }
+                }
+                else if (player != null && FlatDistanceToPlayer() < comeOutDistance)
                 {
                     StartCoroutine(homeDoor != null ? ComeOut() : StandUp());
                 }
@@ -247,9 +289,16 @@ public class Customer : MonoBehaviour
 
     private void UpdateWaiting()
     {
-        // Ungeduldig von einem Fuß auf den anderen
+        // Ungeduldig von einem Fuß auf den anderen (auf dem Träger: sitzen bleiben, Beine baumeln)
         float t = Time.time;
-        rig.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * swaySpeed) * swayAngle);
+        if (seatedOnBeam)
+        {
+            SitPose();
+        }
+        else
+        {
+            rig.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * swaySpeed) * swayAngle);
+        }
 
         bool playerClose = introWave || (player != null && FlatDistanceToPlayer() < waveDistance);
         // Winkel um Z: 0 = Arm hängt runter, -X-Arm geht mit negativen Winkeln nach außen/oben
@@ -278,7 +327,10 @@ public class Customer : MonoBehaviour
                 transform.position = homeDoor.OutsidePosition;
                 homeDoor.SnapClosed();
             }
-            rig.localPosition = Vector3.zero;
+            if (!seatedOnBeam)
+            {
+                rig.localPosition = Vector3.zero;
+            }
         }
         StartCoroutine(ReceiveCarton());
     }
@@ -287,6 +339,10 @@ public class Customer : MonoBehaviour
     {
         state = State.Receiving;
         rig.localRotation = Quaternion.identity;
+        if (seatedOnBeam)
+        {
+            rig.localPosition = Vector3.down * sitDrop;
+        }
         // Beide Arme nach vorne strecken, wie zum Entgegennehmen
         SetHoldPose(70f);
 
@@ -320,6 +376,11 @@ public class Customer : MonoBehaviour
     private void UpdateDance()
     {
         float t = danceTime * danceSpeed;
+        if (seatedOnBeam)
+        {
+            UpdateBeamDance(t);
+            return;
+        }
 
         switch (coins)
         {
@@ -339,6 +400,34 @@ public class Customer : MonoBehaviour
                 // Kurz hin und her wiegen, die Pizza ruhig vor dem Bauch
                 rig.localPosition = Vector3.zero;
                 rig.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(t * 0.6f) * 8f);
+                SetHoldPose(70f + Mathf.Sin(t * 0.6f) * 5f);
+                break;
+        }
+    }
+
+    // Auf dem Träger: 1–2 Münzen im Sitzen (wippen, strampeln, Pizza im Takt), 3 Münzen aufstehen (Beine weg) und wie
+    // gewohnt hüpfen und drehen, die Pizza hoch über dem Kopf
+    private void UpdateBeamDance(float t)
+    {
+        Vector3 seat = Vector3.down * sitDrop;
+        switch (coins)
+        {
+            case 3:
+                SetLegs(false, 0f);
+                rig.localPosition = seat + Vector3.up * (hopHeightThreeCoins * Mathf.Abs(Mathf.Sin(t)));
+                rig.localRotation = Quaternion.Euler(0f, danceTime * spinSpeed, 0f);
+                SetHoldPose(125f + Mathf.Sin(t * 2f) * 15f);
+                break;
+            case 2:
+                SetLegs(true, Mathf.Sin(t * 1.5f) * 35f);
+                rig.localPosition = seat + Vector3.up * (0.08f * Mathf.Abs(Mathf.Sin(t)));
+                rig.localRotation = Quaternion.Euler(6f, 0f, 0f);
+                SetHoldPose(75f + Mathf.Sin(t) * 25f);
+                break;
+            default:
+                SetLegs(true, Mathf.Sin(t * 0.6f) * 20f);
+                rig.localPosition = seat;
+                rig.localRotation = Quaternion.Euler(6f, 0f, Mathf.Sin(t * 0.6f) * 6f);
                 SetHoldPose(70f + Mathf.Sin(t * 0.6f) * 5f);
                 break;
         }
