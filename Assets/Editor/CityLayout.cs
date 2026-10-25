@@ -25,7 +25,9 @@ public static class CityLayout
     public static float FacadeInset(Side side) => side == Side.Narrow ? 5f : side == Side.Avenue ? 10f : 3f;
     public static float SidewalkInset(Side side) => side == Side.Narrow ? 3f : side == Side.Avenue ? 6f : -2f;
 
-    public enum BlockKind { Houses, Downtown, Piazza, Park, Ruins }
+    // HighRise: Hochhausviertel im Norden am Mozzarella Blvd. In Level 1–4 ganz normal, in Level 5 zerstört der Kaiju es
+    // (das Level schneidet die Türme aus und legt sie umgestürzt hin)
+    public enum BlockKind { Houses, Downtown, Piazza, Park, HighRise }
 
     public readonly struct Street
     {
@@ -162,8 +164,8 @@ public static class CityLayout
         new Block(West, -180f, 265f, North, "raar", BlockKind.Houses),
         new Block(-180f, -110f, 215f, 265f, "aaaa", BlockKind.Houses),
         new Block(-180f, -110f, 265f, North, "aaar", BlockKind.Houses),
-        new Block(-110f, -40f, 215f, North, "aaar", BlockKind.Ruins),
-        new Block(-40f, 50f, 215f, North, "anar", BlockKind.Ruins),
+        new Block(-110f, -40f, 215f, North, "aaar", BlockKind.HighRise),
+        new Block(-40f, 50f, 215f, North, "anar", BlockKind.HighRise),
         new Block(50f, East, 215f, North, "nrar", BlockKind.Houses),
     };
 

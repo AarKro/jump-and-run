@@ -69,7 +69,7 @@ public static partial class CityBuilder
         Transform landmarks = Group("Landmarks");
         PlaceLandmarks(landmarks);
         BuildFoundersCircle(landmarks);
-        BuildKaiju(Group("Kaiju"));
+        // Die Kaiju (Echse gegen Roboter) gehören seit 2026-10-25 nur noch zu Level 5 (Level5Builder), die Stadt ist normal
         BuildSurroundings();
         BuildStreetSigns();
 
@@ -219,8 +219,8 @@ public static partial class CityBuilder
                 case CityLayout.BlockKind.Park:
                     BuildPark(parent, block, random);
                     break;
-                case CityLayout.BlockKind.Ruins:
-                    BuildRuins(parent, block, random);
+                case CityLayout.BlockKind.HighRise:
+                    BuildHighRises(parent, block, random);
                     break;
             }
         }
@@ -229,9 +229,8 @@ public static partial class CityBuilder
     // Grundstücke entlang der Blockränder, 8 m tief wie die Häuser in Level 1, 8–14 m breit. Innen bleibt ein Hof frei.
     // Ist der Block zu schmal für zwei Reihen, wird er mit einer Reihe aufgefüllt. skipEast: Ostseite frei lassen (Piazza).
     // Reservierte Grundstücke (feste Gebäude, Kundenhaus) werden ausgespart, die Reihe läuft davor und dahinter weiter
-    private static List<Rect> Lots(Rect area, System.Random random, bool skipEast)
+    private static List<Rect> Lots(Rect area, System.Random random, bool skipEast, float depth = 8f, float minWidth = 8f, float widthRange = 6f)
     {
-        const float depth = 8f;
         var lots = new List<Rect>();
         var reserved = new List<Rect>(CityLayout.LandmarkLots) { CityLayout.CustomerHouseLot };
 
@@ -240,8 +239,8 @@ public static partial class CityBuilder
             float position = from;
             while (to - position > 0.5f)
             {
-                float width = 8f + (float)random.NextDouble() * 6f;
-                if (to - (position + width) < 6f)
+                float width = minWidth + (float)random.NextDouble() * widthRange;
+                if (to - (position + width) < minWidth * 0.75f)
                 {
                     width = to - position;
                 }
@@ -321,6 +320,34 @@ public static partial class CityBuilder
     }
 
     // Ein Haus = ein Würfel mit dem Fassaden-Shader (Fenster, Farbe, Dach kommen aus dem Shader)
+    // Hochhäuser: tiefere und breitere Grundstücke als normale Häuser, 32–76 m hoch. Etwa die Hälfte bekommt oben einen
+    // zurückgesetzten Aufbau (zweiter, schmalerer Quader, der aus dem ersten herauswächst), manche eine Antenne
+    public static readonly float[] HighRiseHeights = { 32f, 40f, 46f, 52f, 60f, 68f, 76f };
+
+    private static void BuildHighRises(Transform parent, CityLayout.Block block, System.Random random)
+    {
+        Material antenna = Mat("Iron");
+        foreach (Rect lot in Lots(block.Lots, random, false, 16f, 12f, 8f))
+        {
+            float height = Pick(random, HighRiseHeights);
+            Renderer tower = House(parent, lot, height);
+            tower.name = "High Rise";
+            float roof = height;
+            if (random.NextDouble() < 0.5)
+            {
+                const float inset = 2.5f;
+                Rect crown = Rect.MinMaxRect(lot.xMin + inset, lot.yMin + inset, lot.xMax - inset, lot.yMax - inset);
+                roof = height + 6f + (float)random.NextDouble() * 8f;
+                House(parent, crown, roof).name = "High Rise Crown";
+            }
+            if (random.NextDouble() < 0.35)
+            {
+                // Steht auf dem höchsten Dach (Mitte 6 m darüber, 12 m lang)
+                Cylinder("Antenna", parent, new Vector3(lot.center.x, Surface + roof + 6f, lot.center.y), 0.3f, 12f, antenna);
+            }
+        }
+    }
+
     private static Renderer House(Transform parent, Rect lot, float height)
     {
         return PrimitiveKit.Box("House", parent, new Vector3(lot.center.x, Surface + height / 2f, lot.center.y), new Vector3(lot.width, height, lot.height), facade);
