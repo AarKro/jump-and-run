@@ -107,6 +107,7 @@ public static class Level5Builder
         LevelBuildKit.SetupEssentials(Mathf.Round(MozzarellaU(GoalZ)), "1", KeepWarmTime,
             new Vector3(MozzarellaX, -20f, 150f), new Vector3(40f, 1f, 340f),
             "No. 1, Mozzarella Blvd (the last house standing)", new Vector3(-60f, 70f, -90f));
+        SetupIntroExpose();
         LevelBuildKit.Save(scene);
         Debug.Log($"Level5Builder: Level 5 (Kaiju) gebaut. Bahn u {LevelBuildKit.Lane.StartU:F2} bis {LevelBuildKit.Lane.EndU:F2}, Mozzarella u(z) = {MozzarellaU(0f):F2} - z");
     }
@@ -399,6 +400,32 @@ public static class Level5Builder
     // Beide Monster wie früher in der Stadt, aber: Die Echse schaut anfangs nach Süden (zum Spieler und zum Park, dorthin
     // speit sie Feuer), der Roboter ist noch nicht da (kommt später aus dem Himmel, eigener Arbeitsschritt). Der Ringkampf
     // (KaijuFight) ist darum erst mal aus
+    private static KaijuBattle battleComponent;
+
+    // Intro-Vorspann: Die Kamera gleitet von Westen über den Ruinen auf die Echse zu, während sie den Park in Brand setzt
+    // (Strahl und Echse von der Seite, beide im Bild). Danach fliegt die Kamera von dort zum Kunden
+    private static readonly Vector3 ExposeCameraFrom = new Vector3(-150f, 30f, 168f);
+    private static readonly Vector3 ExposeCameraTo = new Vector3(-125f, 42f, 190f);
+    private static readonly Vector3 ExposeLook = new Vector3(-40f, 32f, 222f);
+    private const float ExposeDuration = 5f;
+
+    private static void SetupIntroExpose()
+    {
+        GameObject mainCamera = GameObject.Find("Main Camera");
+        IntroFlyover intro = mainCamera != null ? mainCamera.GetComponent<IntroFlyover>() : null;
+        if (intro == null || battleComponent == null)
+        {
+            return;
+        }
+        var so = new SerializedObject(intro);
+        so.FindProperty("exposeActor").objectReferenceValue = battleComponent;
+        so.FindProperty("exposeCameraFrom").vector3Value = ExposeCameraFrom;
+        so.FindProperty("exposeCameraTo").vector3Value = ExposeCameraTo;
+        so.FindProperty("exposeLook").vector3Value = ExposeLook;
+        so.FindProperty("exposeDuration").floatValue = ExposeDuration;
+        so.ApplyModifiedPropertiesWithoutUndo();
+    }
+
     private static void BuildKaiju()
     {
         CityBuilder.KaijuParts kaiju = CityBuilder.BuildKaijuForLevel(gameplayParent, KaijuCenter);
@@ -427,7 +454,8 @@ public static class Level5Builder
         ParticleSystem landingDust = Dust(gameplayParent, "Landing Dust", robotLanding, 16f, particles);
         ParticleSystem fallDust = Dust(gameplayParent, "Fall Dust", new Vector3(KaijuCenter.x - 40f, CityLayout.Surface, KaijuCenter.y - 16f), 30f, particles);
 
-        var battle = new SerializedObject(kaiju.root.gameObject.AddComponent<KaijuBattle>());
+        battleComponent = kaiju.root.gameObject.AddComponent<KaijuBattle>();
+        var battle = new SerializedObject(battleComponent);
         battle.FindProperty("lizardRoot").objectReferenceValue = kaiju.lizard;
         battle.FindProperty("lizardUpper").objectReferenceValue = kaiju.lizardUpper;
         battle.FindProperty("lizardHead").objectReferenceValue = kaiju.lizardHead;

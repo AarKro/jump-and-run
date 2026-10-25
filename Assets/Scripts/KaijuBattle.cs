@@ -12,7 +12,7 @@ using UnityEngine;
 // Während der Zwischensequenzen ist der Spieler eingefroren, die Kamera schaut aufs Geschehen, und die verlorene Zeit wird
 // der Wärme gutgeschrieben (kostet also nichts). Stirbt der Spieler vorher (Respawn), fängt alles wieder bei 1 an.
 // Bewegt wird relativ zur gebauten Pose (wie KaijuFight).
-public class KaijuBattle : MonoBehaviour
+public class KaijuBattle : MonoBehaviour, IIntroExpose
 {
     [Header("Echse")]
     [SerializeField] private Transform lizardRoot;
@@ -218,6 +218,19 @@ public class KaijuBattle : MonoBehaviour
         headPitch = Mathf.Lerp(headPitch, targetHead, blend);
         lizardUpper.localRotation = upperRest * Quaternion.Euler(lean, Mathf.Sin(Time.time * 0.8f) * 3f, Mathf.Sin(Time.time * 0.5f) * 2f);
         lizardHead.localRotation = headRest * Quaternion.Euler(headPitch, Mathf.Sin(Time.time * 0.6f) * 8f, 0f);
+    }
+
+    // Vorspann des Level-Intros: Sie speit einmal Feuer in den Park (lädt schon halb auf, damit es im Bild schnell losgeht).
+    // Danach hört sie auf, weil der Spieler noch in der Pizzeria ist (außerhalb des Bereichs). Die Bäume brennen ab da
+    public void PlayExpose()
+    {
+        if (stage != Stage.Rampage)
+        {
+            return;
+        }
+        breathActive = true;
+        Next(Phase.Charge);
+        phaseTime = chargeTime * 0.25f;
     }
 
     private void Next(Phase next)

@@ -27,6 +27,16 @@ public class IntroFlyover : MonoBehaviour
     [Tooltip("So lange bleibt die Kamera beim winkenden Kunden, bevor sich die Iris schließt")]
     [SerializeField] private float holdDuration = 0.6f;
 
+    [Header("Vorspann (optional, z.B. Level 5)")]
+    [Tooltip("Wird vor dem Flug zum Kunden gezeigt (z.B. die Echse, die die Stadt verwüstet). Leer = kein Vorspann")]
+    [SerializeField] private MonoBehaviour exposeActor;
+    [Tooltip("Kamera gleitet in Welt-Koordinaten von hier nach dort und schaut dabei auf exposeLook. Danach fliegt sie von dort aus " +
+             "zum Kunden (der Bogen bleibt auf dieser Höhe, bis er hinunterstößt)")]
+    [SerializeField] private Vector3 exposeCameraFrom;
+    [SerializeField] private Vector3 exposeCameraTo;
+    [SerializeField] private Vector3 exposeLook;
+    [SerializeField] private float exposeDuration = 4.5f;
+
     [Header("Lieferadresse")]
     [SerializeField] private string deliveryAddress = "No. 42, Pepperoni Parkway";
     [SerializeField] private float titleFadeDuration = 0.4f;
@@ -116,11 +126,43 @@ public class IntroFlyover : MonoBehaviour
         }
         Vector3 focus = customer != null ? customer.IntroFocus : goal.position + Vector3.up;
 
+        // Iris geht auf, sobald die erste Einstellung steht (beim Vorspann über diesem, sonst über der Stadt am Kunden).
+        // Läuft nebenher weiter, während die Kamera schon fliegt
+        Coroutine opening = null;
+        bool skipped = false;
+        Vector3 flightStart = focus + overviewOffset;
+        float overview = overviewDuration;
+        if (exposeActor is IIntroExpose expose)
+        {
+            transform.SetPositionAndRotation(exposeCameraFrom, Quaternion.LookRotation(exposeLook - exposeCameraFrom));
+            opening = iris != null ? StartCoroutine(iris.Open(view, exposeLook, irisOpenDuration)) : null;
+            expose.PlayExpose();
+            for (float t = 0f; t < exposeDuration; t += Time.deltaTime)
+            {
+                if (t > skipDelay && SkipPressed())
+                {
+                    skipped = true;
+                    break;
+                }
+                float k = Mathf.SmoothStep(0f, 1f, t / exposeDuration);
+                transform.position = Vector3.Lerp(exposeCameraFrom, exposeCameraTo, k);
+                transform.rotation = Quaternion.LookRotation(exposeLook - transform.position);
+                yield return null;
+            }
+            // Der Flug zum Kunden beginnt dort, wo der Vorspann aufhört, ohne Übersichts-Pause
+            flightStart = transform.position;
+            overview = 0f;
+        }
+        else
+        {
+            opening = iris != null ? StartCoroutine(iris.Open(view, focus, irisOpenDuration)) : null;
+        }
+
         // Kurve als kubische Bézier-Kurve aus 4 Punkten: Start und Ende liegen auf der Kurve, die zwei Punkte
         // dazwischen ziehen sie nur in ihre Richtung. Kontrollpunkt 2 liegt auf der Verlängerung der Endposition
         // (vom Kunden weg), dadurch kommt die Kamera zum Schluss gerade und schräg von vorne herein.
         // Kontrollpunkt 1 liegt in Starthöhe darüber: erst oben bleiben und herumschwenken, dann hinunterstoßen.
-        Vector3 start = focus + overviewOffset;
+        Vector3 start = flightStart;
         // Von vorne auf den Kunden, also in seiner Drehung (nicht der des Ziels: Level 3 dreht das Picknick um,
         // die Wurzel des Ziels bleibt aber im Lane-Rahmen)
         Quaternion facing = customer != null ? customer.transform.rotation : goal.rotation;
@@ -130,11 +172,9 @@ public class IntroFlyover : MonoBehaviour
 
         float elapsed = 0f;
         bool titleShown = false;
-        float total = overviewDuration + swoopDuration + holdDuration;
-
-        // Iris geht über der Stadt auf (aus der Bildmitte, da schaut die Kamera ja auf den Kunden).
-        // Läuft nebenher weiter, während die Kamera schon fliegt
-        Coroutine opening = iris != null ? StartCoroutine(iris.Open(view, focus, irisOpenDuration)) : null;
+        float total = skipped ? 0f : overview + swoopDuration + holdDuration;
+        // Vom Vorspann kommend: Der Blick schwenkt erst vom Vorspann-Ziel auf den Kunden, statt zu springen
+        Quaternion startRotation = transform.rotation;
 
         while (elapsed < total)
         {
@@ -143,7 +183,7 @@ public class IntroFlyover : MonoBehaviour
                 break;
             }
 
-            float swoop = Mathf.Clamp01((elapsed - overviewDuration) / swoopDuration);
+            float swoop = Mathf.Clamp01((elapsed - overview) / swoopDuration);
             if (hud != null && swoop > 0f && !titleShown)
             {
                 titleShown = true;
@@ -155,7 +195,8 @@ public class IntroFlyover : MonoBehaviour
             transform.position = Bezier(start, high, approach, end, k);
             // Immer den Kunden im Blick, am Anfang etwas darüber (flacherer Blick über die Stadt)
             Vector3 lookPoint = focus + Vector3.up * (overviewLookAbove * (1f - k));
-            transform.rotation = Quaternion.LookRotation(lookPoint - transform.position);
+            Quaternion look = Quaternion.LookRotation(lookPoint - transform.position);
+            transform.rotation = overview > 0f ? look : Quaternion.Slerp(startRotation, look, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(swoop * 3f)));
 
             elapsed += Time.deltaTime;
             yield return null;
