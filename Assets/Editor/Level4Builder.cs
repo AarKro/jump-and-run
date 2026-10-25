@@ -585,6 +585,9 @@ public static class Level4Builder
     //   Kai: Bauarbeiter auf dem Stahlträger (Ziel)
     // Ein Container ist 6 m lang, Stapel stehen Kante an Kante, wo es eine Treppe sein soll. Welt-x = Mitte
     private static readonly (float x, int levels)[] YardStacks = { (-273f, 1), (-279f, 2), (-289f, 2), (-295f, 3) };
+    // Holzkisten als Stufen dort, wo man zwischen den Containern auf den Boden fällt (sonst säße man fest): in der 4 m Lücke
+    // eine niedrige (1.3) und eine hohe (2.6) Stufe hinauf zum nächsten Stapel, vor dem Becken eine hohe als Absprung zur Fähre
+    private static readonly (float x, string prefab)[] YardSteps = { (-283f, "Crate Step Low"), (-285f, "Crate Step High"), (-299f, "Crate Step High") };
     // Kran-Container: Mitte von/bis (Welt-x) und Wurzel-Höhe von/bis (Oberkante = Wurzel + 0.5)
     private static readonly (float fromX, float toX, float fromY, float toY)[] CraneRides =
     {
@@ -606,6 +609,10 @@ public static class Level4Builder
         foreach (var stack in YardStacks)
         {
             LevelBuildKit.PlaceAsset($"{PortSetup.PrefabFolder}/Container Stack {stack.levels}.prefab", Mathf.Round(PortU(stack.x)), 0, port);
+        }
+        foreach (var step in YardSteps)
+        {
+            LevelBuildKit.PlaceAsset($"{PortSetup.PrefabFolder}/{step.prefab}.prefab", Mathf.Round(PortU(step.x)), 0, port);
         }
 
         float liftTop = 0f;

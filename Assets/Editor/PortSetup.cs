@@ -31,6 +31,8 @@ public static class PortSetup
             BuildStack(levels);
         }
         BuildCraneContainer();
+        BuildCrateStep("Crate Step Low", 1);
+        BuildCrateStep("Crate Step High", 2);
         BuildCrewGoal();
         AssetDatabase.SaveAssets();
         Debug.Log("PortSetup: Hafen-Prefabs gebaut.");
@@ -70,9 +72,11 @@ public static class PortSetup
                 PrimitiveKit.Box("Rib", c, new Vector3(x, ContainerHeight / 2f, side * (ContainerDepth / 2f + 0.01f)), new Vector3(0.12f, ContainerHeight - 0.25f, 0.02f), color);
             }
         }
-        // Dunkle Kanten oben und unten, damit man gestapelte Container auseinanderhält
-        PrimitiveKit.Box("Bottom Rail", c, new Vector3(0f, 0.08f, 0f), new Vector3(ContainerLength + 0.02f, 0.16f, ContainerDepth + 0.04f), rib);
-        PrimitiveKit.Box("Top Rail", c, new Vector3(0f, ContainerHeight - 0.08f, 0f), new Vector3(ContainerLength + 0.02f, 0.14f, ContainerDepth + 0.04f), rib);
+        // Dunkle Kanten oben und unten, damit man gestapelte Container auseinanderhält. Etwas unter der Oberseite bzw. über
+        // der Unterseite des Körpers: Lägen ihre Flächen genau auf denen des Körpers, flackerten beide (Z-Fighting), am
+        // auffälligsten auf dem Dach, auf dem man steht
+        PrimitiveKit.Box("Bottom Rail", c, new Vector3(0f, 0.1f, 0f), new Vector3(ContainerLength + 0.02f, 0.14f, ContainerDepth + 0.04f), rib);
+        PrimitiveKit.Box("Top Rail", c, new Vector3(0f, ContainerHeight - 0.1f, 0f), new Vector3(ContainerLength + 0.02f, 0.14f, ContainerDepth + 0.04f), rib);
         // Türen am Ende: zwei Flügel mit Verriegelungsstangen
         foreach (float z in new[] { -0.6f, 0.6f })
         {
@@ -90,6 +94,31 @@ public static class PortSetup
         }
         PrimitiveKit.AddBoxCollider(root, new Vector3(0f, Surface + levels * ContainerHeight / 2f, 0f), new Vector3(ContainerLength, levels * ContainerHeight, ContainerDepth));
         PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Container Stack {levels}.prefab");
+    }
+
+    // Holzkisten-Stapel als Stufe (2 m lang, levels × 1.3 m hoch, begehbar): steht dort, wo man zwischen die Container auf den
+    // Boden fallen kann, damit man wieder hinaufkommt (ein Container ist mit 2.6 m bzw. gestapelt 5.2 m zu hoch für einen Sprung)
+    private static void BuildCrateStep(string name, int levels)
+    {
+        Material wood = PrimitiveKit.Material($"{MaterialFolder}/Crate Wood.mat", PrimitiveKit.LitShader, new Color(0.72f, 0.55f, 0.33f));
+        Material dark = PrimitiveKit.Material($"{MaterialFolder}/Door Wood.mat", PrimitiveKit.LitShader, new Color(0.42f, 0.25f, 0.13f));
+        const float crate = 1.3f, length = 2f;
+        var root = new GameObject(name) { layer = GroundLayer };
+        Transform t = root.transform;
+        for (int level = 0; level < levels; level++)
+        {
+            float y = Surface + level * crate;
+            // Zwei Kisten nebeneinander, die obere Lage etwas versetzt (sieht gestapelt aus)
+            for (int i = 0; i < 2; i++)
+            {
+                float x = -length / 4f + i * length / 2f + (level % 2 == 0 ? 0f : 0.05f);
+                PrimitiveKit.Box("Crate", t, new Vector3(x, y + crate / 2f, 0f), new Vector3(length / 2f - 0.04f, crate - 0.04f, 1.4f), wood);
+                PrimitiveKit.Box("Slat", t, new Vector3(x, y + 0.3f, -0.71f), new Vector3(length / 2f - 0.02f, 0.1f, 0.02f), dark);
+                PrimitiveKit.Box("Slat", t, new Vector3(x, y + crate - 0.3f, -0.71f), new Vector3(length / 2f - 0.02f, 0.1f, 0.02f), dark);
+            }
+        }
+        PrimitiveKit.AddBoxCollider(root, new Vector3(0f, Surface + levels * crate / 2f, 0f), new Vector3(length, levels * crate, 1.4f));
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/{name}.prefab");
     }
 
     // Container am Kranseil: MovingPlatform (fährt von "moving platform start" nach "moving platform end", setzt der
