@@ -49,6 +49,18 @@ public static class Level5Builder
         Rect.MinMaxRect(-34f, 245f, -16f, 266f), Rect.MinMaxRect(-64f, 245f, -46f, 266f),
         Rect.MinMaxRect(-34f, 280f, -16f, 300f), Rect.MinMaxRect(-64f, 280f, -46f, 300f),
     };
+    // ---------- Feueratem ----------
+    //   z 150 … 205   Bereich, in dem die Echse Feuer speit (sobald der Spieler dort ist, im Takt)
+    //   z 168 … 202   Feuer auf der Bahn: tödlich, außer direkt hinter einer Deckung (dort wird die Pizza warm)
+    //   z 180, 194    Deckungen: umgestürzte Busse auf dem Gehweg (2.4 m hoch, man kann drüberspringen)
+    //   Ziel des Strahls zwischen Bahn und Straße bei z 186, die Flammen reichen in den Park (Bäume fangen Feuer)
+    private const float BreathZoneFromZ = 150f, BreathZoneToZ = 205f;
+    private const float FireFromZ = 168f, FireToZ = 202f;
+    private static readonly float[] CoverZ = { 180f, 194f };
+    private const float CoverLength = 5f, CoverHeight = 2.4f, ShelterLength = 3f;
+    private static readonly Vector3 BreathTarget = new Vector3(-40f, CityLayout.Surface, 186f);
+    private static readonly Rect BurnArea = Rect.MinMaxRect(-80f, 166f, -46f, 208f);
+
     // Mittelpunkt der Monster wie früher in der Stadt (CityLayout.KaijuFight): Echse 16 m südlich davon, Roboter 20 m nördlich
     private static Vector2 KaijuCenter => CityLayout.KaijuFight;
 
@@ -387,6 +399,166 @@ public static class Level5Builder
         kaiju.lizard.localRotation = Quaternion.Euler(0f, 180f, 0f);
         kaiju.robot.gameObject.SetActive(false);
         kaiju.fight.enabled = false;
+
+        FireBreath breath = BuildFireBreath(kaiju);
+        var battle = new SerializedObject(kaiju.root.gameObject.AddComponent<KaijuBattle>());
+        battle.FindProperty("lizardUpper").objectReferenceValue = kaiju.lizardUpper;
+        battle.FindProperty("lizardHead").objectReferenceValue = kaiju.lizardHead;
+        battle.FindProperty("breath").objectReferenceValue = breath;
+        battle.FindProperty("breathFromU").floatValue = MozzarellaU(BreathZoneToZ);
+        battle.FindProperty("breathToU").floatValue = MozzarellaU(BreathZoneFromZ);
+        battle.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    // Maul mit Glut am Kopf, Strahl (drei immer dickere Zylinder = Kegel), Flammen am Boden auf der Bahn, an der Aufschlagstelle
+    // und im Park, ein oranges Licht, Deckungen auf der Bahn, Vorlage für brennende Bäume
+    private static FireBreath BuildFireBreath(CityBuilder.KaijuParts kaiju)
+    {
+        Material particles = AssetDatabase.LoadAssetAtPath<Material>("Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat");
+        Material outer = PrimitiveKit.Material("Assets/Materials/City/Fire Outer.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.42f, 0.08f));
+        Material core = PrimitiveKit.Material("Assets/Materials/City/Fire Core.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.88f, 0.4f));
+        Transform root = new GameObject("Fire Breath").transform;
+        root.SetParent(gameplayParent, false);
+
+        // Maul: vorne an der Schnauze (Kopf-Pivot: Schnauze bei z 12, Kiefer bei y 0), dort die Glut
+        Transform mouth = PrimitiveKit.Pivot("Mouth", kaiju.lizardHead, new Vector3(0f, 1.5f, 16.5f));
+        Transform glow = PrimitiveKit.Part("Mouth Glow", PrimitiveType.Sphere, mouth, Vector3.zero, Vector3.one, core).transform;
+
+        // Strahl: Pivot im Maul, schaut zum Ziel, lokal Z wird auf die Länge gestreckt (FireBreath). Die Zylinder (Achse Y) sind
+        // um 90° um X gedreht, damit ihre Achse entlang Z liegt; jeder deckt ein Drittel der Länge ab, nach vorn immer dicker
+        Transform beam = PrimitiveKit.Pivot("Beam", root, Vector3.zero);
+        float[] outerRadius = { 3f, 6f, 10f };
+        for (int i = 0; i < 3; i++)
+        {
+            float center = (i + 0.5f) / 3f;
+            Renderer shell = PrimitiveKit.Part($"Beam Outer {i + 1}", PrimitiveType.Cylinder, beam, new Vector3(0f, 0f, center), new Vector3(outerRadius[i] * 2f, 1f / 6f + 0.01f, outerRadius[i] * 2f), outer);
+            shell.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Renderer inner = PrimitiveKit.Part($"Beam Core {i + 1}", PrimitiveType.Cylinder, beam, new Vector3(0f, 0f, center), new Vector3(outerRadius[i] * 1.1f, 1f / 6f + 0.01f, outerRadius[i] * 1.1f), core);
+            inner.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        }
+
+        // Feuerstrom: Partikel schießen aus dem Maul zum Ziel (FireBreath dreht das System jeden Frame dorthin, lokal Z = Richtung)
+        ParticleSystem stream = Particles("Beam Stream", root, particles, new Color(1f, 0.4f, 0.05f, 0.9f), new Color(1f, 0.85f, 0.3f, 0.9f),
+            lifetime: 1.3f, speed: 70f, size: new Vector2(3f, 7f), rate: 140f, radius: 1f, growth: 2.5f);
+        stream.transform.localRotation = Quaternion.identity;
+        ParticleSystem.ShapeModule streamShape = stream.shape;
+        streamShape.shapeType = ParticleSystemShapeType.Cone;
+        streamShape.angle = 6f;
+        streamShape.radius = 1.5f;
+        ParticleSystem.MainModule streamMain = stream.main;
+        streamMain.playOnAwake = false;
+        stream.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        // Flammen am Boden: auf der Bahn (der ganze Feuerbereich), an der Aufschlagstelle und im Park
+        float laneMidZ = (FireFromZ + FireToZ) / 2f;
+        var fires = new List<ParticleSystem>
+        {
+            GroundFire(root, "Lane Fire", new Vector3(MozzarellaX - 2f, CityLayout.Surface, laneMidZ), new Vector3(8f, FireToZ - FireFromZ), particles, 140f),
+            GroundFire(root, "Impact Fire", BreathTarget, new Vector3(16f, 16f), particles, 120f),
+            GroundFire(root, "Park Fire", new Vector3(BurnArea.center.x, CityLayout.ParkLawnTop, BurnArea.center.y), new Vector3(BurnArea.width, BurnArea.height), particles, 160f),
+        };
+
+        var lightObject = new GameObject("Impact Light");
+        lightObject.transform.SetParent(root, false);
+        lightObject.transform.position = BreathTarget + Vector3.up * 6f;
+        Light impact = lightObject.AddComponent<Light>();
+        impact.type = LightType.Point;
+        impact.color = new Color(1f, 0.55f, 0.2f);
+        impact.range = 50f;
+        impact.intensity = 40f;
+        impact.enabled = false;
+
+        // Vorlage für eine brennende Baumkrone (FireBreath kopiert sie pro Baum)
+        Transform treeFireHolder = PrimitiveKit.Pivot("Tree Fire Template", root, Vector3.zero);
+        ParticleSystem treeFire = Particles("Fire", treeFireHolder, particles, new Color(1f, 0.45f, 0.08f, 0.9f), new Color(1f, 0.8f, 0.2f, 0.9f),
+            lifetime: 1f, speed: 3f, size: new Vector2(2f, 4.5f), rate: 30f, radius: 1.6f, growth: 0.4f);
+        Particles("Smoke", treeFire.transform, particles, new Color(0.2f, 0.19f, 0.18f, 0.6f), new Color(0.35f, 0.33f, 0.32f, 0.4f),
+            lifetime: 5f, speed: 2.5f, size: new Vector2(1.5f, 3f), rate: 3f, radius: 1f, growth: 2f).transform.localRotation = Quaternion.identity;
+        treeFire.transform.SetParent(root, true);
+        Object.DestroyImmediate(treeFireHolder.gameObject);
+        treeFire.gameObject.SetActive(false);
+
+        // Deckungen: umgestürzte Busse auf dem Gehweg, sicherer Bereich direkt dahinter (vom Strahl abgewandt = Süden = +u)
+        var covers = new List<FireBreath.Cover>();
+        foreach (float z in CoverZ)
+        {
+            float u = Mathf.Round(MozzarellaU(z));
+            WreckedBus(u);
+            covers.Add(new FireBreath.Cover
+            {
+                shelterFrom = u + CoverLength / 2f,
+                shelterTo = u + CoverLength / 2f + ShelterLength,
+                top = CityLayout.Surface + CoverHeight,
+            });
+        }
+
+        var breath = new SerializedObject(root.gameObject.AddComponent<FireBreath>());
+        breath.FindProperty("mouth").objectReferenceValue = mouth;
+        breath.FindProperty("target").vector3Value = BreathTarget;
+        breath.FindProperty("beam").objectReferenceValue = beam;
+        breath.FindProperty("beamParticles").objectReferenceValue = stream;
+        PrimitiveKit.SetReferences(breath, "groundFires", fires.ToArray());
+        breath.FindProperty("impactLight").objectReferenceValue = impact;
+        breath.FindProperty("mouthGlow").objectReferenceValue = glow;
+        breath.FindProperty("hitFromU").floatValue = MozzarellaU(FireToZ);
+        breath.FindProperty("hitToU").floatValue = MozzarellaU(FireFromZ);
+        breath.FindProperty("burnArea").rectValue = BurnArea;
+        breath.FindProperty("treeFireTemplate").objectReferenceValue = treeFire;
+        SerializedProperty coverList = breath.FindProperty("covers");
+        coverList.arraySize = covers.Count;
+        for (int i = 0; i < covers.Count; i++)
+        {
+            SerializedProperty entry = coverList.GetArrayElementAtIndex(i);
+            entry.FindPropertyRelative("shelterFrom").floatValue = covers[i].shelterFrom;
+            entry.FindPropertyRelative("shelterTo").floatValue = covers[i].shelterTo;
+            entry.FindPropertyRelative("top").floatValue = covers[i].top;
+        }
+        breath.ApplyModifiedPropertiesWithoutUndo();
+        return (FireBreath)breath.targetObject;
+    }
+
+    // Flammenteppich (Rechteck X/Z in Welt-Größe), brennt nur, solange FireBreath ihn abspielt
+    private static ParticleSystem GroundFire(Transform parent, string name, Vector3 at, Vector3 size, Material material, float rate)
+    {
+        ParticleSystem fire = Particles(name, parent, material, new Color(1f, 0.4f, 0.06f, 0.95f), new Color(1f, 0.82f, 0.25f, 0.95f),
+            lifetime: 1f, speed: 4.5f, size: new Vector2(2.5f, 5.5f), rate: rate, radius: 1f, growth: 0.5f);
+        fire.transform.position = at;
+        ParticleSystem.ShapeModule shape = fire.shape;
+        shape.shapeType = ParticleSystemShapeType.Box;
+        // Das System ist um -90° um X gedreht (Partikel fliegen nach oben): lokal X/Y = Welt X/Z
+        shape.scale = new Vector3(size.x, size.y, 0.1f);
+        ParticleSystem.MainModule main = fire.main;
+        main.playOnAwake = false;
+        fire.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        return fire;
+    }
+
+    // Umgestürzter Stadtbus auf dem Gehweg (Deckung vor dem Feueratem): gelb, auf der Seite liegend, Dach zur Kamera,
+    // Fensterband, Räder zur Hauswand. Begehbar und zum Drüberspringen (Layer Ground)
+    private static void WreckedBus(float u)
+    {
+        Material yellow = PrimitiveKit.Material("Assets/Materials/City/Bus Yellow.mat", PrimitiveKit.LitShader, new Color(0.95f, 0.72f, 0.12f));
+        Material windows = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Window Glass.mat");
+        Material wheel = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Wheel.mat");
+        Material soot = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Scorched.mat");
+        Quaternion frame = LevelBuildKit.Frame(u);
+        var bus = new GameObject($"Wrecked Bus u{u:F0}") { layer = 3 };
+        bus.transform.SetParent(gameplayParent, false);
+        bus.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + Vector3.up * (CityLayout.Surface + CoverHeight / 2f), frame);
+        Transform t = bus.transform;
+        PrimitiveKit.Box("Body", t, Vector3.zero, new Vector3(CoverLength, CoverHeight, 2.5f), yellow);
+        PrimitiveKit.Box("Window Band", t, new Vector3(0f, 0.1f, -1.26f), new Vector3(CoverLength - 0.6f, 0.8f, 0.02f), windows);
+        // Ruß an der Seite, die dem Feuer zugewandt ist (lokal -X = Norden)
+        PrimitiveKit.Box("Soot", t, new Vector3(-CoverLength / 2f - 0.01f, 0f, 0f), new Vector3(0.02f, CoverHeight - 0.1f, 2.4f), soot);
+        foreach (float x in new[] { -1.6f, 1.6f })
+        {
+            foreach (float y in new[] { -0.6f, 0.6f })
+            {
+                Renderer w = PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, t, new Vector3(x, y, 1.3f), new Vector3(0.9f, 0.15f, 0.9f), wheel);
+                w.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            }
+        }
+        PrimitiveKit.AddBoxCollider(bus, Vector3.zero, new Vector3(CoverLength, CoverHeight, 2.5f));
     }
 
     // ---------- Spiel-Elemente ----------
