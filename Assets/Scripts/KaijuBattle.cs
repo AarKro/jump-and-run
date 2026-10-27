@@ -19,6 +19,10 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     [SerializeField] private Transform lizardUpper;
     [SerializeField] private Transform lizardHead;
     [SerializeField] private FireBreath breath;
+    [Tooltip("Arm, mit dem sie im Intro zuschlägt (der zum Hochhaus hin)")]
+    [SerializeField] private Transform lizardSmashArm;
+    [Tooltip("Hochhaus, das sie im Intro zerschlägt")]
+    [SerializeField] private TowerCollapse introTower;
 
     [Header("Roboter")]
     [SerializeField] private Transform robotRoot;
@@ -67,6 +71,9 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     private float lean;
     private float headPitch;
 
+    private bool exposing;
+    private Coroutine exposeRoutine;
+    private Quaternion smashArmRest;
     private Quaternion lizardRootRest, upperRest, headRest, robotRootRest, robotUpperRest, robotArmLeftRest, robotArmRightRest;
     private Vector3 robotLanding;
     private Transform player;
@@ -83,6 +90,10 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         robotArmLeftRest = robotArmLeft.localRotation;
         robotArmRightRest = robotArmRight.localRotation;
         robotLanding = robotRoot.localPosition;
+        if (lizardSmashArm != null)
+        {
+            smashArmRest = lizardSmashArm.localRotation;
+        }
         GameManager.LevelReset += ResetBattle;
     }
 
@@ -142,6 +153,10 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         switch (stage)
         {
             case Stage.Rampage:
+                if (exposing)
+                {
+                    return;
+                }
                 if (canStart && u <= arrivalU)
                 {
                     sequence = StartCoroutine(Arrival());
@@ -220,17 +235,103 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         lizardHead.localRotation = headRest * Quaternion.Euler(headPitch, Mathf.Sin(Time.time * 0.6f) * 8f, 0f);
     }
 
-    // Vorspann des Level-Intros: Sie speit einmal Feuer in den Park (lädt schon halb auf, damit es im Bild schnell losgeht).
-    // Danach hört sie auf, weil der Spieler noch in der Pizzeria ist (außerhalb des Bereichs). Die Bäume brennen ab da
+    // ---------- Intro: Sie zerschlägt ein Hochhaus ----------
+
+    // Vorspann des Level-Intros: Das Hochhaus steht noch, sie holt mit dem Arm aus (lehnt sich zurück, brüllt), schlägt in
+    // die oberen Stockwerke, der Turm sackt in einer Staubwolke zusammen. Der Feueratem bleibt eine Überraschung fürs Level
     public void PlayExpose()
     {
-        if (stage != Stage.Rampage)
+        if (stage != Stage.Rampage || introTower == null || lizardSmashArm == null)
         {
             return;
         }
-        breathActive = true;
-        Next(Phase.Charge);
-        phaseTime = chargeTime * 0.25f;
+        if (exposeRoutine != null)
+        {
+            StopCoroutine(exposeRoutine);
+        }
+        exposeRoutine = StartCoroutine(Smash());
+    }
+
+    // Vorbei (oder übersprungen): Turm ist weg, Echse in Grundhaltung
+    public void EndExpose()
+    {
+        if (exposeRoutine != null)
+        {
+            StopCoroutine(exposeRoutine);
+            exposeRoutine = null;
+        }
+        exposing = false;
+        if (introTower != null)
+        {
+            introTower.SetCollapsed();
+        }
+        if (lizardSmashArm != null)
+        {
+            lizardSmashArm.localRotation = smashArmRest;
+        }
+        lizardUpper.localRotation = upperRest;
+        lizardHead.localRotation = headRest;
+    }
+
+    private IEnumerator Smash()
+    {
+        exposing = true;
+        introTower.SetStanding();
+        // Arm-Drehung um die lokale X-Achse: Ruhe = nach vorn (-80), hoch über den Kopf (-170), Schlag schräg nach unten (-40)
+        Vector3 rest = smashArmRest.eulerAngles;
+        Quaternion raised = Quaternion.Euler(-170f, rest.y, rest.z);
+        Quaternion struck = Quaternion.Euler(-35f, rest.y, rest.z);
+        const float calm = 0.6f, windUp = 1.2f, swing = 0.35f, recover = 1.6f;
+        bool hit = false;
+        for (float t = 0f; t < calm + windUp + swing + recover; t += Time.deltaTime)
+        {
+            float lean, head;
+            Quaternion arm;
+            if (t < calm)
+            {
+                // Wiegt sich noch, schaut auf den Turm
+                lean = 0f;
+                head = 0f;
+                arm = smashArmRest;
+            }
+            else if (t < calm + windUp)
+            {
+                // Ausholen: Arm hoch, Oberkörper zurück, Kopf hoch (brüllt)
+                float k = Mathf.SmoothStep(0f, 1f, (t - calm) / windUp);
+                lean = -10f * k;
+                head = -25f * k;
+                arm = Quaternion.Slerp(smashArmRest, raised, k);
+            }
+            else if (t < calm + windUp + swing)
+            {
+                // Schlag: beschleunigt (k²) nach vorn unten, Oberkörper mit
+                float k = (t - calm - windUp) / swing;
+                k *= k;
+                lean = Mathf.Lerp(-10f, 14f, k);
+                head = Mathf.Lerp(-25f, 15f, k);
+                arm = Quaternion.Slerp(raised, struck, k);
+            }
+            else
+            {
+                // Getroffen (einmal, im ersten Bild danach), dann langsam zurück in die Ruhe
+                if (!hit)
+                {
+                    hit = true;
+                    introTower.Smash(introTower.transform.position - lizardRoot.position);
+                }
+                float k = Mathf.SmoothStep(0f, 1f, (t - calm - windUp - swing) / recover);
+                lean = Mathf.Lerp(14f, 0f, k);
+                head = Mathf.Lerp(15f, 0f, k);
+                arm = Quaternion.Slerp(struck, smashArmRest, k);
+            }
+            lizardSmashArm.localRotation = arm;
+            lizardUpper.localRotation = upperRest * Quaternion.Euler(lean, 0f, 0f);
+            lizardHead.localRotation = headRest * Quaternion.Euler(head, 0f, 0f);
+            yield return null;
+        }
+        lizardSmashArm.localRotation = smashArmRest;
+        exposing = false;
+        exposeRoutine = null;
     }
 
     private void Next(Phase next)

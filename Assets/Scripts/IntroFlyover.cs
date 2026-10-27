@@ -149,6 +149,7 @@ public class IntroFlyover : MonoBehaviour
                 transform.rotation = Quaternion.LookRotation(exposeLook - transform.position);
                 yield return null;
             }
+            expose.EndExpose();
             // Der Flug zum Kunden beginnt dort, wo der Vorspann aufhört, ohne Übersichts-Pause
             flightStart = transform.position;
             overview = 0f;

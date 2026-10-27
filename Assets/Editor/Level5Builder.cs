@@ -42,13 +42,24 @@ public static class Level5Builder
     // Zerstörtes Hochhausviertel: Grundstücke beidseits des Mozzarella Blvd (Welt-Rechtecke von/bis), ab der Four Cheese Avenue
     private static readonly Rect RuinsWest = Rect.MinMaxRect(-100f, 222f, -50f, 315f);
     private static readonly Rect RuinsEast = Rect.MinMaxRect(-30f, 222f, 45f, 315f);
-    // Hier bleibt Platz: Kundenhaus (Ost) und die Füße der Monster (x -40 ± 14, Echse z 254 + 3, Roboter z 290)
+    // Hochhaus, das die Echse im Intro zerschlägt: östlich der Bahn, gleich südlich ihres Fußes, in Reichweite ihres Arms
+    // (Schulter bei etwa x -29, z 246, 60 m hoch; der Schlag schräg nach unten trifft die Spitze)
+    private static readonly Rect IntroTowerLot = Rect.MinMaxRect(-30f, 226f, -16f, 240f);
+    // Hier bleibt Platz: Kundenhaus (Ost), Intro-Hochhaus und die Füße der Monster (x -40 ± 14, Echse z 254 + 3, Roboter z 290)
     private static readonly Rect[] KeepClear =
     {
         Rect.MinMaxRect(-31f, GoalZ - 7f, -14f, GoalZ + 7f),
         Rect.MinMaxRect(-34f, 245f, -16f, 266f), Rect.MinMaxRect(-64f, 245f, -46f, 266f),
         Rect.MinMaxRect(-34f, 280f, -16f, 300f), Rect.MinMaxRect(-64f, 280f, -46f, 300f),
+        IntroTowerLot,
     };
+    private const float IntroTowerHeight = 52f;
+    // Kamera im Vorspann: südwestlich, Echse und Turm nebeneinander im Bild
+    private static readonly Vector3 ExposeCameraFrom = new Vector3(-100f, 34f, 176f);
+    private static readonly Vector3 ExposeCameraTo = new Vector3(-86f, 42f, 192f);
+    private static readonly Vector3 ExposeLook = new Vector3(-32f, 38f, 240f);
+    private const float ExposeDuration = 6f;
+    private const float TailYaw = 35f;
     // ---------- Feueratem ----------
     //   z 150 … 205   Bereich, in dem die Echse Feuer speit (sobald der Spieler dort ist, im Takt)
     //   z 168 … 202   Feuer auf der Bahn: tödlich, außer direkt hinter einer Deckung (dort wird die Pizza warm)
@@ -403,13 +414,8 @@ public static class Level5Builder
     // (KaijuFight) ist darum erst mal aus
     private static KaijuBattle battleComponent;
 
-    // Intro-Vorspann: Die Kamera gleitet von Westen über den Ruinen auf die Echse zu, während sie den Park in Brand setzt
-    // (Strahl und Echse von der Seite, beide im Bild). Danach fliegt die Kamera von dort zum Kunden
-    private static readonly Vector3 ExposeCameraFrom = new Vector3(-150f, 30f, 168f);
-    private static readonly Vector3 ExposeCameraTo = new Vector3(-125f, 42f, 190f);
-    private static readonly Vector3 ExposeLook = new Vector3(-40f, 32f, 222f);
-    private const float ExposeDuration = 5f;
-
+    // Intro-Vorspann: Die Kamera gleitet von Südwesten auf die Echse zu, während sie das Hochhaus zerschlägt. Danach fliegt
+    // die Kamera von dort zum Kunden
     private static void SetupIntroExpose()
     {
         GameObject mainCamera = GameObject.Find("Main Camera");
@@ -431,6 +437,9 @@ public static class Level5Builder
     {
         CityBuilder.KaijuParts kaiju = CityBuilder.BuildKaijuForLevel(gameplayParent, KaijuCenter);
         kaiju.lizard.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        // Der Schwanz zeigt jetzt nach Norden und lag quer über dem Kundenhaus (und im Flug des Intros zum Kunden): weiter nach
+        // Osten über die Ruinen schwenken. KaijuFight merkt sich das als Ruhehaltung
+        kaiju.lizardTail[0].localRotation *= Quaternion.Euler(0f, TailYaw, 0f);
         kaiju.robot.gameObject.SetActive(false);
         kaiju.fight.enabled = false;
 
@@ -455,12 +464,16 @@ public static class Level5Builder
         ParticleSystem landingDust = Dust(gameplayParent, "Landing Dust", robotLanding, 16f, particles);
         ParticleSystem fallDust = Dust(gameplayParent, "Fall Dust", new Vector3(KaijuCenter.x - 40f, CityLayout.Surface, KaijuCenter.y - 16f), 30f, particles);
 
+        TowerCollapse tower = BuildIntroTower(particles);
         battleComponent = kaiju.root.gameObject.AddComponent<KaijuBattle>();
         var battle = new SerializedObject(battleComponent);
         battle.FindProperty("lizardRoot").objectReferenceValue = kaiju.lizard;
         battle.FindProperty("lizardUpper").objectReferenceValue = kaiju.lizardUpper;
         battle.FindProperty("lizardHead").objectReferenceValue = kaiju.lizardHead;
         battle.FindProperty("breath").objectReferenceValue = breath;
+        // Die Echse ist um 180° gedreht (schaut nach Süden): ihr linker Arm (lokal -X) ist der östliche, zum Turm hin
+        battle.FindProperty("lizardSmashArm").objectReferenceValue = kaiju.lizardArmLeft;
+        battle.FindProperty("introTower").objectReferenceValue = tower;
         battle.FindProperty("robotRoot").objectReferenceValue = kaiju.robot;
         battle.FindProperty("robotUpper").objectReferenceValue = kaiju.robotUpper;
         battle.FindProperty("robotArmLeft").objectReferenceValue = kaiju.robotArmLeft;
@@ -481,6 +494,49 @@ public static class Level5Builder
         {
             mainCamera.AddComponent<CameraShake>();
         }
+    }
+
+    // Das Hochhaus fürs Intro: steht als ganzer Quader (Fassaden-Shader wie die Stadt), darin steckt schon der Stumpf mit
+    // Schutt, der nach dem Einsturz übrig bleibt. Dazu Brocken und zwei Staubwolken (Spitze, Fuß)
+    private static TowerCollapse BuildIntroTower(Material particles)
+    {
+        Material facade = CityBuilder.FacadeMaterialAsset;
+        Material rubble = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Rubble.mat");
+        Rect lot = IntroTowerLot;
+        var root = new GameObject("Intro Tower");
+        root.transform.SetParent(propParent, false);
+        root.transform.position = new Vector3(lot.center.x, CityLayout.Surface, lot.center.y);
+        Transform body = PrimitiveKit.Pivot("Body", root.transform, Vector3.zero);
+        PrimitiveKit.Box("Tower", body, new Vector3(0f, IntroTowerHeight / 2f, 0f), new Vector3(lot.width - 1f, IntroTowerHeight, lot.height - 1f), facade);
+        PrimitiveKit.Box("Crown", body, new Vector3(0f, IntroTowerHeight + 3f, 0f), new Vector3(lot.width - 5f, 6f, lot.height - 5f), facade);
+
+        var random = new System.Random(808);
+        Transform aftermath = PrimitiveKit.Pivot("Aftermath", root.transform, Vector3.zero);
+        Stump(aftermath, Rect.MinMaxRect(lot.xMin + 1.5f, lot.yMin + 1.5f, lot.xMax - 1.5f, lot.yMax - 1.5f), 9f, facade, rubble, random);
+        RubblePile(aftermath, root.transform.position, 7f, rubble, facade, random);
+
+        Transform debrisParent = PrimitiveKit.Pivot("Debris", root.transform, Vector3.zero);
+        var debris = new List<Transform>();
+        for (int i = 0; i < 16; i++)
+        {
+            float size = 1.5f + (float)random.NextDouble() * 2.5f;
+            Renderer piece = PrimitiveKit.Box("Chunk", debrisParent, Vector3.up * IntroTowerHeight, new Vector3(size, size * 0.7f, size * 1.2f), i % 2 == 0 ? rubble : facade);
+            debris.Add(piece.transform);
+        }
+
+        ParticleSystem impactDust = Dust(root.transform, "Impact Dust", root.transform.position + Vector3.up * IntroTowerHeight, 8f, particles);
+        ParticleSystem baseDust = Dust(root.transform, "Collapse Dust", root.transform.position, 11f, particles);
+
+        var tower = root.AddComponent<TowerCollapse>();
+        var serialized = new SerializedObject(tower);
+        serialized.FindProperty("body").objectReferenceValue = body;
+        serialized.FindProperty("height").floatValue = IntroTowerHeight + 6f;
+        serialized.FindProperty("aftermath").objectReferenceValue = aftermath.gameObject;
+        PrimitiveKit.SetReferences(serialized, "debris", debris.ToArray());
+        serialized.FindProperty("impactDust").objectReferenceValue = impactDust;
+        serialized.FindProperty("baseDust").objectReferenceValue = baseDust;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        return tower;
     }
 
     // Partikelsystem, das erst auf Befehl startet
