@@ -305,6 +305,15 @@ public static partial class CityBuilder
             serialized.FindProperty("id").stringValue = landmark.prefab;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
+
+        // Reine Kulisse, keine CityLandmark (hat keinen Zustand, den ein Level zurücksetzen müsste)
+        var skateSpot = AssetDatabase.LoadAssetAtPath<GameObject>($"{MarketSetup.PrefabFolder}/Skate Spot.prefab");
+        if (skateSpot != null)
+        {
+            var spot = (GameObject)PrefabUtility.InstantiatePrefab(skateSpot, parent.gameObject.scene);
+            spot.transform.SetParent(parent, false);
+            spot.transform.SetPositionAndRotation(CityLayout.SkateSpotPosition, Quaternion.Euler(0f, CityLayout.SkateSpotYaw, 0f));
+        }
     }
 
     // Die Stadt muss in den Build Settings stehen, sonst kann LevelCity sie nicht per Name laden

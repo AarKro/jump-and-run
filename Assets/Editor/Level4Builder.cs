@@ -394,7 +394,6 @@ public static class Level4Builder
     //   z 12, z 57      Plakate "Ollie's Board Shop" mit Pfeil, z 66 der Board-Shop
     private const float MargheritaPitFrom = -26.75f, MargheritaPitTo = -23.25f;
     private static readonly (float z, float range, float speed, float direction)[] SkaterKids = { (42f, 3f, 3.5f, 1f), (55f, 3.5f, 4.2f, -1f) };
-    private const float SkateSpotZ = 45f;
     private static readonly float[] PosterZ = { 12f, 57f };
 
     private static void BuildOnFoot()
@@ -431,9 +430,7 @@ public static class Level4Builder
             patrol.FindProperty("chaseSpeed").floatValue = kid.speed;
             patrol.ApplyModifiedPropertiesWithoutUndo();
         }
-        // Skate-Spot: die Häuser auf dem Grundstück verschwinden (Cutout), der Spot bringt seinen eigenen Boden mit
-        LevelBuildKit.PlaceAsset($"{MarketSetup.PrefabFolder}/Skate Spot.prefab", Mathf.Round(OreganoU(SkateSpotZ)), 0, propParent);
-        LevelBuildKit.Cutout(link, "Skate Spot Lot", OreganoX + 3f, OreganoX + 17f, SkateSpotZ - 7f, SkateSpotZ + 7f);
+        // Der Skate-Spot steht fest in der Stadt (CityLayout.SkateSpotPosition), auf einem freigehaltenen Grundstück
         foreach (float z in PosterZ)
         {
             LevelBuildKit.PlaceAsset($"{MarketSetup.PrefabFolder}/Shop Poster.prefab", Mathf.Round(OreganoU(z)), 0, propParent);

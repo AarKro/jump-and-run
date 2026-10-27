@@ -194,7 +194,15 @@ public static class CityLayout
         Rect.MinMaxRect(-142f, 3f, -134f, 11f),    // Gelateria
         Rect.MinMaxRect(-100f, 62f, -92f, 70f),    // Board-Shop
         Rect.MinMaxRect(-247f, 245.5f, -239f, 252.5f), // Kiosk
+        Rect.MinMaxRect(-100f, 38f, -92f, 52f),    // Skate-Spot
     };
+
+    // Skate-Spot an der Oregano Street (Kulisse vor dem Board-Shop, Level 4): steht fest in der Stadt auf einem eigenen
+    // Grundstück (14 m entlang der Straße, z 38 … 52). Vorher hat Level 4 ihn per Cutout zwischen die Häuser gesetzt, aber
+    // ein Cutout entfernt nur Häuser, deren Mitte darin liegt: Das Nachbarhaus ragte 7 m in den Spot, die Kinder fuhren
+    // durch seine Wand. Wurzel auf der Laufbahn von Level 4 (x -103), Yaw 90 wie beim Board-Shop
+    public static readonly Vector3 SkateSpotPosition = new Vector3(-103f, 0f, 45f);
+    public const float SkateSpotYaw = 90f;
 
     // Piazza Pisa ist auch zur Margherita Avenue hin offen: ab hier bis zur Basil Street keine Häuser in der Südreihe
     public const float PiazzaSouthOpeningFrom = -236f;

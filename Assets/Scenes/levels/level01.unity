@@ -1900,6 +1900,11 @@ MonoBehaviour:
   swoopDuration: 3
   approachLength: 30
   holdDuration: 0.6
+  exposeActor: {fileID: 0}
+  exposeCameraFrom: {x: 0, y: 0, z: 0}
+  exposeCameraTo: {x: 0, y: 0, z: 0}
+  exposeLook: {x: 0, y: 0, z: 0}
+  exposeDuration: 4.5
   deliveryAddress: No. 42, Pepperoni Parkway
   titleFadeDuration: 0.4
   irisOpenDuration: 0.5
@@ -5374,7 +5379,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1510100525748948031, guid: 6df5999b66ef04e57b2c1f84157d2ac8, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -7.5
+      value: -8
       objectReference: {fileID: 0}
     - target: {fileID: 1510100525748948031, guid: 6df5999b66ef04e57b2c1f84157d2ac8, type: 3}
       propertyPath: m_LocalPosition.y
