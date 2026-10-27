@@ -2,10 +2,11 @@ using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.TextCore.LowLevel;
 using UnityEngine.UI;
 
 // Baut alles für die Pizza-Wärme auf:
-// - HUD-Prefab (Wärmebalken, "Delivered!"-Panel mit Trinkgeld-Münzen, "Pizza's cold!"-Panel)
+// - HUD-Prefab (Wärmebalken, Lieferschein im Intro, "Delivered!"-Panel mit Trinkgeld-Münzen, "Pizza's cold!"-Panel)
 // - HUD in die geöffnete Szene setzen
 // - Dampf-Partikel am Pizzakarton im Player-Prefab
 // Menü: Tools > Jump and Run > Pizza Heat. Alles mehrfach ausführbar, vorhandenes wird ersetzt.
@@ -14,9 +15,19 @@ public static class PizzaHeatSetup
     private const string HudPrefabPath = "Assets/Prefabs/HUD.prefab";
     private const string PlayerPrefabPath = "Assets/Prefabs/Player.prefab";
     private const string ParticleMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat";
-    // Schrift-Material mit schwarzem Rand aus den TMP Essentials: Text bleibt lesbar, auch ohne dunklen Hintergrund
-    private const string OutlineFontMaterialPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Outline.mat";
     private const string IrisMaterialPath = "Assets/Materials/Iris.mat";
+    // Fredoka (Google Fonts, SIL Open Font License, Lizenz liegt daneben): rund und kräftig, passt zum Comic-Look
+    private const string FontFolder = "Assets/Fonts";
+
+    // Lieferschein-Look für alle Texte zu Levelbeginn und -ende: cremefarbenes Papier, farbiges Band, dunkle Schrift
+    private static readonly Color PaperColor = new Color(1f, 0.96f, 0.86f);
+    private static readonly Color PizzeriaRed = new Color(0.8f, 0.13f, 0.1f);
+    private static readonly Color ColdBlue = new Color(0.22f, 0.48f, 0.82f);
+    private static readonly Color InkColor = new Color(0.27f, 0.13f, 0.08f);
+    private static readonly Color FadedInkColor = new Color(0.55f, 0.4f, 0.3f);
+
+    private static TMP_FontAsset boldFont;
+    private static TMP_FontAsset semiBoldFont;
 
     // Referenzauflösung: Alle Größen unten sind in Pixeln bei 1920x1080, der CanvasScaler rechnet sie um
     private static readonly Vector2 ReferenceResolution = new Vector2(1920f, 1080f);
@@ -119,6 +130,9 @@ public static class PizzaHeatSetup
         scaler.referenceResolution = ReferenceResolution;
         scaler.matchWidthOrHeight = 0.5f;
 
+        boldFont = LoadOrCreateFont("Fredoka-Bold");
+        semiBoldFont = LoadOrCreateFont("Fredoka-SemiBold");
+
         var hud = root.AddComponent<PizzaHud>();
         var serializedHud = new SerializedObject(hud);
 
@@ -207,18 +221,26 @@ public static class PizzaHeatSetup
     // Draufsicht einer Pizza links neben dem Balken (Rand, Käse, drei Salami): "dieser Balken ist die Pizza"
     private static void BuildPizzaIcon(Transform parent)
     {
-        Sprite circle = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
-        RectTransform pizza = CreateRect("Pizza Icon", parent);
+        RectTransform pizza = PizzaIcon(parent, 56f);
         pizza.anchorMin = pizza.anchorMax = new Vector2(0.5f, 1f);
-        pizza.sizeDelta = new Vector2(56f, 56f);
         // Balken: 640 breit, mittig, y -40 bis -76. Das Symbol sitzt links daneben, auf halber Höhe
         pizza.anchoredPosition = new Vector2(-362f, -58f);
-        Circle("Crust", pizza, Vector2.zero, 56f, new Color(0.8f, 0.5f, 0.22f), circle);
-        Circle("Cheese", pizza, Vector2.zero, 44f, new Color(1f, 0.8f, 0.3f), circle);
+    }
+
+    // Pizza aus Kreisen, Maße für 56 px Durchmesser entworfen und auf size umgerechnet
+    private static RectTransform PizzaIcon(Transform parent, float size)
+    {
+        Sprite circle = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+        float k = size / 56f;
+        RectTransform pizza = CreateRect("Pizza Icon", parent);
+        pizza.sizeDelta = new Vector2(size, size);
+        Circle("Crust", pizza, Vector2.zero, 56f * k, new Color(0.8f, 0.5f, 0.22f), circle);
+        Circle("Cheese", pizza, Vector2.zero, 44f * k, new Color(1f, 0.8f, 0.3f), circle);
         Color salami = new Color(0.78f, 0.16f, 0.1f);
-        Circle("Salami 1", pizza, new Vector2(-9f, 8f), 12f, salami, circle);
-        Circle("Salami 2", pizza, new Vector2(10f, 4f), 12f, salami, circle);
-        Circle("Salami 3", pizza, new Vector2(0f, -11f), 12f, salami, circle);
+        Circle("Salami 1", pizza, new Vector2(-9f, 8f) * k, 12f * k, salami, circle);
+        Circle("Salami 2", pizza, new Vector2(10f, 4f) * k, 12f * k, salami, circle);
+        Circle("Salami 3", pizza, new Vector2(0f, -11f) * k, 12f * k, salami, circle);
+        return pizza;
     }
 
     // Unter jedem Drittel des Balkens die Münzen, die es in diesem Bereich als Trinkgeld gibt (1, 2, 3)
@@ -257,21 +279,22 @@ public static class PizzaHeatSetup
         hud.FindProperty("flameTemplate").objectReferenceValue = flame;
     }
 
-    // "Keep the pizza hot!" auf einer eigenen dunklen Pille unter der Wärme-Platte, nur kurz zu Levelbeginn (PizzaHud blendet ein und aus)
+    // "Keep the pizza hot!" als rotes Band auf Papier unter der Wärme-Platte, nur kurz zu Levelbeginn (PizzaHud blendet ein und aus)
     private static void BuildHeatHint(Transform parent, SerializedObject hud)
     {
-        var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
         RectTransform hint = CreateRect("Heat Hint", parent);
         hint.anchorMin = hint.anchorMax = new Vector2(0.5f, 1f);
-        hint.sizeDelta = new Vector2(900f, 60f);
-        hint.anchoredPosition = new Vector2(0f, -170f);
+        hint.pivot = new Vector2(0.5f, 1f);
+        // Wärme-Platte endet bei y -122
+        hint.anchoredPosition = new Vector2(0f, -136f);
         var group = hint.gameObject.AddComponent<CanvasGroup>();
         group.alpha = 0f;
         group.interactable = false;
         group.blocksRaycasts = false;
-        Plate("Plate", hint, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(520f, 70f));
-        TextMeshProUGUI text = CreateText("Text", hint, "Keep the pizza hot!", 46f, new Color(1f, 0.85f, 0.35f), Vector2.zero, outline);
-        text.rectTransform.sizeDelta = new Vector2(900f, 60f);
+
+        RectTransform paper = Ticket("Ticket", hint, new Vector2(0.5f, 1f), 0f);
+        RectTransform band = Band("Band", paper, PizzeriaRed, 30f, 8f);
+        TicketText("Text", band, "Keep the pizza hot!", 44f, Color.white, boldFont);
         hud.FindProperty("heatHint").objectReferenceValue = group;
     }
 
@@ -311,36 +334,48 @@ public static class PizzaHeatSetup
 
     private static void BuildDeliveredPanel(Transform parent, SerializedObject hud)
     {
-        // Kompakt im oberen Drittel, ohne Abdunkeln: Die Bildmitte bleibt frei für den tanzenden Kunden.
-        // Oben mittig verankert, direkt unter dem Wärmebalken
+        // Kompakt oben, ohne Abdunkeln: Die Bildmitte bleibt frei für den tanzenden Kunden.
+        // Oben mittig verankert, direkt unter der Wärme-Platte (endet bei y -122)
         RectTransform panel = CreateRect("Delivered Panel", parent);
         panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 1f);
         panel.pivot = new Vector2(0.5f, 1f);
-        panel.sizeDelta = new Vector2(1400f, 400f);
-        // Unter der Wärme-Platte (endet bei y -122)
-        panel.anchoredPosition = new Vector2(0f, -135f);
+        panel.anchoredPosition = new Vector2(0f, -140f);
 
-        var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
-        // Dunkle Karte hinter dem Inhalt (Titel bis Hinweis), kompakt: Die Szene mit dem tanzenden Kunden bleibt sichtbar
-        Plate("Card", panel, new Vector2(0.5f, 0.5f), new Vector2(0f, 28f), new Vector2(620f, 330f));
-        // Positionen relativ zur Panel-Mitte (200 px unter der Panel-Oberkante)
-        CreateText("Title", panel, "Delivered!", 84f, Color.white, new Vector2(0f, 130f), outline);
-        CreateText("Tip Label", panel, "Tip", 32f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, 60f), outline);
+        RectTransform paper = Ticket("Ticket", panel, new Vector2(0.5f, 1f), -1.5f);
+        RectTransform band = Band("Band", paper, PizzeriaRed, 40f, 10f);
+        AddLayoutSize(PizzaIcon(band, 60f), 60f, 60f);
+        TicketText("Title", band, "Delivered!", 76f, Color.white, boldFont);
 
-        // Eingebautes Kreis-Sprite aus Unitys UI-Ressourcen als Münze
+        RectTransform body = Body("Body", paper, 60f, 16f, 22f, 10f);
+        TicketText("Tip Label", body, "TIP", 30f, FadedInkColor, semiBoldFont, 12f);
+
+        // Münzen nebeneinander. Die Layout Group setzt nur Position und Größe, die Skalierung fürs Aufploppen bleibt frei
+        RectTransform row = CreateRect("Coins", body);
+        var rowLayout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+        rowLayout.spacing = 28f;
+        rowLayout.childAlignment = TextAnchor.MiddleCenter;
+        rowLayout.childControlWidth = rowLayout.childControlHeight = true;
+        rowLayout.childForceExpandWidth = rowLayout.childForceExpandHeight = false;
+        rowLayout.padding = new RectOffset(0, 0, 4, 8);
+
+        // Eingebautes Kreis-Sprite aus Unitys UI-Ressourcen als Münze. Der dunkelgoldene Rand (Outline-Effekt: das Bild
+        // nochmal in 4 Richtungen versetzt dahinter) trennt das Gold vom hellen Papier
         Sprite circle = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
         SerializedProperty coins = hud.FindProperty("coins");
         coins.arraySize = 3;
         for (int i = 0; i < 3; i++)
         {
-            RectTransform coin = CreateImage("Coin " + (i + 1), panel, Color.white);
+            RectTransform coin = CreateImage("Coin " + (i + 1), row, Color.white);
             coin.GetComponent<Image>().sprite = circle;
-            coin.sizeDelta = new Vector2(80f, 80f);
-            coin.anchoredPosition = new Vector2((i - 1) * 110f, -15f);
+            AddLayoutSize(coin, 80f, 80f);
+            var rim = coin.gameObject.AddComponent<Outline>();
+            rim.effectColor = new Color(0.6f, 0.38f, 0.05f);
+            rim.effectDistance = new Vector2(3f, -3f);
             coins.GetArrayElementAtIndex(i).objectReferenceValue = coin.GetComponent<Image>();
         }
+        hud.FindProperty("coinMissingColor").colorValue = new Color(0.45f, 0.33f, 0.22f, 0.25f);
 
-        CreateText("Continue Hint", panel, "Press Jump to continue", 30f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, -95f), outline);
+        TicketText("Continue Hint", body, "Press Jump to continue", 30f, FadedInkColor, semiBoldFont);
 
         hud.FindProperty("deliveredPanel").objectReferenceValue = panel.gameObject;
         // Im Prefab ausgeschaltet speichern, sonst verdeckt das Panel im Edit Mode die Game-Ansicht
@@ -349,36 +384,179 @@ public static class PizzaHeatSetup
 
     private static void BuildColdPanel(Transform parent, SerializedObject hud)
     {
+        // Ganzer Bildschirm kühl-blau eingefärbt, mittig ein blaues Band auf Papier
         RectTransform panel = CreateImage("Cold Panel", parent, new Color(0.05f, 0.12f, 0.28f, 0.6f));
         Stretch(panel, 0f);
-        Plate("Card", panel, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(860f, 200f));
-
-        CreateText("Title", panel, "Pizza's cold!", 120f, new Color(0.75f, 0.9f, 1f), Vector2.zero);
+        RectTransform paper = Ticket("Ticket", panel, new Vector2(0.5f, 0.5f), 2f);
+        RectTransform band = Band("Band", paper, ColdBlue, 60f, 18f);
+        TicketText("Title", band, "Pizza's cold!", 110f, Color.white, boldFont);
 
         hud.FindProperty("coldPanel").objectReferenceValue = panel.gameObject;
         panel.gameObject.SetActive(false);
     }
 
-    // "Deliver to" + Adresse unten mittig, während die Kamera zum Kunden fliegt. Startet unsichtbar (Alpha 0)
+    // Lieferschein unten mittig, während die Kamera zum Kunden fliegt: rotes Band "DELIVERY ORDER", darunter die Adresse
+    // und optional eine kleinere zweite Zeile. Startet unsichtbar (Alpha 0)
     private static void BuildIntroTitle(Transform parent, SerializedObject hud)
     {
-        var outline = AssetDatabase.LoadAssetAtPath<Material>(OutlineFontMaterialPath);
         RectTransform group = CreateRect("Intro Title", parent);
         group.anchorMin = group.anchorMax = new Vector2(0.5f, 0f);
         group.pivot = new Vector2(0.5f, 0f);
-        group.sizeDelta = new Vector2(1400f, 160f);
-        group.anchoredPosition = new Vector2(0f, 90f);
+        group.anchoredPosition = new Vector2(0f, 80f);
         var canvasGroup = group.gameObject.AddComponent<CanvasGroup>();
         canvasGroup.alpha = 0f;
         canvasGroup.interactable = false;
         canvasGroup.blocksRaycasts = false;
 
-        Plate("Plate", group, new Vector2(0.5f, 0.5f), new Vector2(0f, 10f), new Vector2(1000f, 150f));
-        CreateText("Label", group, "Deliver to", 38f, new Color(1f, 1f, 1f, 0.9f), new Vector2(0f, 40f), outline);
-        TextMeshProUGUI address = CreateText("Address", group, "No. 42, Pepperoni Parkway", 64f, new Color(1f, 0.85f, 0.35f), new Vector2(0f, -20f), outline);
+        RectTransform paper = Ticket("Ticket", group, new Vector2(0.5f, 0f), 1.5f);
+        RectTransform band = Band("Band", paper, PizzeriaRed, 28f, 8f);
+        AddLayoutSize(PizzaIcon(band, 40f), 40f, 40f);
+        TicketText("Label", band, "DELIVERY ORDER", 30f, Color.white, boldFont, 10f);
+
+        RectTransform body = Body("Body", paper, 56f, 14f, 20f, 0f);
+        TextMeshProUGUI address = TicketText("Address", body, "No. 42, Pepperoni Parkway", 64f, InkColor, boldFont);
+        TextMeshProUGUI note = TicketText("Note", body, "", 38f, FadedInkColor, semiBoldFont);
+        note.gameObject.SetActive(false);
 
         hud.FindProperty("introTitle").objectReferenceValue = canvasGroup;
         hud.FindProperty("introAddress").objectReferenceValue = address;
+        hud.FindProperty("introNote").objectReferenceValue = note;
+    }
+
+    // ---------- Lieferschein ----------
+    // Die Größen kommen aus dem Inhalt statt aus festen Zahlen: Jede Layout Group misst ihre Kinder (bei Text die Breite
+    // der Zeile), der Content Size Fitter am Papier übernimmt das Ergebnis als eigene Größe. Längere Adresse = breiterer Zettel
+
+    // Papier mit Schlagschatten, wächst mit seinem Inhalt um den Pivot. tilt = leicht schief (Grad), wirkt wie hingelegt
+    private static RectTransform Ticket(string name, Transform parent, Vector2 pivot, float tilt)
+    {
+        RectTransform paper = CreateImage(name, parent, PaperColor);
+        var image = paper.GetComponent<Image>();
+        image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
+        image.type = Image.Type.Sliced;
+        image.pixelsPerUnitMultiplier = 0.35f;
+        paper.anchorMin = paper.anchorMax = pivot;
+        paper.pivot = pivot;
+        paper.anchoredPosition = Vector2.zero;
+        paper.localRotation = Quaternion.Euler(0f, 0f, tilt);
+
+        // Shadow-Effekt zeichnet das Papier versetzt und dunkel nochmal dahinter. Geht hier, weil das Papier deckend ist
+        var shadow = paper.gameObject.AddComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.4f);
+        shadow.effectDistance = new Vector2(6f, -8f);
+
+        // Band und Inhalt untereinander, 8 px Papierrand rundherum
+        var layout = paper.gameObject.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(8, 8, 8, 8);
+        layout.childAlignment = TextAnchor.UpperCenter;
+        layout.childControlWidth = layout.childControlHeight = true;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+
+        var fitter = paper.gameObject.AddComponent<ContentSizeFitter>();
+        fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        return paper;
+    }
+
+    // Farbiges Band oben im Zettel, Inhalt (Symbol + Text) nebeneinander und mittig
+    private static RectTransform Band(string name, Transform paper, Color color, float padX, float padY)
+    {
+        RectTransform band = CreateImage(name, paper, color);
+        var image = band.GetComponent<Image>();
+        image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
+        image.type = Image.Type.Sliced;
+        // Etwas kleinere Ecken als das Papier, damit der Papierrand gleichmäßig breit wirkt
+        image.pixelsPerUnitMultiplier = 0.5f;
+        var layout = band.gameObject.AddComponent<HorizontalLayoutGroup>();
+        layout.padding = new RectOffset(Mathf.RoundToInt(padX), Mathf.RoundToInt(padX), Mathf.RoundToInt(padY), Mathf.RoundToInt(padY));
+        layout.spacing = 16f;
+        layout.childAlignment = TextAnchor.MiddleCenter;
+        layout.childControlWidth = layout.childControlHeight = true;
+        layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+        return band;
+    }
+
+    // Papierbereich unter dem Band, Zeilen untereinander
+    private static RectTransform Body(string name, Transform paper, float padX, float padTop, float padBottom, float spacing)
+    {
+        RectTransform body = CreateRect(name, paper);
+        var layout = body.gameObject.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(Mathf.RoundToInt(padX), Mathf.RoundToInt(padX), Mathf.RoundToInt(padTop), Mathf.RoundToInt(padBottom));
+        layout.spacing = spacing;
+        layout.childAlignment = TextAnchor.UpperCenter;
+        layout.childControlWidth = layout.childControlHeight = true;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+        return body;
+    }
+
+    // Einzeilig (kein Umbruch): So meldet der Text der Layout Group seine volle Zeilenbreite und der Zettel wächst mit.
+    // spacing = zusätzlicher Buchstabenabstand (für gesperrte Großbuchstaben wie "DELIVERY ORDER")
+    private static TextMeshProUGUI TicketText(string name, Transform parent, string text, float fontSize, Color color, TMP_FontAsset font, float spacing = 0f)
+    {
+        RectTransform rect = CreateRect(name, parent);
+        var label = rect.gameObject.AddComponent<TextMeshProUGUI>();
+        label.font = font;
+        label.text = text;
+        label.fontSize = fontSize;
+        label.color = color;
+        label.characterSpacing = spacing;
+        label.alignment = TextAlignmentOptions.Center;
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.raycastTarget = false;
+        return label;
+    }
+
+    // Feste Größe für ein Element in einer Layout Group (Symbol, Münze)
+    private static void AddLayoutSize(RectTransform rect, float width, float height)
+    {
+        var element = rect.gameObject.AddComponent<LayoutElement>();
+        element.preferredWidth = element.minWidth = width;
+        element.preferredHeight = element.minHeight = height;
+    }
+
+    // SDF-Schrift-Asset aus der TTF erzeugen (einmalig, danach wird das gespeicherte geladen). Static mit allen druckbaren
+    // ASCII-Zeichen: Der Atlas ändert sich dann zur Laufzeit nicht mehr (ein Dynamic-Atlas würde das Asset bei jedem neuen
+    // Zeichen verändern). Fehlt doch mal ein Zeichen, springt Liberation Sans als Fallback ein
+    private static TMP_FontAsset LoadOrCreateFont(string fileName)
+    {
+        string assetPath = $"{FontFolder}/{fileName} SDF.asset";
+        var existing = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(assetPath);
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        var font = AssetDatabase.LoadAssetAtPath<Font>($"{FontFolder}/{fileName}.ttf");
+        // 72 pt Abtastgröße, 8 px Rand fürs Distanzfeld, 1024er Atlas: reicht für die ASCII-Zeichen in hoher Qualität
+        TMP_FontAsset asset = TMP_FontAsset.CreateFontAsset(font, 72, 8, GlyphRenderMode.SDFAA, 1024, 1024, AtlasPopulationMode.Dynamic, false);
+        asset.name = fileName + " SDF";
+        AssetDatabase.CreateAsset(asset, assetPath);
+        // Atlas-Textur und Material entstehen nur im Speicher, als Unter-Assets kommen sie mit in die Datei
+        asset.atlasTextures[0].name = fileName + " Atlas";
+        AssetDatabase.AddObjectToAsset(asset.atlasTextures[0], asset);
+        asset.material.name = fileName + " Material";
+        AssetDatabase.AddObjectToAsset(asset.material, asset);
+
+        var ascii = new System.Text.StringBuilder();
+        for (char c = ' '; c <= '~'; c++)
+        {
+            ascii.Append(c);
+        }
+        if (!asset.TryAddCharacters(ascii.ToString(), out string missing))
+        {
+            Debug.LogWarning($"PizzaHeatSetup: {fileName} fehlen Zeichen: {missing}");
+        }
+        asset.atlasPopulationMode = AtlasPopulationMode.Static;
+        if (TMP_Settings.defaultFontAsset != null)
+        {
+            asset.fallbackFontAssetTable = new System.Collections.Generic.List<TMP_FontAsset> { TMP_Settings.defaultFontAsset };
+        }
+        EditorUtility.SetDirty(asset);
+        AssetDatabase.SaveAssets();
+        Debug.Log($"PizzaHeatSetup: Schrift-Asset {assetPath} erzeugt.");
+        return asset;
     }
 
     // Kreis-Blende über den ganzen Bildschirm. Image im Prefab aus, sonst ist die Game-Ansicht im Edit Mode schwarz
@@ -478,26 +656,6 @@ public static class PizzaHeatSetup
         // Reine Anzeige: keine Maus-Treffer, damit das HUD nie Klicks abfängt
         image.raycastTarget = false;
         return rect;
-    }
-
-    private static TextMeshProUGUI CreateText(string name, Transform parent, string text, float fontSize, Color color, Vector2 position, Material fontMaterial = null)
-    {
-        RectTransform rect = CreateRect(name, parent);
-        rect.sizeDelta = new Vector2(1400f, fontSize * 1.4f);
-        rect.anchoredPosition = position;
-
-        var label = rect.gameObject.AddComponent<TextMeshProUGUI>();
-        label.text = text;
-        label.fontSize = fontSize;
-        label.color = color;
-        label.alignment = TextAlignmentOptions.Center;
-        label.fontStyle = FontStyles.Bold;
-        label.raycastTarget = false;
-        if (fontMaterial != null)
-        {
-            label.fontSharedMaterial = fontMaterial;
-        }
-        return label;
     }
 
     // Anker auf die Ecken des Elternteils: Das Rechteck füllt es komplett aus, abzüglich Rand

@@ -139,7 +139,7 @@ public static class Level5Builder
 
         LevelBuildKit.SetupEssentials(Mathf.Round(MozzarellaU(GoalZ)), "1", KeepWarmTime,
             new Vector3(-60f, -20f, 150f), new Vector3(110f, 1f, 340f),
-            "No. 1, Mozzarella Blvd (the last house standing)", new Vector3(-60f, 70f, -90f));
+            "No. 1, Mozzarella Blvd", "the last house standing", new Vector3(-60f, 70f, -90f));
         SetupIntroExpose();
         LevelBuildKit.Save(scene);
         Debug.Log($"Level5Builder: Level 5 (Kaiju) gebaut. Bahn u {LevelBuildKit.Lane.StartU:F2} bis {LevelBuildKit.Lane.EndU:F2}, Mozzarella u(z) = {MozzarellaU(0f):F2} - z");

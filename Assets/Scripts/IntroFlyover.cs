@@ -39,6 +39,8 @@ public class IntroFlyover : MonoBehaviour
 
     [Header("Lieferadresse")]
     [SerializeField] private string deliveryAddress = "No. 42, Pepperoni Parkway";
+    [Tooltip("Optionale zweite, kleinere Zeile unter der Adresse (z.B. \"Pesto Park\"). Leer = keine")]
+    [SerializeField] private string deliveryNote = "";
     [SerializeField] private float titleFadeDuration = 0.4f;
 
     [Header("Iris und HUD")]
@@ -188,7 +190,7 @@ public class IntroFlyover : MonoBehaviour
             if (hud != null && swoop > 0f && !titleShown)
             {
                 titleShown = true;
-                hud.ShowIntroTitle(deliveryAddress, titleFadeDuration);
+                hud.ShowIntroTitle(deliveryAddress, deliveryNote, titleFadeDuration);
             }
             // SmootherStep (Ken Perlin): wie SmoothStep, aber noch weicher an beiden Enden. Losfliegen und Ankommen ohne Ruck
             float k = swoop * swoop * swoop * (swoop * (swoop * 6f - 15f) + 10f);

@@ -237,9 +237,9 @@ public static class LevelBuildKit
 
     // Spieler und Startpunkt an die Tür der Pizzeria (steht in der Stadt), Wärme-Zeit, Ziel an die Stelle goalU mit eigener
     // Hausnummer, KillZone unsichtbar knapp über dem Baugruben-Boden, Kamerafahrt, Himmel und Nebel wie in der Stadt
-    // Intro: Lieferadresse (wird eingeblendet) und Startposition der Kamera relativ zum Kunden (Welt-Achsen)
+    // Intro: Lieferadresse (wird eingeblendet, deliveryNote = optionale kleinere zweite Zeile) und Startposition der Kamera relativ zum Kunden (Welt-Achsen)
     public static void SetupEssentials(float goalU, string houseNumber, float keepWarmTime, Vector3 killZoneCenter, Vector3 killZoneSize,
-        string deliveryAddress, Vector3 introOverviewOffset)
+        string deliveryAddress, string deliveryNote, Vector3 introOverviewOffset)
     {
         var landmark = System.Array.Find(CityLayout.Landmarks, entry => entry.prefab == "Pizzeria");
         var pizzeriaPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{CityPropsSetup.PrefabFolder}/Pizzeria.prefab");
@@ -275,6 +275,7 @@ public static class LevelBuildKit
             follow.ApplyModifiedPropertiesWithoutUndo();
             var intro = new SerializedObject(mainCamera.GetComponent<IntroFlyover>());
             intro.FindProperty("deliveryAddress").stringValue = deliveryAddress;
+            intro.FindProperty("deliveryNote").stringValue = deliveryNote;
             intro.FindProperty("overviewOffset").vector3Value = introOverviewOffset;
             intro.ApplyModifiedPropertiesWithoutUndo();
         }

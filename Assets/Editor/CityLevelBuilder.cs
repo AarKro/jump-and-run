@@ -67,7 +67,7 @@ public static class CityLevelBuilder
         // Knapp über dem Baugruben-Boden (y = -4): Der Tod passiert noch sichtbar in der Grube.
         // Groß genug für beide Straßen (vor der Kurve entlang X, danach entlang Z). Kundenhaus nach der Kurve bei u = 146
         LevelBuildKit.SetupEssentials(146f, "42", KeepWarmTime, new Vector3(25f, -3f, 70f), new Vector3(140f, 1f, 190f),
-            "No. 42, Pepperoni Parkway", new Vector3(-10f, 90f, -120f));
+            "No. 42, Pepperoni Parkway", "", new Vector3(-10f, 90f, -120f));
         LevelBuildKit.Save(scene);
         Debug.Log("CityLevelBuilder: Level 1 als Stadt gebaut.");
     }

@@ -138,7 +138,7 @@ public static class Level3Builder
         float goalU = Mathf.Round(startU + (LaneStartFromCenter - GoalFromCenter));
         LevelBuildKit.SetupEssentials(goalU, "", KeepWarmTime,
             new Vector3(MozzarellaX - 5f, -3f, 55f), new Vector3(30f, 1f, 110f),
-            "Picnic at the Duck Pond, Pesto Park", new Vector3(20f, 90f, -110f));
+            "Picnic at the Duck Pond", "Pesto Park", new Vector3(20f, 90f, -110f));
         FacePicnicToCamera();
         LevelBuildKit.Save(scene);
         Debug.Log($"Level3Builder: Level 3 (Pesto Park) gebaut. Bahn u {startU:F2} bis {LevelBuildKit.Lane.EndU:F2}.");

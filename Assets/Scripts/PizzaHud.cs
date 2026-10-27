@@ -13,9 +13,11 @@ public class PizzaHud : MonoBehaviour
     [Header("Intro")]
     [Tooltip("Wärmebalken: im Level-Intro ausgeblendet, danach eingeblendet")]
     [SerializeField] private CanvasGroup gameplayGroup;
-    [Tooltip("\"Deliver to\" + Adresse, während die Kamera zum Kunden fliegt")]
+    [Tooltip("Lieferschein mit der Adresse, während die Kamera zum Kunden fliegt")]
     [SerializeField] private CanvasGroup introTitle;
     [SerializeField] private TextMeshProUGUI introAddress;
+    [Tooltip("Kleinere zweite Zeile unter der Adresse, ausgeblendet wenn leer")]
+    [SerializeField] private TextMeshProUGUI introNote;
 
     [Header("Wärmebalken")]
     [Tooltip("Füllung des Balkens. Die Breite kommt über anchorMax.x (0-1), nicht über die Größe")]
@@ -52,7 +54,7 @@ public class PizzaHud : MonoBehaviour
     [SerializeField] private GameObject deliveredPanel;
     [SerializeField] private Image[] coins;
     [SerializeField] private Color coinEarnedColor = new Color(1f, 0.8f, 0.15f);
-    [SerializeField] private Color coinMissingColor = new Color(1f, 1f, 1f, 0.2f);
+    [SerializeField] private Color coinMissingColor = new Color(0.45f, 0.33f, 0.22f, 0.25f);
     [Tooltip("Pause zwischen den einzelnen Münzen")]
     [SerializeField] private float coinPopInterval = 0.3f;
     [Tooltip("So groß ist eine Münze im ersten Moment, bevor sie auf normale Größe schrumpft")]
@@ -123,11 +125,17 @@ public class PizzaHud : MonoBehaviour
         yield return Fade(heatHint, 0f, 0.6f);
     }
 
-    public void ShowIntroTitle(string address, float duration)
+    public void ShowIntroTitle(string address, string note, float duration)
     {
         if (introAddress != null)
         {
             introAddress.text = address;
+        }
+        if (introNote != null)
+        {
+            // Ausgeschaltete Kinder zählen für die Layout Group nicht mit: Der Zettel wird dann eine Zeile kürzer
+            introNote.text = note;
+            introNote.gameObject.SetActive(!string.IsNullOrEmpty(note));
         }
         titleFade = RestartFade(titleFade, introTitle, 1f, duration);
     }
