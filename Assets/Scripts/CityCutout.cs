@@ -6,11 +6,15 @@ using UnityEngine;
 // Größe = Scale des Objekts (wie bei einem Würfel). Es zählt nur der Grundriss (X/Z), keine Drehung.
 // treesOnly: nimmt nur Bäume und Büsche weg (ganz, mit Stamm und Krone) und lässt Boden, Wege und alles andere stehen.
 // Für Stellen, an denen nur die Kamera freie Sicht braucht (Level 5 im Park).
+// keepGround: blendet alles aus wie sonst, schneidet aber den Boden nicht aus (z.B. Platz für den Eiswagen im Park: Laternen
+// und Bäume weg, der Gehweg am Parkrand bleibt ganz).
 public class CityCutout : MonoBehaviour
 {
     [SerializeField] private bool treesOnly;
+    [SerializeField] private bool keepGround;
 
     public bool TreesOnly => treesOnly;
+    public bool KeepGround => keepGround;
 
     public Rect Area
     {

@@ -133,6 +133,7 @@ public static class Level3Builder
         BuildGround(link);
         BuildGameplay();
         BuildProps();
+        BuildIceCreamTruck(link);
 
         float goalU = Mathf.Round(startU + (LaneStartFromCenter - GoalFromCenter));
         LevelBuildKit.SetupEssentials(goalU, "", KeepWarmTime,
@@ -141,6 +142,34 @@ public static class Level3Builder
         FacePicnicToCamera();
         LevelBuildKit.Save(scene);
         Debug.Log($"Level3Builder: Level 3 (Pesto Park) gebaut. Bahn u {startU:F2} bis {LevelBuildKit.Lane.EndU:F2}.");
+    }
+
+    // Eiswagen am Südost-Weg, kurz nach dem Parkeingang (derselbe Wagen wie in Level 5, dort liegt er an derselben Stelle
+    // umgekippt): aufrecht, Klappe offen, drinnen der Verkäufer, davor zwei Leute in der Schlange, daneben einer mit Eis.
+    // Kulisse ohne Collider, etwas weiter im Rasen als in Level 5, damit die Schlange nicht auf dem Weg steht. Laternen,
+    // Bänke und Bäume der Stadt an der Stelle blendet ein Ausschnitt aus (der Boden bleibt)
+    private const float IceCreamTruckBack = 5f;
+
+    private static void BuildIceCreamTruck(Transform link)
+    {
+        IceCreamTruckKit.Spot(IceCreamTruckBack, out Vector3 position, out Quaternion rotation);
+        Transform truck = new GameObject("Ice Cream Truck").transform;
+        truck.SetParent(propParent, false);
+        truck.SetPositionAndRotation(position, rotation);
+        IceCreamTruckKit.BuildModel(truck);
+        // Steht im Wagen auf einem Tritt (Füße 0.85 über dem Rasen, sonst sähe man über der Theke nur den Kopf), Oberkörper in
+        // der Klappe, schaut zum Weg
+        IceCreamTruckKit.Vendor(truck, new Vector3(0.6f, 0.85f, 0.1f), 0f);
+        MarketSetup.Person(truck, "Customer", new Vector3(0.9f, 0f, -2.0f), 180f, 0.4f);
+        MarketSetup.Person(truck, "Customer", new Vector3(-0.5f, 0f, -2.4f), 200f, 0.4f);
+        // Hält sein Eis vor sich (Arme nach vorn), die Waffel hängt an der rechten Hand und bleibt aufrecht
+        CrowdFigure licking = MarketSetup.Person(truck, "Customer With Ice Cream", new Vector3(3.9f, 0f, -0.9f), -30f, 0f, 60f);
+        var lickingData = new SerializedObject(licking);
+        var arm = (Transform)lickingData.FindProperty("rightArm").objectReferenceValue;
+        IceCreamTruckKit.Cone(arm, new Vector3(0f, -0.6f, 0.05f), true).localRotation = Quaternion.Euler(-60f, 0f, 0f);
+
+        Vector3 c = position + rotation * new Vector3(0f, 0f, -0.6f);
+        LevelBuildKit.Cutout(link, "Ice Cream Truck", c.x - 5f, c.x + 5f, c.z - 5f, c.z + 5f, keepGround: true);
     }
 
     // Ziel ohne Haus: Das Goal-Prefab mit Kundenhaus (aus der kopierten Szene) gegen das Picknick tauschen. Es heißt weiter

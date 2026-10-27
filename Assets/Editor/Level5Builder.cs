@@ -74,15 +74,16 @@ public static class Level5Builder
     //   Auslöser: Der Spieler biegt vom Mozzarella Blvd auf den Südost-Diagonalweg. Die Echse lädt 4 s auf, der Eisverkäufer
     //   hinter seinem umgekippten Wagen (TruckS vom Brunnen, hinter der Bahn = zur Echse hin) ruft, dann 3 s Feuer auf dem
     //   ganzen Park-Stück der Bahn, außer direkt vor dem Wagen. Bäume nördlich des Wegs fangen Feuer
-    private const float TruckS = 70f;
-    private const float TruckLength = 6f, TruckHeight = 2.4f, TruckDepth = 2.8f, TruckBackOffset = 2.7f;
+    private const float TruckS = IceCreamTruckKit.S;
+    private const float TruckLength = IceCreamTruckKit.Length, TruckHeight = IceCreamTruckKit.Width, TruckDepth = IceCreamTruckKit.Height, TruckBackOffset = 2.7f;
     private const float ShelterHalf = 2.4f;
     private static readonly Rect BurnArea = Rect.MinMaxRect(-88f, 142f, -47f, 207f);
     // Kamera-Zone während des Ereignisses: weiter weg und schräg von hinten (+u, über der Kreuzung Crust Street/Mozzarella
     // Blvd, dort stehen keine Häuser), Blick leicht nach oben: Spieler und Wagen unten, die Echse (~110 m nördlich) oben
     private static readonly Vector3 BreathCameraOffset = new Vector3(18f, 6f, -16f);
     private const float BreathCameraLookHeight = 8.3f;
-    private const float BreathChargeTime = 4.5f;
+    // Der Wagen steht seit 2026-10-27 6 m weiter im Park (gleiche Stelle wie in Level 3): eine halbe Sekunde mehr zum Hinlaufen
+    private const float BreathChargeTime = 5f;
 
     // ---------- Roboter ----------
     //   Spieler kommt aus dem Park zurück auf den Mozzarella Blvd (Four Cheese): Zwischensequenz, der Roboter stürzt herab,
@@ -798,49 +799,29 @@ public static class Level5Builder
         return fire;
     }
 
-    // Umgekippter Eiswagen (auf der Seite liegend, Dach zur Kamera mit der großen Waffel, Unterboden mit Rädern zur Echse),
-    // daneben verschüttetes Eis, dahinter kauert der Verkäufer (HidingVendor). Collider auf Layer Ground (man kann draufspringen)
+    // Umgekippter Eiswagen: derselbe Wagen wie in Level 3 (IceCreamTruckKit), auf die Seite gekippt: Dach mit der großen
+    // Waffel zur Kamera, Unterboden mit Rädern zur Echse, die Verkaufsseite liegt unten. Daneben verschüttetes Eis, dahinter
+    // kauert der Verkäufer (HidingVendor). Collider auf Layer Ground (man kann draufspringen). Die Stadt-Deko an der Stelle
+    // (Laternen, Bäume) blendet ein Ausschnitt aus, der den Boden stehen lässt
     private static HidingVendor IceCreamTruck(float u)
     {
-        Material white = PrimitiveKit.Material("Assets/Materials/City/Truck White.mat", PrimitiveKit.LitShader, new Color(0.95f, 0.94f, 0.9f));
-        Material pink = PrimitiveKit.Material("Assets/Materials/City/Ice Cream Pink.mat", PrimitiveKit.LitShader, new Color(0.98f, 0.55f, 0.7f));
-        Material mint = PrimitiveKit.Material("Assets/Materials/City/Ice Cream Mint.mat", PrimitiveKit.LitShader, new Color(0.6f, 0.9f, 0.75f));
-        Material waffle = PrimitiveKit.Material("Assets/Materials/City/Waffle.mat", PrimitiveKit.LitShader, new Color(0.85f, 0.62f, 0.32f));
-        Material wheel = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Wheel.mat");
-        Material windows = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Window Glass.mat");
         Quaternion frame = LevelBuildKit.Frame(u);
         var truck = new GameObject("Ice Cream Truck") { layer = 3 };
         truck.transform.SetParent(gameplayParent, false);
-        // Lokal: X entlang der Bahn, Y hoch (liegend ist die Wagenbreite die Höhe), Z zur Echse. Mitte über dem Rasen
+        // Wurzel in der Mitte des liegenden Wagens: lokal X entlang der Bahn, Y hoch (liegend die Wagenbreite), Z zur Echse
         truck.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + Vector3.up * (CityLayout.ParkLawnTop + TruckHeight / 2f)
             + frame * Vector3.forward * TruckBackOffset, frame);
         Transform t = truck.transform;
-        PrimitiveKit.Box("Body", t, Vector3.zero, new Vector3(TruckLength, TruckHeight, TruckDepth), white);
-        // Rosa Streifen rundum und die Fahrerkabine am -X-Ende mit Fenster
-        PrimitiveKit.Box("Stripe", t, new Vector3(0f, 0f, 0.3f), new Vector3(TruckLength + 0.02f, TruckHeight + 0.02f, 0.5f), pink);
-        PrimitiveKit.Box("Cab Window", t, new Vector3(-TruckLength / 2f - 0.01f, 0f, -0.6f), new Vector3(0.02f, 1.6f, 1f), windows);
-        // Oben (eigentlich die Seite): Verkaufsklappe offen, Schriftzug
-        PrimitiveKit.Box("Serving Hatch", t, new Vector3(0.6f, TruckHeight / 2f + 0.01f, -0.2f), new Vector3(2.6f, 0.02f, 1.2f), windows);
-        TMPro.TextMeshPro sign = PrimitiveKit.Text("Sign", t, new Vector3(-1f, 0.2f, -TruckDepth / 2f - 0.02f), new Vector2(3.4f, 1.2f), "GELATO", new Color(0.9f, 0.3f, 0.5f));
-        sign.fontSizeMax = 14f;
-        // Dach zur Kamera: große Waffel mit Kugeln, liegt jetzt waagrecht
-        Transform cone = PrimitiveKit.Pivot("Roof Cone", t, new Vector3(1.2f, 0f, -TruckDepth / 2f));
-        cone.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        PrimitiveKit.Part("Waffle", PrimitiveType.Cylinder, cone, new Vector3(0f, 0.5f, 0f), new Vector3(0.6f, 0.5f, 0.6f), waffle);
-        PrimitiveKit.Part("Scoop Pink", PrimitiveType.Sphere, cone, new Vector3(0f, 1.15f, 0f), Vector3.one * 0.9f, pink);
-        PrimitiveKit.Part("Scoop Mint", PrimitiveType.Sphere, cone, new Vector3(0f, 1.75f, 0f), Vector3.one * 0.75f, mint);
-        // Räder an der Unterseite (zur Echse)
-        foreach (float x in new[] { -1.9f, 1.9f })
-        {
-            foreach (float y in new[] { -0.8f, 0.8f })
-            {
-                Renderer w = PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, t, new Vector3(x, y, TruckDepth / 2f + 0.1f), new Vector3(0.8f, 0.12f, 0.8f), wheel);
-                w.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            }
-        }
+        // Aufrecht: Y = hoch, Z = Rückseite. Um -90° um X gekippt wird aus Y (Dach) -Z (zur Kamera), aus Z (Rückseite) Y (oben)
+        Transform model = IceCreamTruckKit.BuildModel(t);
+        model.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+        model.localPosition = new Vector3(0f, 0f, TruckDepth / 2f);
         PrimitiveKit.AddBoxCollider(truck, Vector3.zero, new Vector3(TruckLength, TruckHeight, TruckDepth));
+        Vector3 c = truck.transform.position;
+        LevelBuildKit.Cutout(GameObject.Find("City Link").transform, "Ice Cream Truck", c.x - 4.5f, c.x + 4.5f, c.z - 4.5f, c.z + 4.5f, keepGround: true);
+        Material pink = IceCreamTruckKit.Pink, mint = IceCreamTruckKit.Mint;
 
-        // Verschüttetes Eis vor dem Wagen (flache Kugeln) und ein umgefallenes Menü-Schild
+        // Verschüttetes Eis vor dem Wagen (flache Kugeln)
         var random = new System.Random(42);
         for (int i = 0; i < 6; i++)
         {
@@ -848,14 +829,14 @@ public static class Level5Builder
             PrimitiveKit.Part("Spilled Scoop", PrimitiveType.Sphere, t, spot, new Vector3(0.45f, 0.15f, 0.45f), i % 2 == 0 ? pink : mint);
         }
 
-        // Verkäufer an dem Ende, zu dem der Spieler hinläuft (-u), im Spalt zwischen Bahn und Wagen, schaut zur Kamera
-        CrowdFigure figure = MarketSetup.Person(t, "Ice Cream Vendor", new Vector3(-TruckLength / 2f + 0.9f, -TruckHeight / 2f, -TruckDepth / 2f - 0.55f), 0f, 0f);
+        // Verkäufer (derselbe wie in Level 3) an dem Ende, zu dem der Spieler hinläuft (-u), im Spalt zwischen Bahn und Wagen,
+        // schaut zur Kamera
+        CrowdFigure figure = IceCreamTruckKit.Vendor(t, new Vector3(-TruckLength / 2f + 0.9f, -TruckHeight / 2f, -TruckDepth / 2f - 0.55f), 0f);
         var figureData = new SerializedObject(figure);
+        figureData.FindProperty("gesture").floatValue = 0f;
+        figureData.ApplyModifiedPropertiesWithoutUndo();
         Transform rightArm = (Transform)figureData.FindProperty("rightArm").objectReferenceValue;
         Transform leftArm = (Transform)figureData.FindProperty("leftArm").objectReferenceValue;
-        // Weiße Mütze wie ein Eisverkäufer
-        Material hat = white;
-        PrimitiveKit.Part("Paper Hat", PrimitiveType.Cylinder, figure.transform.Find("Rig"), new Vector3(0f, 1.62f, 0f), new Vector3(0.42f, 0.12f, 0.42f), hat);
         // Groß und über dem Wagen (vor dem weißen Wagen ging die weiße Blase unter)
         GameObject bubble = ParkSetup.SpeechBubble(figure.transform, new Vector3(0.9f, 3.9f, 0f), "OVER HERE!");
         bubble.transform.localScale = Vector3.one * 2.4f;

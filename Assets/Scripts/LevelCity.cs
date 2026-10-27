@@ -81,6 +81,7 @@ public class LevelCity : MonoBehaviour
                 (cutout.TreesOnly ? treeCutouts : cutouts).Add(cutout);
             }
         }
+        List<CityCutout> carveCutouts = cutouts.FindAll(cutout => !cutout.KeepGround);
         if (cutouts.Count == 0 && treeCutouts.Count == 0)
         {
             return;
@@ -97,7 +98,7 @@ public class LevelCity : MonoBehaviour
                 }
                 if (renderer.TryGetComponent(out CityGround _))
                 {
-                    Carve(renderer, cutouts);
+                    Carve(renderer, carveCutouts);
                 }
                 else if (cutouts.Exists(cutout => cutout.Contains(renderer.bounds.center)))
                 {

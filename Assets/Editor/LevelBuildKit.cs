@@ -218,17 +218,19 @@ public static class LevelBuildKit
     }
 
     // Rechteck in Welt-X/Z (von, bis), in dem die Stadt für dieses Level verschwindet (Boden wird ausgeschnitten)
-    public static void Cutout(Transform link, string name, float x0, float x1, float z0, float z1, bool treesOnly = false)
+    // treesOnly: nur Bäume und Büsche; keepGround: alles außer dem Boden (siehe CityCutout)
+    public static void Cutout(Transform link, string name, float x0, float x1, float z0, float z1, bool treesOnly = false, bool keepGround = false)
     {
         Transform cutout = new GameObject("Cutout " + name).transform;
         cutout.SetParent(link, false);
         cutout.position = new Vector3((x0 + x1) / 2f, 0f, (z0 + z1) / 2f);
         cutout.localScale = new Vector3(Mathf.Abs(x1 - x0), 1f, Mathf.Abs(z1 - z0));
         var component = cutout.gameObject.AddComponent<CityCutout>();
-        if (treesOnly)
+        if (treesOnly || keepGround)
         {
             var serialized = new SerializedObject(component);
-            serialized.FindProperty("treesOnly").boolValue = true;
+            serialized.FindProperty("treesOnly").boolValue = treesOnly;
+            serialized.FindProperty("keepGround").boolValue = keepGround;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
     }

@@ -28,6 +28,12 @@ public class CrowdFigure : MonoBehaviour
     [SerializeField] private float gesture = 1f;
     [Tooltip("Arme dauerhaft so weit nach vorn (Grad), z.B. der Händler, der seinen Karren schiebt")]
     [SerializeField] private float armsForward;
+    [Header("Feste Kleidung (statt zufällig, z.B. der Eisverkäufer, der in Level 3 und 5 gleich aussehen soll)")]
+    [SerializeField] private bool fixedOutfit;
+    [SerializeField] private Color outfitShirt = Color.white;
+    [SerializeField] private Color outfitSkin = new Color(0.96f, 0.8f, 0.66f);
+    [SerializeField] private Color outfitHair = new Color(0.2f, 0.13f, 0.08f);
+
     [Tooltip("In Panik (Level 5): rennt vorgebeugt mit hochgerissenen, fuchtelnden Armen")]
     [SerializeField] private bool panic;
 
@@ -134,6 +140,13 @@ public class CrowdFigure : MonoBehaviour
         Vector3 p = transform.position;
         int hash = Mathf.Abs(Mathf.RoundToInt(p.x * 7.3f) * 73856093 ^ Mathf.RoundToInt(p.z * 5.9f) * 19349663 ^ Mathf.RoundToInt(p.y * 3.1f) * 83492791);
         seed = (hash % 1000) / 1000f;
+        if (fixedOutfit)
+        {
+            SetColor(shirtRenderers, outfitShirt);
+            SetColor(skinRenderers, outfitSkin);
+            SetColor(hairRenderers, outfitHair);
+            return;
+        }
         SetColor(shirtRenderers, Shirts[hash % Shirts.Length]);
         SetColor(skinRenderers, Skins[(hash / 7) % Skins.Length]);
         SetColor(hairRenderers, Hairs[(hash / 13) % Hairs.Length]);
