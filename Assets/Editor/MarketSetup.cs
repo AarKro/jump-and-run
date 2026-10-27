@@ -500,20 +500,20 @@ public static class MarketSetup
         const float length = 4f, height = 0.6f;
         float angle = Mathf.Atan2(height, length) * Mathf.Rad2Deg;
         float slope = Mathf.Sqrt(length * length + height * height);
-        // Schräge Platte: um Z gedreht, negativer Winkel hebt das -X-Ende an
+        // Sichtbar ist ein einziger Keil (eigenes Mesh): schräge Oberseite, dreieckige Seiten, senkrechte Rückwand an der
+        // Kante. Vorher waren die Seiten rechteckige Klötze, die im flachen Teil durch die Schräge ragten
+        var body = new GameObject("Wedge");
+        body.transform.SetParent(t, false);
+        body.transform.localPosition = new Vector3(0f, Surface, 0f);
+        body.AddComponent<MeshFilter>().sharedMesh = KickerMesh(length, height, 2f);
+        body.AddComponent<MeshRenderer>().sharedMaterial = plank;
+        // Collider: schräge Platte, um Z gedreht (negativer Winkel hebt das -X-Ende an). Ihre Oberseite liegt auf der des Keils
         var deck = new GameObject("Deck") { layer = GroundLayer };
         deck.transform.SetParent(t, false);
         deck.transform.localPosition = new Vector3(0f, Surface + height / 2f - 0.1f, 0f);
         deck.transform.localRotation = Quaternion.Euler(0f, 0f, -angle);
-        PrimitiveKit.Box("Planks", deck.transform, Vector3.zero, new Vector3(slope, 0.2f, 2f), plank);
         PrimitiveKit.Box("Lip Stripe", deck.transform, new Vector3(-slope / 2f + 0.2f, 0.105f, 0f), new Vector3(0.4f, 0.01f, 2f), stripe);
         PrimitiveKit.AddBoxCollider(deck, Vector3.zero, new Vector3(slope, 0.2f, 2f));
-        // Seitenwangen (Dreiecke angedeutet durch zwei Klötze) und die senkrechte Rückwand an der Kante
-        foreach (float z in new[] { -1f, 1f })
-        {
-            PrimitiveKit.Box("Side", t, new Vector3(-length / 4f, Surface + height / 3f, z), new Vector3(length / 2f, height * 0.66f, 0.06f), plank);
-        }
-        PrimitiveKit.Box("Back", t, new Vector3(-length / 2f + 0.03f, Surface + height / 2f, 0f), new Vector3(0.06f, height, 2f), plank);
         // Auslöser an der Kante: der Spieler fährt die Schräge hinauf und hinein
         var lip = new GameObject("Launch Trigger");
         lip.transform.SetParent(t, false);
@@ -521,6 +521,61 @@ public static class MarketSetup
         PrimitiveKit.AddBoxCollider(lip, new Vector3(-length / 2f + 0.25f, Surface + height + 0.8f, 0f), new Vector3(0.5f, 1.6f, 2f), true);
         lip.AddComponent<KickerRamp>();
         PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Kicker Ramp.prefab");
+    }
+
+    // Keil (Dreiecksprisma), Ursprung unten in der Mitte: flaches Ende bei x = +length/2, hohes bei -length/2, Breite in Z.
+    // Jede Fläche bekommt eigene Ecken, damit RecalculateNormals harte Kanten macht. Gespeichert als Asset (ein Prefab kann
+    // kein Mesh referenzieren, das nur im Speicher existiert); beim erneuten Bauen wird dasselbe Asset überschrieben
+    private static Mesh KickerMesh(float length, float height, float width)
+    {
+        PrimitiveKit.EnsureFolder("Assets", "Meshes");
+        const string path = "Assets/Meshes/Kicker Ramp.asset";
+        Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (mesh == null)
+        {
+            mesh = new Mesh { name = "Kicker Ramp" };
+            AssetDatabase.CreateAsset(mesh, path);
+        }
+
+        float x = length / 2f, z = width / 2f;
+        Vector3 lowFront = new Vector3(x, 0f, -z), lowBack = new Vector3(x, 0f, z);
+        Vector3 topFront = new Vector3(-x, height, -z), topBack = new Vector3(-x, height, z);
+        Vector3 footFront = new Vector3(-x, 0f, -z), footBack = new Vector3(-x, 0f, z);
+
+        var vertices = new System.Collections.Generic.List<Vector3>();
+        var triangles = new System.Collections.Generic.List<int>();
+        // Unity zeigt die Seite, von der aus die Ecken im Uhrzeigersinn liegen; die Normale ist dann Cross(b - a, c - a).
+        // Zeigt sie nicht nach außen, werden zwei Ecken getauscht
+        void Triangle(Vector3 a, Vector3 b, Vector3 c, Vector3 outward)
+        {
+            if (Vector3.Dot(Vector3.Cross(b - a, c - a), outward) < 0f)
+            {
+                (b, c) = (c, b);
+            }
+            foreach (Vector3 corner in new[] { a, b, c })
+            {
+                triangles.Add(vertices.Count);
+                vertices.Add(corner);
+            }
+        }
+        void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 outward)
+        {
+            Triangle(a, b, c, outward);
+            Triangle(a, c, d, outward);
+        }
+        Quad(lowFront, lowBack, topBack, topFront, new Vector3(height, length, 0f));   // Schräge
+        Quad(topFront, topBack, footBack, footFront, Vector3.left);                     // Rückwand an der Kante
+        Quad(lowFront, footFront, footBack, lowBack, Vector3.down);                     // Unterseite
+        Triangle(lowFront, topFront, footFront, Vector3.back);                          // Seite zur Kamera
+        Triangle(lowBack, topBack, footBack, Vector3.forward);                          // Seite zum Park
+
+        mesh.Clear();
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(triangles, 0);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        EditorUtility.SetDirty(mesh);
+        return mesh;
     }
 
     // Poller auf der Bahn zum Drüberspringen (0.9 m). Auf dem Board seitlich angefahren = vom Board fallen (wie auf dem Markt)
