@@ -11,13 +11,13 @@ using UnityEngine;
 // Die Stadt wird angegriffen: Die Riesenechse steht mitten im Hochhausviertel am Mozzarella Blvd (z 254, die Füße links und
 // rechts der Straße) und verwüstet es. Das Level schneidet die Hochhäuser dort aus und legt sie zerstört hin (Stümpfe,
 // umgestürzte Türme, Schutt, Rauch). Route (der Spieler läuft nach LINKS, Richtung -u): aus der Pizzeria nach Westen,
-// rechts auf den Ostgehweg des Mozzarella Blvd (x -33, gleiche Ecke wie Level 3) und geradeaus nach Norden über die Crust
-// Street, am umgestürzten Gründer-Denkmal vorbei, über Olive Lane und Four Cheese Avenue, zwischen den Beinen der Echse
-// hindurch zum letzten heilen Haus kurz vor der Calzone Road (z 305).
+// rechts auf den Ostgehweg des Mozzarella Blvd (x -33, gleiche Ecke wie Level 3) und nach Norden über die Crust Street.
+// Am Founder's Circle ist die Straße versperrt (Krater, Schutt, ein umgestürzter Turm quer über dem Mozzarella Blvd):
+// Umweg durch den Pesto Park, links auf den Südost-Diagonalweg (dort der Feueratem), quer über den Rasen nach Norden,
+// auf dem Nordost-Diagonalweg wieder hinaus, der genau an der Four Cheese Avenue auf den Mozzarella Blvd trifft. Weiter
+// nach Norden zwischen den Beinen der Echse hindurch zum letzten heilen Haus kurz vor der Calzone Road (z 305).
 // Die Bahn ist in +u-Richtung definiert (Häuser links davon): Sie beginnt beim Kunden und endet hinter der Pizzeria.
-// Auf der Margherita Avenue ist u = Welt-X, auf dem Mozzarella Blvd u = -31 - z.
-//
-// Stand: Gerüst (Arbeitsschritt 2 von Level 5). Feueratem, Roboter, Intro und Leute in Panik kommen als eigene Schritte.
+// Auf der Margherita Avenue ist u = Welt-X, auf dem unteren Mozzarella Blvd u = -31 - z.
 public static class Level5Builder
 {
     private const string ScenePath = "Assets/Scenes/levels/level05.unity";
@@ -36,8 +36,18 @@ public static class Level5Builder
     // Ecke Margherita → Mozzarella: Radius so, dass ganze Meter z auf ganze Meter u fallen (wie Level 3)
     private static readonly float CornerRadius = 2f / (2f - Mathf.PI / 2f);
 
-    // Straßen, die die Bahn quert (Mitte, 12 m Fahrbahn): Crust Street östlich (z 112), Olive Lane (z 165), Four Cheese (z 215)
-    private static readonly float[] CrossingZ = { 112f, 165f, 215f };
+    // Crust Street östlich (z 112, 12 m Fahrbahn) quert die Bahn auf dem unteren Mozzarella Blvd; Four Cheese liegt im Umweg
+    private const float CrustEastZ = 112f;
+
+    // ---------- Umweg durch den Park ----------
+    // Die Diagonalwege laufen von den Park-Ecken genau auf den Brunnen zu. Verlängert treffen sie die Laufbahn auf dem
+    // Mozzarella Blvd (x -33) bei z ~130 (Founder's Circle) und z ~215 (Four Cheese Avenue). Dazwischen geht es quer über
+    // den Rasen nach Norden, ParkLegS vom Brunnen entfernt. Alle Ecken mit DetourRadius
+    private const float ParkLegS = 35f;
+    private const float DetourRadius = 6f;
+    // Blockade: Krater und Schutt auf dem Gehweg gleich nördlich der Abzweigung, dahinter ein umgestürzter Turm quer über
+    // der Straße (vom Downtown-Block bis zum Westbordstein)
+    private const float BlockadeTowerZ = 154f;
 
     // Zerstörtes Hochhausviertel: Grundstücke beidseits des Mozzarella Blvd (Welt-Rechtecke von/bis), ab der Four Cheese Avenue
     private static readonly Rect RuinsWest = Rect.MinMaxRect(-100f, 222f, -50f, 315f);
@@ -60,23 +70,25 @@ public static class Level5Builder
     private static readonly Vector3 ExposeLook = new Vector3(-32f, 38f, 240f);
     private const float ExposeDuration = 6f;
     private const float TailYaw = 35f;
-    // ---------- Feueratem ----------
-    //   z 150 … 205   Bereich, in dem die Echse Feuer speit (sobald der Spieler dort ist, im Takt)
-    //   z 168 … 202   Feuer auf der Bahn: tödlich, außer direkt hinter einer Deckung (dort wird die Pizza warm)
-    //   z 180, 194    Deckungen: umgestürzte Busse auf dem Gehweg (2.4 m hoch, man kann drüberspringen)
-    //   Ziel des Strahls zwischen Bahn und Straße bei z 186, die Flammen reichen in den Park (Bäume fangen Feuer)
-    private const float BreathZoneFromZ = 150f, BreathZoneToZ = 205f;
-    private const float FireFromZ = 168f, FireToZ = 202f;
-    private static readonly float[] CoverZ = { 180f, 194f };
-    private const float CoverLength = 5f, CoverHeight = 2.4f, ShelterLength = 3f;
-    private static readonly Vector3 BreathTarget = new Vector3(-40f, CityLayout.Surface, 186f);
-    private static readonly Rect BurnArea = Rect.MinMaxRect(-80f, 166f, -46f, 208f);
+    // ---------- Feueratem (einmal, beim Betreten des Parks) ----------
+    //   Auslöser: Der Spieler biegt vom Mozzarella Blvd auf den Südost-Diagonalweg. Die Echse lädt 4 s auf, der Eisverkäufer
+    //   hinter seinem umgekippten Wagen (TruckS vom Brunnen, hinter der Bahn = zur Echse hin) ruft, dann 3 s Feuer auf dem
+    //   ganzen Park-Stück der Bahn, außer direkt vor dem Wagen. Bäume nördlich des Wegs fangen Feuer
+    private const float TruckS = 70f;
+    private const float TruckLength = 6f, TruckHeight = 2.4f, TruckDepth = 2.8f, TruckBackOffset = 2.7f;
+    private const float ShelterHalf = 2.4f;
+    private static readonly Rect BurnArea = Rect.MinMaxRect(-88f, 142f, -47f, 207f);
+    // Kamera-Zone während des Ereignisses: weiter weg und schräg von hinten (+u, über der Kreuzung Crust Street/Mozzarella
+    // Blvd, dort stehen keine Häuser), Blick leicht nach oben: Spieler und Wagen unten, die Echse (~110 m nördlich) oben
+    private static readonly Vector3 BreathCameraOffset = new Vector3(18f, 6f, -16f);
+    private const float BreathCameraLookHeight = 8.3f;
+    private const float BreathChargeTime = 4.5f;
 
     // ---------- Roboter ----------
-    //   z 210   Spieler überquert die Four Cheese Avenue: Zwischensequenz, der Roboter stürzt herab, die Echse dreht sich um,
-    //           ab dann ringen beide (kein Feuer mehr)
+    //   Spieler kommt aus dem Park zurück auf den Mozzarella Blvd (Four Cheese): Zwischensequenz, der Roboter stürzt herab,
+    //           die Echse dreht sich um, ab dann ringen beide (kein Feuer mehr)
     //   z 285   Spieler zwischen den Beinen des Roboters: Zwischensequenz, Aufwärtshaken, die Echse kippt nach Westen um
-    private const float RobotArrivalZ = 210f, FinaleZ = 285f;
+    private const float FinaleZ = 285f;
 
     // Mittelpunkt der Monster wie früher in der Stadt (CityLayout.KaijuFight): Echse 16 m südlich davon, Roboter 20 m nördlich
     private static Vector2 KaijuCenter => CityLayout.KaijuFight;
@@ -84,7 +96,14 @@ public static class Level5Builder
     private static Transform groundParent, gameplayParent, propParent;
     private static readonly List<float> pieceStartU = new List<float>();
 
+    // Oberer Mozzarella Blvd (Kunde, Ruinen, Kaiju) und unterer (Crust Street bis zur Abzweigung in den Park)
     public static float MozzarellaU(float z) => pieceStartU[0] + (LaneTopZ - z);
+    public static float LowerMozzarellaU(float z) => pieceStartU[8] + (lowerTopZ - z);
+    // Südost-Diagonalweg (Feueratem): s = Abstand vom Brunnen, die Bahn läuft dort in +u nach außen
+    public static float ParkSEU(float s) => pieceStartU[6] + (s - (ParkLegS + detourTangent));
+    private static Vector2 DirSE => (new Vector2(CityLayout.ParkArea.xMax + 1f, CityLayout.ParkArea.yMin - 1f) - CityLayout.ParkCenter).normalized;
+    private static Vector2 DirNE => (new Vector2(CityLayout.ParkArea.xMax + 1f, CityLayout.ParkArea.yMax + 1f) - CityLayout.ParkCenter).normalized;
+    private static float detourTangent, lowerTopZ, diagonalS;
 
     [MenuItem("Tools/Jump and Run/City/Rebuild Level 5 (Kaiju)")]
     public static void Rebuild()
@@ -111,13 +130,14 @@ public static class Level5Builder
         Transform link = LevelBuildKit.CityLink("Pizzeria");
         BuildGround(link);
         BuildFallenStatue(link);
+        BuildBlockade();
         BuildRuins(link);
         BuildKaiju();
         BuildGameplay();
         BuildPanic();
 
         LevelBuildKit.SetupEssentials(Mathf.Round(MozzarellaU(GoalZ)), "1", KeepWarmTime,
-            new Vector3(MozzarellaX, -20f, 150f), new Vector3(40f, 1f, 340f),
+            new Vector3(-60f, -20f, 150f), new Vector3(110f, 1f, 340f),
             "No. 1, Mozzarella Blvd (the last house standing)", new Vector3(-60f, 70f, -90f));
         SetupIntroExpose();
         LevelBuildKit.Save(scene);
@@ -148,13 +168,37 @@ public static class Level5Builder
     private static void BuildLane()
     {
         float mainStartX = MozzarellaX + CornerRadius;
+        Vector2 center = CityLayout.ParkCenter;
+        // Wo die Diagonalen x -33 treffen (s = Abstand vom Brunnen), und um wie viel Grad die Bahn dort abknickt
+        diagonalS = (MozzarellaX - center.x) / DirSE.x;
+        float northCornerZ = center.y + DirNE.y * diagonalS;
+        float southCornerZ = center.y + DirSE.y * diagonalS;
+        float turn = Mathf.Acos(-DirSE.y) * Mathf.Rad2Deg;   // von Nord-Süd auf die Diagonale, ~61°
+        detourTangent = DetourRadius * Mathf.Tan(turn / 2f * Mathf.Deg2Rad);
+        float legLength = (DirNE.y - DirSE.y) * ParkLegS;
+        float diagonalLength = diagonalS - ParkLegS - 2f * detourTangent;
+        lowerTopZ = southCornerZ - detourTangent;
+
         var pieces = new List<LanePath.Piece>
         {
-            LevelBuildKit.Straight(LaneTopZ - CornerRadius),     // Mozzarella Blvd (Kunde, Kaiju, Ruinen, Denkmal)
-            LevelBuildKit.Arc(CornerRadius, 90f),
-            LevelBuildKit.Straight(MainEndX - mainStartX),       // Margherita Avenue (Pizzeria)
+            LevelBuildKit.Straight(LaneTopZ - northCornerZ - detourTangent),   // 0 oberer Mozzarella Blvd (Kunde, Kaiju, Ruinen)
+            LevelBuildKit.Arc(DetourRadius, -turn),                             // 1 in den Park (Four Cheese)
+            LevelBuildKit.Straight(diagonalLength),                             // 2 Nordost-Diagonalweg
+            LevelBuildKit.Arc(DetourRadius, turn),                              // 3
+            LevelBuildKit.Straight(legLength - 2f * detourTangent),             // 4 quer über den Rasen nach Süden
+            LevelBuildKit.Arc(DetourRadius, turn),                              // 5
+            LevelBuildKit.Straight(diagonalLength),                             // 6 Südost-Diagonalweg (Feueratem)
+            LevelBuildKit.Arc(DetourRadius, -turn),                             // 7 zurück auf den Mozzarella Blvd (Founder's Circle)
+            LevelBuildKit.Straight(lowerTopZ - CornerRadius),                   // 8 unterer Mozzarella Blvd (Crust Street)
+            LevelBuildKit.Arc(CornerRadius, 90f),                               // 9
+            LevelBuildKit.Straight(MainEndX - mainStartX),                      // 10 Margherita Avenue (Pizzeria)
         };
-        float startU = mainStartX - (pieces[0].length + pieces[1].length);
+        float beforeMain = 0f;
+        for (int i = 0; i < pieces.Count - 1; i++)
+        {
+            beforeMain += pieces[i].length;
+        }
+        float startU = mainStartX - beforeMain;
         pieceStartU.Clear();
         float u = startU;
         foreach (LanePath.Piece piece in pieces)
@@ -171,9 +215,36 @@ public static class Level5Builder
     {
         // Querstraßen haben in der Stadt keinen Collider: unsichtbarer Laufboden auf Gehweghöhe (Autos fahren hier keine,
         // die Stadt ist auf der Flucht)
-        foreach (float z in CrossingZ)
+        LevelBuildKit.WalkGround("Walk Crossing Crust", LowerMozzarellaU(CrustEastZ + 6.5f), LowerMozzarellaU(CrustEastZ - 6.5f), CityLayout.Surface, groundParent);
+        // Umweg: Founder's Circle (Pflaster ohne Collider), Park-Wege und Rasen (ebenso), Four Cheese Avenue (Fahrbahn).
+        // Auf Höhe der Park-Wege; auf den Gehweg-Stücken an den Enden sind das 4 cm mehr, das merkt man nicht
+        // Stück für Stück: Über den ganzen Umweg zeigt die Bahn am Anfang, in der Mitte und am Ende nach Süden, WalkGround
+        // hielte ihn sonst für eine Gerade (und legte ein einziges Stück entlang x -33)
+        var bounds = new List<float> { MozzarellaU(223f) };
+        for (int i = 1; i <= 8; i++)
         {
-            LevelBuildKit.WalkGround($"Walk Crossing z{z:F0}", MozzarellaU(z + 6.5f), MozzarellaU(z - 6.5f), CityLayout.Surface, groundParent);
+            bounds.Add(pieceStartU[i]);
+        }
+        bounds.Add(LowerMozzarellaU(123f));
+        for (int i = 0; i < bounds.Count - 1; i++)
+        {
+            LevelBuildKit.WalkGround($"Walk Detour {i + 1}", bounds[i], bounds[i + 1], CityLayout.ParkPathTop, groundParent);
+        }
+
+        // Bäume, die im Weg stünden (nur Bäume und Büsche, Boden und Wege bleiben): auf dem Rasen-Stück (es führt quer durch
+        // den Baumbestand) und westlich davon (Kamera), auf der Kameraseite des Nordost-Wegs (Nordwesten) und des Südost-Wegs
+        // (Südwesten, die Kamera des Feueratems steht dort weiter weg als sonst)
+        Vector2 center = CityLayout.ParkCenter;
+        Vector2 legTop = center + DirNE * ParkLegS, legBottom = center + DirSE * ParkLegS;
+        LevelBuildKit.Cutout(link, "Trees Park Leg", legTop.x - 13f, legTop.x + 3.5f, legBottom.y - 4f, legTop.y + 4f, treesOnly: true);
+        var normalNE = new Vector2(-DirNE.y, DirNE.x);
+        var normalSE = new Vector2(DirSE.y, -DirSE.x);
+        for (float s = ParkLegS; s <= diagonalS; s += 8f)
+        {
+            Vector2 ne = center + DirNE * s + normalNE * 8f;
+            LevelBuildKit.Cutout(link, $"Trees NE s{s:F0}", ne.x - 5.5f, ne.x + 5.5f, ne.y - 5.5f, ne.y + 5.5f, treesOnly: true);
+            Vector2 se = center + DirSE * s + normalSE * 11f;
+            LevelBuildKit.Cutout(link, $"Trees SE s{s:F0}", se.x - 9f, se.x + 9f, se.y - 9f, se.y + 9f, treesOnly: true);
         }
     }
 
@@ -193,27 +264,57 @@ public static class Level5Builder
         circle.position = new Vector3(at.x, 0f, at.y);
         const float roadTop = CityLayout.RoadTop;
         Cylinder("Paving", circle, new Vector3(0f, (roadTop - 0.1f + CityLayout.Surface + 0.01f) / 2f, 0f), 15f, CityLayout.Surface + 0.01f - (roadTop - 0.1f), paving);
-        Cylinder("Lawn", circle, new Vector3(0f, 0.6f, 0f), 7.5f, 0.3f, grass);
-        // Sockel abgebrochen, schief
-        Renderer pedestal = PrimitiveKit.Box("Broken Pedestal", circle, new Vector3(0f, 0.95f, 0f), new Vector3(3.2f, 0.4f, 3.2f), marble);
+        // Rasen nur knapp über dem Laufboden: Die Bahn biegt 2 m nördlich der Mitte über den Platz in den Park
+        Cylinder("Lawn", circle, new Vector3(0f, 0.4f, 0f), 7.5f, 0.3f, grass);
+        // Sockel abgebrochen, schief, vom Sturz nach Südwesten verschoben
+        Renderer pedestal = PrimitiveKit.Box("Broken Pedestal", circle, new Vector3(-1.5f, 0.6f, -2f), new Vector3(3.2f, 0.4f, 3.2f), marble);
         pedestal.transform.localRotation = Quaternion.Euler(4f, 20f, -6f);
-        // Statue liegt nach Nordwesten (weg von der Bahn) auf dem Rasen, die Pizza ist ihr aus der Hand gefallen
-        Transform statue = PrimitiveKit.Pivot("Founder Statue (fallen)", circle, new Vector3(-1.5f, 1.1f, 1.5f));
-        statue.localRotation = Quaternion.Euler(0f, -45f, 0f) * Quaternion.Euler(0f, 0f, 90f);
+        // Statue ist nach Nordosten auf den Gehweg in den Krater gestürzt (hinter der Bahn, die nördlich am Platz vorbei in
+        // den Park biegt; die Kamera fährt südwestlich davon über den Platz), die Pizza ist ihr aus der Hand gefallen
+        Transform statue = PrimitiveKit.Pivot("Founder Statue (fallen)", circle, new Vector3(5.5f, 1.1f, 6.5f));
+        statue.localRotation = Quaternion.Euler(0f, 45f, 0f) * Quaternion.Euler(0f, 0f, 90f);
         PrimitiveKit.Part("Leg L", PrimitiveType.Capsule, statue, new Vector3(-0.4f, -1.3f, 0f), new Vector3(0.7f, 1.3f, 0.7f), bronze);
         PrimitiveKit.Part("Leg R", PrimitiveType.Capsule, statue, new Vector3(0.4f, -1.3f, 0f), new Vector3(0.7f, 1.3f, 0.7f), bronze);
         PrimitiveKit.Part("Body", PrimitiveType.Capsule, statue, new Vector3(0f, 0.8f, 0f), new Vector3(1.7f, 1.4f, 1.2f), bronze);
         PrimitiveKit.Part("Head", PrimitiveType.Sphere, statue, new Vector3(0f, 2.5f, 0f), Vector3.one * 1.1f, bronze);
         Cylinder("Chef Hat", statue, new Vector3(0f, 3.2f, 0f), 0.45f, 0.7f, bronze);
-        Cylinder("Pizza", circle, new Vector3(3.5f, 0.82f, -2f), 1.3f, 0.15f, bronze).transform.localRotation = Quaternion.Euler(8f, 0f, 14f);
+        Cylinder("Pizza", circle, new Vector3(9f, 0.82f, 4.5f), 1.3f, 0.15f, bronze).transform.localRotation = Quaternion.Euler(8f, 0f, 14f);
         // Schutt vom Sockel
         var random = new System.Random(130);
         for (int i = 0; i < 6; i++)
         {
-            Vector3 position = new Vector3((float)random.NextDouble() * 5f - 3.5f, 0.85f, (float)random.NextDouble() * 5f - 1f);
+            Vector3 position = new Vector3((float)random.NextDouble() * 5f - 3.5f, 0.85f, (float)random.NextDouble() * 4f - 5f);
             Renderer chunk = PrimitiveKit.Box("Marble Chunk", circle, position, Vector3.one * (0.4f + (float)random.NextDouble() * 0.6f), marble);
             chunk.transform.localRotation = Quaternion.Euler(random.Next(360), random.Next(360), random.Next(360));
         }
+    }
+
+    // ---------- Blockade am Founder's Circle ----------
+
+    // Warum der Umweg: gleich nördlich der Abzweigung ein Krater mit Schutt auf Gehweg und Fahrbahn, dahinter liegt ein
+    // umgestürzter Turm quer über der Straße (vom Downtown-Block bis zum Westbordstein). Kulisse, keine Collider (die Bahn
+    // biegt vorher ab)
+    private static void BuildBlockade()
+    {
+        Transform blockade = new GameObject("Blockade").transform;
+        blockade.SetParent(propParent, false);
+        Material facade = CityBuilder.FacadeMaterialAsset;
+        Material rubble = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Rubble.mat");
+        Material scorched = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Scorched.mat");
+        var random = new System.Random(150);
+        float craterZ = lowerTopZ + 10f;
+        Cylinder("Crater", blockade, new Vector3(-36f, CityLayout.Surface + 0.02f, craterZ), 5f, 0.1f, scorched);
+        Cylinder("Crater Rim", blockade, new Vector3(-36f, CityLayout.Surface + 0.1f, craterZ), 6.2f, 0.25f, rubble);
+        RubblePile(blockade, new Vector3(-33f, CityLayout.Surface, craterZ - 3f), 3f, rubble, facade, random);
+        RubblePile(blockade, new Vector3(-38f, CityLayout.RoadTop, craterZ + 4f), 4f, rubble, facade, random);
+        RubblePile(blockade, new Vector3(-31f, CityLayout.Surface, craterZ + 6f), 3f, rubble, facade, random);
+
+        // Turmstück liegt quer über der Straße, von den Fassaden der Ostseite (x -30) bis an den Park, Schutt an beiden Enden
+        Renderer tower = PrimitiveKit.Box("Fallen Tower", blockade, new Vector3(-38f, CityLayout.Surface + 3.5f, BlockadeTowerZ), new Vector3(19f, 9f, 9f), facade);
+        tower.transform.localRotation = Quaternion.Euler(-3f, 6f, 4f);
+        RubblePile(blockade, new Vector3(-30f, CityLayout.Surface, BlockadeTowerZ - 4f), 4f, rubble, facade, random);
+        RubblePile(blockade, new Vector3(-47f, CityLayout.RoadTop, BlockadeTowerZ - 2f), 3f, rubble, facade, random);
+        Smoke(blockade, new Vector3(-34f, CityLayout.Surface, BlockadeTowerZ - 5f));
     }
 
     // ---------- Zerstörtes Hochhausviertel ----------
@@ -482,9 +583,14 @@ public static class Level5Builder
         PrimitiveKit.SetReferences(battle, "thrusters", thrusters.ToArray());
         battle.FindProperty("landingDust").objectReferenceValue = landingDust;
         battle.FindProperty("fallDust").objectReferenceValue = fallDust;
-        battle.FindProperty("breathFromU").floatValue = MozzarellaU(BreathZoneToZ);
-        battle.FindProperty("breathToU").floatValue = MozzarellaU(BreathZoneFromZ);
-        battle.FindProperty("arrivalU").floatValue = MozzarellaU(RobotArrivalZ);
+        // Feueratem, sobald der Spieler in den Park abbiegt (bis zum Ende des Rasen-Stücks), Roboter, sobald er wieder auf
+        // dem Mozzarella Blvd ist
+        battle.FindProperty("breathFromU").floatValue = pieceStartU[4];
+        battle.FindProperty("breathToU").floatValue = pieceStartU[8] - 1f;
+        battle.FindProperty("vendor").objectReferenceValue = breathVendor;
+        battle.FindProperty("breathCamera").objectReferenceValue = breathCameraZone;
+        battle.FindProperty("chargeTime").floatValue = BreathChargeTime;
+        battle.FindProperty("arrivalU").floatValue = pieceStartU[1];
         battle.FindProperty("finaleU").floatValue = MozzarellaU(FinaleZ);
         battle.ApplyModifiedPropertiesWithoutUndo();
 
@@ -563,8 +669,9 @@ public static class Level5Builder
         return Stopped(dust);
     }
 
-    // Maul mit Glut am Kopf, Strahl (drei immer dickere Zylinder = Kegel), Flammen am Boden auf der Bahn, an der Aufschlagstelle
-    // und im Park, ein oranges Licht, Deckungen auf der Bahn, Vorlage für brennende Bäume
+    // Maul mit Glut am Kopf, Strahl (drei immer dickere Zylinder = Kegel), Flammen am Boden auf dem Park-Stück der Bahn
+    // (links und rechts vom Wagen, nicht davor), an der Aufschlagstelle hinter dem Wagen und im Park, ein oranges Licht, der
+    // umgekippte Eiswagen als einzige Deckung mit dem Verkäufer, Vorlage für brennende Bäume, Kamera-Zone fürs Ereignis
     private static FireBreath BuildFireBreath(CityBuilder.KaijuParts kaiju)
     {
         Material particles = AssetDatabase.LoadAssetAtPath<Material>("Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat");
@@ -602,18 +709,29 @@ public static class Level5Builder
         streamMain.playOnAwake = false;
         stream.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
-        // Flammen am Boden: auf der Bahn (der ganze Feuerbereich), an der Aufschlagstelle und im Park
-        float laneMidZ = (FireFromZ + FireToZ) / 2f;
+        // Wagen hinter der Bahn (zur Echse hin), der Strahl schlägt dahinter auf
+        float truckU = ParkSEU(TruckS);
+        Vector3 back = LevelBuildKit.Frame(truckU) * Vector3.forward;
+        Vector3 truckBase = LevelBuildKit.Lane.PointAt(truckU) + Vector3.up * CityLayout.ParkLawnTop + back * TruckBackOffset;
+        Vector3 target = truckBase + back * 7f;
+        HidingVendor vendor = IceCreamTruck(truckU);
+
+        // Flammen auf der Bahn: vom Ende des Rasen-Stücks bis vor den Wagen und hinter dem Wagen bis zur Abzweigung vom
+        // Mozzarella Blvd, dazu das Rasen-Stück selbst. Davor (die Deckung) brennt es nicht
+        float laneFrom = pieceStartU[4];
+        float laneTo = pieceStartU[8];
         var fires = new List<ParticleSystem>
         {
-            GroundFire(root, "Lane Fire", new Vector3(MozzarellaX - 2f, CityLayout.Surface, laneMidZ), new Vector3(8f, FireToZ - FireFromZ), particles, 140f),
-            GroundFire(root, "Impact Fire", BreathTarget, new Vector3(16f, 16f), particles, 120f),
+            LaneFire(root, "Lane Fire Leg", pieceStartU[4], pieceStartU[5], particles),
+            LaneFire(root, "Lane Fire Before", pieceStartU[6] - 3f, truckU - ShelterHalf - 0.6f, particles),
+            LaneFire(root, "Lane Fire After", truckU + ShelterHalf + 0.6f, laneTo, particles),
+            GroundFire(root, "Impact Fire", target, new Vector3(14f, 14f), particles, 120f),
             GroundFire(root, "Park Fire", new Vector3(BurnArea.center.x, CityLayout.ParkLawnTop, BurnArea.center.y), new Vector3(BurnArea.width, BurnArea.height), particles, 160f),
         };
 
         var lightObject = new GameObject("Impact Light");
         lightObject.transform.SetParent(root, false);
-        lightObject.transform.position = BreathTarget + Vector3.up * 6f;
+        lightObject.transform.position = target + Vector3.up * 6f;
         Light impact = lightObject.AddComponent<Light>();
         impact.type = LightType.Point;
         impact.color = new Color(1f, 0.55f, 0.2f);
@@ -631,43 +749,124 @@ public static class Level5Builder
         Object.DestroyImmediate(treeFireHolder.gameObject);
         treeFire.gameObject.SetActive(false);
 
-        // Deckungen: umgestürzte Busse auf dem Gehweg, sicherer Bereich direkt dahinter (vom Strahl abgewandt = Süden = +u)
-        var covers = new List<FireBreath.Cover>();
-        foreach (float z in CoverZ)
-        {
-            float u = Mathf.Round(MozzarellaU(z));
-            WreckedBus(u);
-            covers.Add(new FireBreath.Cover
-            {
-                shelterFrom = u + CoverLength / 2f,
-                shelterTo = u + CoverLength / 2f + ShelterLength,
-                top = CityLayout.Surface + CoverHeight,
-            });
-        }
+        // Kamera-Zone für das Ereignis (KaijuBattle blendet sie ein): über das Südost-Stück und die Abzweigung
+        var zone = new SerializedObject(new GameObject("Breath Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
+        zone.FindProperty("fromU").floatValue = pieceStartU[5];
+        zone.FindProperty("toU").floatValue = pieceStartU[8] + 4f;
+        zone.FindProperty("blend").floatValue = 6f;
+        zone.FindProperty("offset").vector3Value = BreathCameraOffset;
+        zone.FindProperty("lookHeight").floatValue = BreathCameraLookHeight;
+        zone.FindProperty("strength").floatValue = 0f;
+        zone.ApplyModifiedPropertiesWithoutUndo();
+        breathCameraZone = (CameraZone)zone.targetObject;
+        breathCameraZone.transform.SetParent(gameplayParent, false);
+        breathVendor = vendor;
 
         var breath = new SerializedObject(root.gameObject.AddComponent<FireBreath>());
         breath.FindProperty("mouth").objectReferenceValue = mouth;
-        breath.FindProperty("target").vector3Value = BreathTarget;
+        breath.FindProperty("target").vector3Value = target;
         breath.FindProperty("beam").objectReferenceValue = beam;
         breath.FindProperty("beamParticles").objectReferenceValue = stream;
         PrimitiveKit.SetReferences(breath, "groundFires", fires.ToArray());
         breath.FindProperty("impactLight").objectReferenceValue = impact;
         breath.FindProperty("mouthGlow").objectReferenceValue = glow;
-        breath.FindProperty("hitFromU").floatValue = MozzarellaU(FireToZ);
-        breath.FindProperty("hitToU").floatValue = MozzarellaU(FireFromZ);
+        breath.FindProperty("hitFromU").floatValue = laneFrom;
+        breath.FindProperty("hitToU").floatValue = laneTo;
         breath.FindProperty("burnArea").rectValue = BurnArea;
         breath.FindProperty("treeFireTemplate").objectReferenceValue = treeFire;
         SerializedProperty coverList = breath.FindProperty("covers");
-        coverList.arraySize = covers.Count;
-        for (int i = 0; i < covers.Count; i++)
-        {
-            SerializedProperty entry = coverList.GetArrayElementAtIndex(i);
-            entry.FindPropertyRelative("shelterFrom").floatValue = covers[i].shelterFrom;
-            entry.FindPropertyRelative("shelterTo").floatValue = covers[i].shelterTo;
-            entry.FindPropertyRelative("top").floatValue = covers[i].top;
-        }
+        coverList.arraySize = 1;
+        SerializedProperty entry = coverList.GetArrayElementAtIndex(0);
+        entry.FindPropertyRelative("shelterFrom").floatValue = truckU - ShelterHalf;
+        entry.FindPropertyRelative("shelterTo").floatValue = truckU + ShelterHalf;
+        // Wer hochspringt, schaut über den Wagen und wird getroffen
+        entry.FindPropertyRelative("top").floatValue = CityLayout.ParkLawnTop + TruckHeight;
         breath.ApplyModifiedPropertiesWithoutUndo();
         return (FireBreath)breath.targetObject;
+    }
+
+    private static CameraZone breathCameraZone;
+    private static HidingVendor breathVendor;
+
+    // Flammen-Streifen entlang der Bahn von u0 bis u1 (gerades Stück), 7 m breit
+    private static ParticleSystem LaneFire(Transform parent, string name, float u0, float u1, Material material)
+    {
+        Vector3 a = LevelBuildKit.Lane.PointAt(u0), b = LevelBuildKit.Lane.PointAt(u1);
+        ParticleSystem fire = GroundFire(parent, name, (a + b) / 2f + Vector3.up * CityLayout.ParkPathTop, new Vector3(Vector3.Distance(a, b), 7f), material, 9f * Vector3.Distance(a, b));
+        // Das Rechteck liegt in Welt-X/Z: um die Hochachse in Richtung der Bahn drehen
+        fire.transform.rotation = Quaternion.FromToRotation(Vector3.right, (b - a).normalized) * fire.transform.rotation;
+        return fire;
+    }
+
+    // Umgekippter Eiswagen (auf der Seite liegend, Dach zur Kamera mit der großen Waffel, Unterboden mit Rädern zur Echse),
+    // daneben verschüttetes Eis, dahinter kauert der Verkäufer (HidingVendor). Collider auf Layer Ground (man kann draufspringen)
+    private static HidingVendor IceCreamTruck(float u)
+    {
+        Material white = PrimitiveKit.Material("Assets/Materials/City/Truck White.mat", PrimitiveKit.LitShader, new Color(0.95f, 0.94f, 0.9f));
+        Material pink = PrimitiveKit.Material("Assets/Materials/City/Ice Cream Pink.mat", PrimitiveKit.LitShader, new Color(0.98f, 0.55f, 0.7f));
+        Material mint = PrimitiveKit.Material("Assets/Materials/City/Ice Cream Mint.mat", PrimitiveKit.LitShader, new Color(0.6f, 0.9f, 0.75f));
+        Material waffle = PrimitiveKit.Material("Assets/Materials/City/Waffle.mat", PrimitiveKit.LitShader, new Color(0.85f, 0.62f, 0.32f));
+        Material wheel = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Wheel.mat");
+        Material windows = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Window Glass.mat");
+        Quaternion frame = LevelBuildKit.Frame(u);
+        var truck = new GameObject("Ice Cream Truck") { layer = 3 };
+        truck.transform.SetParent(gameplayParent, false);
+        // Lokal: X entlang der Bahn, Y hoch (liegend ist die Wagenbreite die Höhe), Z zur Echse. Mitte über dem Rasen
+        truck.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + Vector3.up * (CityLayout.ParkLawnTop + TruckHeight / 2f)
+            + frame * Vector3.forward * TruckBackOffset, frame);
+        Transform t = truck.transform;
+        PrimitiveKit.Box("Body", t, Vector3.zero, new Vector3(TruckLength, TruckHeight, TruckDepth), white);
+        // Rosa Streifen rundum und die Fahrerkabine am -X-Ende mit Fenster
+        PrimitiveKit.Box("Stripe", t, new Vector3(0f, 0f, 0.3f), new Vector3(TruckLength + 0.02f, TruckHeight + 0.02f, 0.5f), pink);
+        PrimitiveKit.Box("Cab Window", t, new Vector3(-TruckLength / 2f - 0.01f, 0f, -0.6f), new Vector3(0.02f, 1.6f, 1f), windows);
+        // Oben (eigentlich die Seite): Verkaufsklappe offen, Schriftzug
+        PrimitiveKit.Box("Serving Hatch", t, new Vector3(0.6f, TruckHeight / 2f + 0.01f, -0.2f), new Vector3(2.6f, 0.02f, 1.2f), windows);
+        TMPro.TextMeshPro sign = PrimitiveKit.Text("Sign", t, new Vector3(-1f, 0.2f, -TruckDepth / 2f - 0.02f), new Vector2(3.4f, 1.2f), "GELATO", new Color(0.9f, 0.3f, 0.5f));
+        sign.fontSizeMax = 14f;
+        // Dach zur Kamera: große Waffel mit Kugeln, liegt jetzt waagrecht
+        Transform cone = PrimitiveKit.Pivot("Roof Cone", t, new Vector3(1.2f, 0f, -TruckDepth / 2f));
+        cone.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        PrimitiveKit.Part("Waffle", PrimitiveType.Cylinder, cone, new Vector3(0f, 0.5f, 0f), new Vector3(0.6f, 0.5f, 0.6f), waffle);
+        PrimitiveKit.Part("Scoop Pink", PrimitiveType.Sphere, cone, new Vector3(0f, 1.15f, 0f), Vector3.one * 0.9f, pink);
+        PrimitiveKit.Part("Scoop Mint", PrimitiveType.Sphere, cone, new Vector3(0f, 1.75f, 0f), Vector3.one * 0.75f, mint);
+        // Räder an der Unterseite (zur Echse)
+        foreach (float x in new[] { -1.9f, 1.9f })
+        {
+            foreach (float y in new[] { -0.8f, 0.8f })
+            {
+                Renderer w = PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, t, new Vector3(x, y, TruckDepth / 2f + 0.1f), new Vector3(0.8f, 0.12f, 0.8f), wheel);
+                w.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            }
+        }
+        PrimitiveKit.AddBoxCollider(truck, Vector3.zero, new Vector3(TruckLength, TruckHeight, TruckDepth));
+
+        // Verschüttetes Eis vor dem Wagen (flache Kugeln) und ein umgefallenes Menü-Schild
+        var random = new System.Random(42);
+        for (int i = 0; i < 6; i++)
+        {
+            Vector3 spot = new Vector3(((float)random.NextDouble() - 0.5f) * TruckLength, -TruckHeight / 2f + 0.05f, -TruckDepth / 2f - 0.4f - (float)random.NextDouble() * 0.6f);
+            PrimitiveKit.Part("Spilled Scoop", PrimitiveType.Sphere, t, spot, new Vector3(0.45f, 0.15f, 0.45f), i % 2 == 0 ? pink : mint);
+        }
+
+        // Verkäufer an dem Ende, zu dem der Spieler hinläuft (-u), im Spalt zwischen Bahn und Wagen, schaut zur Kamera
+        CrowdFigure figure = MarketSetup.Person(t, "Ice Cream Vendor", new Vector3(-TruckLength / 2f + 0.9f, -TruckHeight / 2f, -TruckDepth / 2f - 0.55f), 0f, 0f);
+        var figureData = new SerializedObject(figure);
+        Transform rightArm = (Transform)figureData.FindProperty("rightArm").objectReferenceValue;
+        Transform leftArm = (Transform)figureData.FindProperty("leftArm").objectReferenceValue;
+        // Weiße Mütze wie ein Eisverkäufer
+        Material hat = white;
+        PrimitiveKit.Part("Paper Hat", PrimitiveType.Cylinder, figure.transform.Find("Rig"), new Vector3(0f, 1.62f, 0f), new Vector3(0.42f, 0.12f, 0.42f), hat);
+        // Groß und über dem Wagen (vor dem weißen Wagen ging die weiße Blase unter)
+        GameObject bubble = ParkSetup.SpeechBubble(figure.transform, new Vector3(0.9f, 3.9f, 0f), "OVER HERE!");
+        bubble.transform.localScale = Vector3.one * 2.4f;
+        var vendor = figure.gameObject.AddComponent<HidingVendor>();
+        var vendorData = new SerializedObject(vendor);
+        vendorData.FindProperty("figure").objectReferenceValue = figure;
+        vendorData.FindProperty("rightArm").objectReferenceValue = rightArm;
+        vendorData.FindProperty("leftArm").objectReferenceValue = leftArm;
+        vendorData.FindProperty("bubble").objectReferenceValue = bubble;
+        vendorData.ApplyModifiedPropertiesWithoutUndo();
+        return vendor;
     }
 
     // Flammenteppich (Rechteck X/Z in Welt-Größe), brennt nur, solange FireBreath ihn abspielt
@@ -684,34 +883,6 @@ public static class Level5Builder
         main.playOnAwake = false;
         fire.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         return fire;
-    }
-
-    // Umgestürzter Stadtbus auf dem Gehweg (Deckung vor dem Feueratem): gelb, auf der Seite liegend, Dach zur Kamera,
-    // Fensterband, Räder zur Hauswand. Begehbar und zum Drüberspringen (Layer Ground)
-    private static void WreckedBus(float u)
-    {
-        Material yellow = PrimitiveKit.Material("Assets/Materials/City/Bus Yellow.mat", PrimitiveKit.LitShader, new Color(0.95f, 0.72f, 0.12f));
-        Material windows = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Window Glass.mat");
-        Material wheel = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Wheel.mat");
-        Material soot = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Scorched.mat");
-        Quaternion frame = LevelBuildKit.Frame(u);
-        var bus = new GameObject($"Wrecked Bus u{u:F0}") { layer = 3 };
-        bus.transform.SetParent(gameplayParent, false);
-        bus.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + Vector3.up * (CityLayout.Surface + CoverHeight / 2f), frame);
-        Transform t = bus.transform;
-        PrimitiveKit.Box("Body", t, Vector3.zero, new Vector3(CoverLength, CoverHeight, 2.5f), yellow);
-        PrimitiveKit.Box("Window Band", t, new Vector3(0f, 0.1f, -1.26f), new Vector3(CoverLength - 0.6f, 0.8f, 0.02f), windows);
-        // Ruß an der Seite, die dem Feuer zugewandt ist (lokal -X = Norden)
-        PrimitiveKit.Box("Soot", t, new Vector3(-CoverLength / 2f - 0.01f, 0f, 0f), new Vector3(0.02f, CoverHeight - 0.1f, 2.4f), soot);
-        foreach (float x in new[] { -1.6f, 1.6f })
-        {
-            foreach (float y in new[] { -0.6f, 0.6f })
-            {
-                Renderer w = PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, t, new Vector3(x, y, 1.3f), new Vector3(0.9f, 0.15f, 0.9f), wheel);
-                w.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            }
-        }
-        PrimitiveKit.AddBoxCollider(bus, Vector3.zero, new Vector3(CoverLength, CoverHeight, 2.5f));
     }
 
     // ---------- Spiel-Elemente ----------
@@ -744,7 +915,7 @@ public static class Level5Builder
 
     // Leute in Panik: fliehen auf einem Streifen 2.4 m hinter der Bahn (zwischen Bahn und Häusern/Ruinen, neben Schutt und
     // Bussen vorbei) nach Süden, dem Spieler entgegen, der zur Echse läuft. Nicht zwischen den Füßen der Monster
-    private static readonly (float fromZ, float toZ, int count)[] PanicStrips = { (244f, 214f, 4), (162f, 108f, 6) };
+    private static readonly (float fromZ, float toZ, int count)[] PanicStrips = { (244f, 220f, 4), (126f, 100f, 4) };
     private const float PanicX = MozzarellaX + 2.4f;
 
     private static void BuildPanic()

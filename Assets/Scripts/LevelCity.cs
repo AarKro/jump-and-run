@@ -73,14 +73,15 @@ public class LevelCity : MonoBehaviour
     private void ApplyCutouts(Scene city)
     {
         var cutouts = new List<CityCutout>();
+        var treeCutouts = new List<CityCutout>();
         foreach (CityCutout cutout in FindObjectsByType<CityCutout>())
         {
             if (cutout.gameObject.scene == gameObject.scene)
             {
-                cutouts.Add(cutout);
+                (cutout.TreesOnly ? treeCutouts : cutouts).Add(cutout);
             }
         }
-        if (cutouts.Count == 0)
+        if (cutouts.Count == 0 && treeCutouts.Count == 0)
         {
             return;
         }
@@ -102,8 +103,19 @@ public class LevelCity : MonoBehaviour
                 {
                     Hide(renderer.gameObject);
                 }
+                else if (IsTreePart(renderer) && treeCutouts.Exists(cutout => cutout.Contains(renderer.transform.parent.position)))
+                {
+                    // Den ganzen Baum (Stamm und Krone hängen am Objekt "Tree"), nicht nur das eine Teil
+                    Hide(renderer.transform.parent.gameObject);
+                }
             }
         }
+    }
+
+    private static bool IsTreePart(Renderer renderer)
+    {
+        Transform parent = renderer.transform.parent;
+        return parent != null && (parent.name == "Tree" || parent.name == "Bush");
     }
 
     // Boden-Platte minus alle Ausschnitte = bis zu vier Rechtecke pro Ausschnitt drumherum. Die Original-Platte wird

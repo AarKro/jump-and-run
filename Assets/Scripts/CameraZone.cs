@@ -26,6 +26,16 @@ public class CameraZone : MonoBehaviour
              "läuft), -1 über die -u-Seite")]
     [SerializeField] private float orbitSide = 1f;
 
+    [Tooltip("Wie stark die Zone wirkt (0 = gar nicht, 1 = voll). Ein Skript kann sie ein- und ausblenden, z.B. nur während " +
+             "eines Ereignisses (Level 5: Feueratem)")]
+    [SerializeField] private float strength = 1f;
+
+    public float Strength
+    {
+        get => strength;
+        set => strength = Mathf.Clamp01(value);
+    }
+
     public Vector3 Offset => offset;
     public float LookHeight => lookHeight;
     public float OrbitSide => orbitSide >= 0f ? 1f : -1f;
@@ -58,7 +68,7 @@ public class CameraZone : MonoBehaviour
         {
             k = 1f;
         }
-        return Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(k));
+        return Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(k)) * strength;
     }
 
     private void OnDrawGizmosSelected()

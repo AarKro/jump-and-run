@@ -2,8 +2,11 @@ using System.Collections;
 using UnityEngine;
 
 // Steuert die beiden Riesenmonster in Level 5 durch den ganzen Ablauf:
-// 1. Wüten: Die Echse wiegt sich. Ist der Spieler im Bereich vor ihr, speit sie im Takt Feuer: kurz ruhig → aufladen
-//    (lehnt sich zurück, Kopf hoch, Maul glüht) → Feueratem (lehnt sich vor, FireBreath trifft) → erholen.
+// 1. Wüten: Die Echse wiegt sich. Betritt der Spieler den Park (Bereich breathFromU … breathToU), speit sie EINMAL Feuer,
+//    als geskriptetes Ereignis (der Spieler steuert weiter): Die Kamera-Zone blendet ein (weiter weg, nach oben, die Echse im
+//    Bild), sie lädt auf (lehnt sich zurück, Kopf hoch, Maul glüht), der Eisverkäufer hinter seinem Wagen ruft und winkt
+//    → Feueratem (lehnt sich vor, FireBreath trifft alles außer hinter dem Wagen) → erholen, die Kamera-Zone blendet aus.
+//    Stirbt der Spieler dabei, kommt es nach dem Respawn beim nächsten Betreten wieder.
 // 2. Ankunft (Spieler überquert arrivalU): kurze Zwischensequenz. Der Roboter stürzt mit Düsenflammen und Rauchschweif
 //    aus dem Himmel, schlägt mit Staubwolke auf (Bildschirm wackelt) und richtet sich auf. Die Echse brüllt und dreht sich
 //    zu ihm um. Danach ringen beide (KaijuFight), kein Feuer mehr.
@@ -34,8 +37,15 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     [SerializeField] private ParticleSystem landingDust;
     [SerializeField] private ParticleSystem fallDust;
 
+    [Header("Feueratem im Park")]
+    [Tooltip("Ruft und winkt, während sie auflädt")]
+    [SerializeField] private HidingVendor vendor;
+    [Tooltip("Kamera-Zone, die während des Ereignisses einblendet (Stärke 0 bis 1), damit man die Echse sieht")]
+    [SerializeField] private CameraZone breathCamera;
+    [SerializeField] private float cameraFade = 1.2f;
+
     [Header("Ablauf (u auf der Bahn)")]
-    [Tooltip("Bereich, in dem die Echse Feuer speit (u von/bis)")]
+    [Tooltip("Betritt der Spieler diesen Bereich, kommt der Feueratem (u von/bis)")]
     [SerializeField] private float breathFromU;
     [SerializeField] private float breathToU;
     [Tooltip("Hier kommt der Roboter (Spieler läuft nach -u, also sobald u kleiner ist)")]
@@ -43,9 +53,9 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     [Tooltip("Hier fällt die Echse")]
     [SerializeField] private float finaleU;
 
-    [Header("Feueratem-Takt")]
-    [SerializeField] private float calmTime = 1.5f;
-    [SerializeField] private float chargeTime = 2f;
+    [Header("Feueratem-Ablauf")]
+    [Tooltip("So lange lädt sie auf: Zeit, um hinter den Wagen zu laufen")]
+    [SerializeField] private float chargeTime = 4f;
     [SerializeField] private float breathTime = 3f;
     [SerializeField] private float recoverTime = 1f;
     [SerializeField] private float chargeLean = 14f;
@@ -62,12 +72,13 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     [SerializeField] private Vector3 finaleCameraOffset = new Vector3(85f, 35f, -10f);
 
     private enum Stage { Rampage, Arrival, Fight, Finale, Done }
-    private enum Phase { Calm, Charge, Breath, Recover }
+    private enum Phase { Charge, Breath, Recover }
 
     private Stage stage = Stage.Rampage;
-    private Phase phase = Phase.Calm;
+    private Phase phase = Phase.Charge;
     private float phaseTime;
     private bool breathActive;
+    private bool breathDone;
     private float lean;
     private float headPitch;
 
@@ -122,8 +133,17 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         }
         stage = Stage.Rampage;
         breathActive = false;
-        phase = Phase.Calm;
+        breathDone = false;
+        phase = Phase.Charge;
         phaseTime = 0f;
+        if (vendor != null)
+        {
+            vendor.Relax();
+        }
+        if (breathCamera != null)
+        {
+            breathCamera.Strength = 0f;
+        }
         fight.enabled = false;
         lizardRoot.localRotation = lizardRootRest;
         lizardUpper.localRotation = upperRest;
@@ -179,10 +199,20 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     {
         float dt = Time.deltaTime;
         bool inRange = u >= Mathf.Min(breathFromU, breathToU) && u <= Mathf.Max(breathFromU, breathToU);
-        if (inRange && !breathActive)
+        if (inRange && !breathActive && !breathDone)
         {
             breathActive = true;
-            Next(Phase.Calm);
+            Next(Phase.Charge);
+            if (vendor != null)
+            {
+                vendor.Shout();
+            }
+        }
+
+        // Kamera-Zone weich ein- und ausblenden
+        if (breathCamera != null)
+        {
+            breathCamera.Strength = Mathf.MoveTowards(breathCamera.Strength, breathActive ? 1f : 0f, dt / cameraFade);
         }
 
         float targetLean = 0f, targetHead = 0f;
@@ -191,9 +221,6 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
             phaseTime += dt;
             switch (phase)
             {
-                case Phase.Calm:
-                    if (phaseTime >= calmTime) Next(Phase.Charge);
-                    break;
                 case Phase.Charge:
                     float k = Mathf.Clamp01(phaseTime / chargeTime);
                     targetLean = -chargeLean * k;
@@ -204,6 +231,10 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
                         breath.SetCharge(0.6f);
                         breath.StartBreath();
                         Next(Phase.Breath);
+                        if (vendor != null)
+                        {
+                            vendor.TakeCover();
+                        }
                     }
                     break;
                 case Phase.Breath:
@@ -219,9 +250,13 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
                 case Phase.Recover:
                     if (phaseTime >= recoverTime)
                     {
-                        // Ist der Spieler aus dem Bereich, hört sie nach dieser Runde auf
-                        breathActive = inRange;
-                        Next(Phase.Calm);
+                        // Nur einmal (bis zum nächsten Respawn)
+                        breathActive = false;
+                        breathDone = true;
+                        if (vendor != null)
+                        {
+                            vendor.Relax();
+                        }
                     }
                     break;
             }
