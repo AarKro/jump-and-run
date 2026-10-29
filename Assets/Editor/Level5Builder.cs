@@ -814,8 +814,146 @@ public static class Level5Builder
         {
             mainCamera.AddComponent<CameraShake>();
         }
+        BuildHiccups(kaiju, particles);
     }
 
+    // ---------- Nach dem Sturz: Feuer-Hickser die Salami Street hinunter ----------
+    //   Die Echse liegt mit dem Maul zur Salami Street (KaijuBattle.headFallen). KaijuHiccups lässt im Takt Feuerbälle bis an
+    //   die Häuser westlich der Basil Street rollen; die Bahn quert die Salami Street auf der Basil Street. Dazu Sterne über dem
+    //   Kopf, Rauch aus den Nüstern, eine Brandspur auf der Straße, ein ausgeschlagener Zahn, Schutt und kleine Feuer
+    private const float HiccupInterval = 2.4f, HiccupSpeed = 14f, FireballRadius = 1.2f;
+    // Verpuffen auf dem Westgehweg der Basil Street, kurz vor den Fassaden (x -190); die Bahn liegt auf dem Ostgehweg (BasilX)
+    private const float HiccupEndX = -187.5f;
+
+    private static void BuildHiccups(CityBuilder.KaijuParts kaiju, Material particles)
+    {
+        Transform mouth = kaiju.lizardHead.Find("Mouth");
+        Material fire = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Fire Additive.mat");
+        Material core = PrimitiveKit.Material("Assets/Materials/City/Fireball Core.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.62f, 0.15f));
+        Material hot = PrimitiveKit.Material("Assets/Materials/City/Fireball Hot.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.9f, 0.45f));
+        Material star = PrimitiveKit.Material("Assets/Materials/City/Dizzy Star.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.85f, 0.2f));
+        Transform root = PrimitiveKit.Pivot("Lizard Hiccups", gameplayParent, Vector3.zero);
+
+        // Feuerbälle: kleiner, heller Kern, darum ein flackernder Flammenkörper, der mitfliegt (lokale Simulation; ein einfarbige
+        // Kugel sah wie ein Wasserball aus), dahinter ziehen Flammen und Rauch (Welt-Simulation)
+        var balls = new List<Transform>();
+        int count = Mathf.CeilToInt((mouth.position.x - HiccupEndX) / HiccupSpeed / HiccupInterval) + 1;
+        for (int i = 0; i < count; i++)
+        {
+            Transform ball = PrimitiveKit.Pivot($"Fireball {i + 1}", root, mouth.position);
+            PrimitiveKit.Part("Core", PrimitiveType.Sphere, ball, Vector3.zero, Vector3.one * FireballRadius * 1.1f, hot);
+            ParticleSystem body = Particles("Flame Body", ball, fire, new Color(1f, 0.5f, 0.1f, 0.95f), new Color(1f, 0.85f, 0.35f, 0.95f),
+                lifetime: 0.35f, speed: 1.2f, size: new Vector2(1.6f, 2.8f), rate: 110f, radius: FireballRadius * 0.7f, growth: 0.3f);
+            ParticleSystem.MainModule bodyMain = body.main;
+            bodyMain.simulationSpace = ParticleSystemSimulationSpace.Local;
+            ParticleSystem.ShapeModule bodyShape = body.shape;
+            bodyShape.shapeType = ParticleSystemShapeType.Sphere;
+            Particles("Flames", ball, fire, new Color(1f, 0.45f, 0.08f, 0.95f), new Color(1f, 0.82f, 0.3f, 0.95f),
+                lifetime: 0.5f, speed: 2.5f, size: new Vector2(1.6f, 3.2f), rate: 110f, radius: FireballRadius, growth: 0.4f);
+            Particles("Smoke", ball, particles, new Color(0.15f, 0.14f, 0.13f, 0.7f), new Color(0.3f, 0.28f, 0.27f, 0.5f),
+                lifetime: 1.6f, speed: 1.5f, size: new Vector2(1.8f, 3.5f), rate: 14f, radius: FireballRadius, growth: 1.5f);
+            ball.gameObject.SetActive(false);
+            balls.Add(ball);
+        }
+
+        // Warnung im Maul: wachsendes Glühen, beim Hicks eine Rauchwolke; am Ende Funken an den Häusern
+        Renderer glow = PrimitiveKit.Part("Hiccup Glow", PrimitiveType.Sphere, mouth, new Vector3(0f, 0f, -1.5f), Vector3.one * 4f, core);
+        glow.gameObject.SetActive(false);
+        ParticleSystem puff = Stopped(Particles("Hiccup Puff", mouth, particles, new Color(0.2f, 0.19f, 0.18f, 0.8f), new Color(0.4f, 0.38f, 0.36f, 0.6f),
+            lifetime: 1.4f, speed: 6f, size: new Vector2(2.5f, 5f), rate: 0f, radius: 1.5f, growth: 1.5f));
+        ParticleSystem fizzle = Stopped(Particles("Fireball Fizzle", root, fire, new Color(1f, 0.5f, 0.1f, 0.95f), new Color(1f, 0.85f, 0.35f, 0.9f),
+            lifetime: 0.8f, speed: 7f, size: new Vector2(0.6f, 1.6f), rate: 0f, radius: 1f, growth: 0.5f));
+        ParticleSystem.ShapeModule fizzleShape = fizzle.shape;
+        fizzleShape.shapeType = ParticleSystemShapeType.Hemisphere;
+
+        // Benommen: Sterne kreisen über dem Kopf (Kopf schaut nach Westen, lokal oben = Welt oben), Rauch aus den Nüstern
+        Transform dazed = PrimitiveKit.Pivot("Dazed", kaiju.lizardHead, new Vector3(0f, 13f, 4f));
+        Transform ring = PrimitiveKit.Pivot("Dizzy Stars", dazed, Vector3.zero);
+        var spinner = new SerializedObject(ring.gameObject.AddComponent<Spinner>());
+        spinner.FindProperty("axis").vector3Value = Vector3.up;
+        spinner.FindProperty("degreesPerSecond").floatValue = 110f;
+        spinner.ApplyModifiedPropertiesWithoutUndo();
+        for (int i = 0; i < 5; i++)
+        {
+            float angle = i * 72f * Mathf.Deg2Rad;
+            Transform s = PrimitiveKit.Pivot($"Star {i + 1}", ring, new Vector3(Mathf.Cos(angle) * 6f, Mathf.Sin(i * 2.1f) * 0.8f, Mathf.Sin(angle) * 6f));
+            s.localRotation = Quaternion.Euler(0f, -i * 72f, 0f);
+            PrimitiveKit.Part("Point", PrimitiveType.Sphere, s, Vector3.zero, Vector3.one * 0.9f, star);
+            foreach (float tilt in new[] { 0f, 72f, 144f, 216f, 288f })
+            {
+                Renderer ray = PrimitiveKit.Box("Ray", s, Vector3.zero, new Vector3(0.35f, 1.6f, 0.35f), star);
+                ray.transform.localRotation = Quaternion.Euler(0f, 0f, tilt);
+                ray.transform.localPosition = ray.transform.localRotation * new Vector3(0f, 0.6f, 0f);
+            }
+        }
+        Particles("Nostril Smoke", PrimitiveKit.Pivot("Nostrils", dazed, new Vector3(0f, -9f, 11.5f)), particles,
+            new Color(0.25f, 0.24f, 0.23f, 0.6f), new Color(0.45f, 0.43f, 0.41f, 0.45f), lifetime: 3f, speed: 2f, size: new Vector2(1.5f, 3f), rate: 7f, radius: 1.2f, growth: 2f);
+        dazed.gameObject.SetActive(false);
+
+        var hiccups = new SerializedObject(root.gameObject.AddComponent<KaijuHiccups>());
+        hiccups.FindProperty("battle").objectReferenceValue = battleComponent;
+        hiccups.FindProperty("mouth").objectReferenceValue = mouth;
+        hiccups.FindProperty("head").objectReferenceValue = kaiju.lizardHead;
+        hiccups.FindProperty("jaw").objectReferenceValue = kaiju.lizardJaw;
+        hiccups.FindProperty("interval").floatValue = HiccupInterval;
+        hiccups.FindProperty("speed").floatValue = HiccupSpeed;
+        hiccups.FindProperty("streetZ").floatValue = SalamiZ;
+        hiccups.FindProperty("endX").floatValue = HiccupEndX;
+        hiccups.FindProperty("ground").floatValue = CityLayout.RoadTop;
+        hiccups.FindProperty("radius").floatValue = FireballRadius;
+        PrimitiveKit.SetReferences(hiccups, "balls", balls.ToArray());
+        hiccups.FindProperty("glow").objectReferenceValue = glow.transform;
+        hiccups.FindProperty("puff").objectReferenceValue = puff;
+        hiccups.FindProperty("fizzle").objectReferenceValue = fizzle;
+        hiccups.FindProperty("dazedDecor").objectReferenceValue = dazed.gameObject;
+        hiccups.ApplyModifiedPropertiesWithoutUndo();
+
+        SalamiAftermath(mouth.position.x);
+    }
+
+    // Spuren der Hickser und des Sturzes: Brandspur auf der Salami Street (zeigt, wo die Bälle rollen), ein ausgeschlagener
+    // Zahn, Schutt am Rand und auf der Basil Street, zwei kleine Feuer. Alles Kulisse ohne Collider, nicht auf der Bahn
+    private static void SalamiAftermath(float mouthX)
+    {
+        Transform parent = PrimitiveKit.Pivot("Salami Aftermath", propParent, Vector3.zero);
+        Material rubble = PrimitiveKit.Material("Assets/Materials/City/Rubble.mat", PrimitiveKit.LitShader, new Color(0.55f, 0.52f, 0.48f));
+        Material scorched = PrimitiveKit.Material("Assets/Materials/City/Scorched.mat", PrimitiveKit.LitShader, new Color(0.2f, 0.18f, 0.16f));
+        Material tooth = PrimitiveKit.Material("Assets/Materials/City/Lizard Tooth.mat", PrimitiveKit.LitShader, new Color(0.95f, 0.93f, 0.85f), 0.5f);
+        Material facade = CityBuilder.FacadeMaterialAsset;
+        var random = new System.Random(1313);
+
+        float from = mouthX - 2f, to = HiccupEndX;
+        PrimitiveKit.Box("Scorch Trail", parent, new Vector3((from + to) / 2f, CityLayout.RoadTop + 0.012f, SalamiZ), new Vector3(from - to, 0.02f, FireballRadius * 2.2f), scorched);
+        for (int i = 0; i < 9; i++)
+        {
+            float x = Mathf.Lerp(from, to, (i + (float)random.NextDouble()) / 9f);
+            Cylinder("Scorch", parent, new Vector3(x, CityLayout.RoadTop + 0.014f, SalamiZ + ((float)random.NextDouble() - 0.5f) * 3f), 1.6f + (float)random.NextDouble() * 1.4f, 0.02f, scorched);
+        }
+
+        // Zahn: lag im Maul, liegt jetzt schräg auf der Straße neben der Brandspur
+        Transform toothPivot = PrimitiveKit.Pivot("Knocked-Out Tooth", parent, new Vector3(-146f, CityLayout.RoadTop + 0.55f, SalamiZ + 4.2f));
+        toothPivot.localRotation = Quaternion.Euler(0f, 35f, 78f);
+        PrimitiveKit.Part("Crown", PrimitiveType.Capsule, toothPivot, new Vector3(0f, 0.6f, 0f), new Vector3(1.1f, 1.2f, 1.1f), tooth);
+        PrimitiveKit.Part("Tip", PrimitiveType.Sphere, toothPivot, new Vector3(0f, 1.9f, 0f), new Vector3(0.55f, 0.9f, 0.55f), tooth);
+
+        // Schutt am Rand der Salami Street und auf der Basil Street neben der Bahn (Fahrbahn, Westgehweg)
+        Vector3[] piles =
+        {
+            new Vector3(-133f, CityLayout.Surface, SalamiZ - 8f), new Vector3(-151f, CityLayout.Surface, SalamiZ + 8f),
+            new Vector3(-163f, CityLayout.RoadTop, SalamiZ - 4.5f), new Vector3(-138f, CityLayout.RoadTop, SalamiZ + 5f),
+            new Vector3(BasilX - 5f, CityLayout.RoadTop, 248f), new Vector3(BasilX - 4.5f, CityLayout.RoadTop, 283f),
+            new Vector3(-188f, CityLayout.Surface, SalamiZ + 7.5f),
+        };
+        foreach (Vector3 pile in piles)
+        {
+            RubblePile(parent, pile, 2f, rubble, facade, random);
+        }
+        Smoke(parent, new Vector3(-157f, CityLayout.RoadTop, SalamiZ + 4.5f));
+        Smoke(parent, new Vector3(-160f, CityLayout.Surface, SalamiZ + 8f));
+    }
+
+    // Das Hochhaus fürs Intro: steht als ganzer Quader (Fassaden-Shader wie die Stadt), darin steckt schon der Stumpf mit
+    // Schutt, der nach dem Einsturz übrig bleibt. Dazu Brocken und zwei Staubwolken (Spitze, Fuß)
     // Rechnet die Haltungen für KaijuBattle aus, indem die Echse kurz in die jeweilige Lage gedreht wird: Schwanz im Kampf
     // (sie schaut nach Norden, Schwanz flach nach Süden auf dem Mozzarella Blvd), nach dem Sturz (gekippt, Kopf zur Salami
     // Street, Schwanz von der Hüfte schräg zurück auf den Mozzarella Blvd). Danach steht alles wieder wie gebaut
