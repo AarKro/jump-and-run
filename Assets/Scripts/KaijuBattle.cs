@@ -11,7 +11,10 @@ using UnityEngine;
 //    aus dem Himmel, schlägt mit Staubwolke auf (Bildschirm wackelt) und richtet sich auf. Die Echse brüllt und dreht sich
 //    zu ihm um. Danach ringen beide (KaijuFight), kein Feuer mehr.
 // 3. Finale (Spieler überquert finaleU): Zwischensequenz. Der Roboter verpasst der Echse einen Aufwärtshaken, sie kippt
-//    zur Seite auf die Ruinen, der Roboter reckt die Arme.
+//    zur Seite auf die Ruinen, der Roboter reckt die Arme. Der Kopf landet mit dem Maul zur Salami Street (KaijuHiccups).
+// Der Schwanz hat drei gebaute Haltungen (Level5Builder legt sie auf den Boden): Ruhe (beim Wüten), Kampf (flach hinter ihr
+// auf dem Mozzarella Blvd) und Liegen (flach am Boden nach dem Sturz). Beim Umdrehen hebt er sich, sonst schwenkte er quer
+// durch die Ruinen.
 // Während der Zwischensequenzen ist der Spieler eingefroren, die Kamera schaut aufs Geschehen, und die verlorene Zeit wird
 // der Wärme gutgeschrieben (kostet also nichts). Stirbt der Spieler vorher (Respawn), fängt alles wieder bei 1 an.
 // Bewegt wird relativ zur gebauten Pose (wie KaijuFight).
@@ -26,6 +29,21 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     [SerializeField] private Transform lizardSmashArm;
     [Tooltip("Hochhaus, das sie im Intro zerschlägt")]
     [SerializeField] private TowerCollapse introTower;
+    [Tooltip("Schwanzglieder von der Wurzel zur Spitze")]
+    [SerializeField] private Transform[] lizardTail;
+    [Tooltip("Haltung der Schwanzglieder (lokal) im Kampf: flach hinter ihr auf dem Boden")]
+    [SerializeField] private Quaternion[] tailFightPose;
+    [Tooltip("Haltung der Schwanzglieder (lokal) nach dem Sturz: flach auf dem Boden")]
+    [SerializeField] private Quaternion[] tailFallenPose;
+    [Tooltip("So weit hebt sich der Schwanz beim Umdrehen (Grad, Mitte der Drehung)")]
+    [SerializeField] private float tailTurnLift = 50f;
+    [Tooltip("Um so viel Grad kippt sie im Finale zur Seite")]
+    [SerializeField] private float fallAngle = 84f;
+    [Tooltip("Oberkörper (lokal) nach dem Sturz: auf den Bauch gerollt, die Rückenplatten zeigen nach oben (sonst ragten " +
+             "sie waagrecht wie ein schwebendes Brett zur Four Cheese Avenue)")]
+    [SerializeField] private Quaternion upperFallen = Quaternion.identity;
+    [Tooltip("Kopf (lokal, relativ zum gerollten Oberkörper) nach dem Sturz: Maul zur Salami Street, Kinn am Boden")]
+    [SerializeField] private Quaternion headFallen = Quaternion.identity;
 
     [Header("Roboter")]
     [SerializeField] private Transform robotRoot;
@@ -77,6 +95,8 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     private Stage stage = Stage.Rampage;
     // Der Roboter steht und kämpft (ab dem Ende der Ankunft): Erst dann fliegen Brocken aus dem Kampf (FallingDebris)
     public bool RobotLanded => stage >= Stage.Fight;
+    // Die Echse liegt (Finale vorbei): Jetzt hickst sie Feuer (KaijuHiccups)
+    public bool LizardDown => stage == Stage.Done;
     private Phase phase = Phase.Charge;
     private float phaseTime;
     private bool breathActive;
@@ -89,6 +109,7 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     private Quaternion smashArmRest;
     private Quaternion lizardRootRest, upperRest, headRest, robotRootRest, robotUpperRest, robotArmLeftRest, robotArmRightRest;
     private Vector3 robotLanding;
+    private Quaternion[] tailRest;
     private Transform player;
     private PlayerController controller;
     private Coroutine sequence;
@@ -106,6 +127,11 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         if (lizardSmashArm != null)
         {
             smashArmRest = lizardSmashArm.localRotation;
+        }
+        tailRest = new Quaternion[lizardTail != null ? lizardTail.Length : 0];
+        for (int i = 0; i < tailRest.Length; i++)
+        {
+            tailRest[i] = lizardTail[i].localRotation;
         }
         GameManager.LevelReset += ResetBattle;
     }
@@ -150,6 +176,10 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         lizardRoot.localRotation = lizardRootRest;
         lizardUpper.localRotation = upperRest;
         lizardHead.localRotation = headRest;
+        for (int i = 0; i < tailRest.Length; i++)
+        {
+            lizardTail[i].localRotation = tailRest[i];
+        }
         robotRoot.gameObject.SetActive(false);
         robotRoot.localPosition = robotLanding;
         robotRoot.localRotation = robotRootRest;
@@ -416,6 +446,7 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         // Aufrichten aus der Hocke, die Echse brüllt (Kopf hoch) und dreht sich um (180° in 1.6 s)
         Quaternion lizardStart = lizardRoot.localRotation;
         Quaternion lizardEnd = lizardRootRest * Quaternion.Euler(0f, 180f, 0f);
+        Quaternion[] tailStart = TailPose();
         for (float t = 0f; t < 2.2f; t += Time.deltaTime)
         {
             float rise = Mathf.Clamp01(t / 1f);
@@ -425,6 +456,8 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
             lizardUpper.localRotation = upperRest * Quaternion.Euler(-10f * roar, 0f, 0f);
             float turn = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.6f, 2.2f, t));
             lizardRoot.localRotation = Quaternion.Slerp(lizardStart, lizardEnd, turn);
+            // Schwanz von der Ruhe- in die Kampfhaltung, dabei in der Mitte der Drehung hochgehoben
+            BlendTail(tailStart, tailFightPose, turn, Mathf.Sin(turn * Mathf.PI) * tailTurnLift);
             Vector3 focus = Vector3.Lerp(landing, lizardRoot.position, 0.5f) + Vector3.up * 45f;
             cam.position = camPos;
             cam.rotation = Quaternion.Slerp(cam.rotation, Quaternion.LookRotation(focus - camPos), 1f - Mathf.Exp(-4f * Time.deltaTime));
@@ -432,6 +465,9 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         }
         robotUpper.localRotation = robotUpperRest;
         lizardRoot.localRotation = lizardEnd;
+        BlendTail(tailStart, tailFightPose, 1f, 0f);
+        // KaijuFight schwingt den Schwanz relativ zu seiner Ruhehaltung: das ist jetzt die Kampfhaltung
+        fight.RememberTail();
         fight.enabled = true;
         stage = Stage.Fight;
         EndCutscene(follow, Time.time - started);
@@ -465,17 +501,27 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         CameraShake.Shake(0.6f, 0.5f);
 
         // Echse: Kopf fliegt zurück, dann kippt sie um ihre Füße zur Seite (lokal um Z, positiv = nach Westen), immer schneller
+        // Der Kopf fliegt zurück und dreht sich im Fallen zur Salami Street, der Schwanz legt sich flach
         Quaternion fallStart = lizardRoot.localRotation;
+        Quaternion[] tailFallStart = TailPose();
+        // Oberkörper rollt auf den Bauch (headFallen ist relativ dazu berechnet)
+        Quaternion upperFallStart = lizardUpper.localRotation;
         for (float t = 0f; t < 1.8f; t += Time.deltaTime)
         {
             float k = Mathf.Clamp01(t / 1.8f);
-            lizardHead.localRotation = headRest * Quaternion.Euler(-40f * Mathf.Clamp01(t / 0.3f), 0f, 0f);
-            lizardRoot.localRotation = fallStart * Quaternion.Euler(0f, 0f, 84f * k * k);
+            lizardUpper.localRotation = Quaternion.Slerp(upperFallStart, upperFallen, k);
+            Quaternion snapped = headRest * Quaternion.Euler(-40f * Mathf.Clamp01(t / 0.3f), 0f, 0f);
+            lizardHead.localRotation = Quaternion.Slerp(snapped, headFallen, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.3f, 1.8f, t)));
+            BlendTail(tailFallStart, tailFallenPose, Mathf.SmoothStep(0f, 1f, k), 0f);
+            lizardRoot.localRotation = fallStart * Quaternion.Euler(0f, 0f, fallAngle * k * k);
             cam.position = camPos;
             cam.rotation = Quaternion.Slerp(cam.rotation, Quaternion.LookRotation(lizardRoot.position + lizardRoot.up * 25f - camPos), 1f - Mathf.Exp(-3f * Time.deltaTime));
             yield return null;
         }
-        lizardRoot.localRotation = fallStart * Quaternion.Euler(0f, 0f, 84f);
+        lizardRoot.localRotation = fallStart * Quaternion.Euler(0f, 0f, fallAngle);
+        lizardHead.localRotation = headFallen;
+        lizardUpper.localRotation = upperFallen;
+        BlendTail(tailFallStart, tailFallenPose, 1f, 0f);
         if (fallDust != null) fallDust.Emit(200);
         CameraShake.Shake(1.6f, 1.8f);
 
@@ -493,6 +539,33 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         stage = Stage.Done;
         EndCutscene(follow, Time.time - started);
         sequence = null;
+    }
+
+    private Quaternion[] TailPose()
+    {
+        var pose = new Quaternion[tailRest.Length];
+        for (int i = 0; i < pose.Length; i++)
+        {
+            pose[i] = lizardTail[i].localRotation;
+        }
+        return pose;
+    }
+
+    // Schwanz von einer Haltung zur anderen (k 0…1); lift hebt das erste Glied an (positiv um X = Spitze nach oben)
+    private void BlendTail(Quaternion[] from, Quaternion[] to, float k, float lift)
+    {
+        if (to == null || to.Length != tailRest.Length)
+        {
+            return;
+        }
+        for (int i = 0; i < tailRest.Length; i++)
+        {
+            lizardTail[i].localRotation = Quaternion.Slerp(from[i], to[i], k);
+        }
+        if (tailRest.Length > 0)
+        {
+            lizardTail[0].localRotation *= Quaternion.Euler(lift, 0f, 0f);
+        }
     }
 
     // Spieler einfrieren, Respawns sperren, Kamera übernehmen

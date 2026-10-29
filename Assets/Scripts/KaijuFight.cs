@@ -88,6 +88,15 @@ public class KaijuFight : MonoBehaviour
         }
     }
 
+    // Die Schwanzhaltung als neue Ruhehaltung merken (Level 5 legt ihn nach dem Umdrehen flach hinter die Echse)
+    public void RememberTail()
+    {
+        if (lizardTail != null)
+        {
+            Remember(lizardTail);
+        }
+    }
+
     private void Remember(params Transform[] parts)
     {
         foreach (Transform part in parts)

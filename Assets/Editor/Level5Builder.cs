@@ -78,6 +78,18 @@ public static class Level5Builder
         IntroTowerLot,
     };
     private const float IntroTowerHeight = 52f;
+    // Hier liegt die Echse nach dem Sturz (westlich ihrer Füße, Kopf auf der Oregano Street an der Salami Street): Dort stehen
+    // keine Stümpfe oder umgestürzten Türme (sie lag mitten hindurch), sondern ein flachgedrücktes Schuttbett. 2026-10-29
+    private static readonly Rect LizardBed = Rect.MinMaxRect(-100f, 238f, -46f, 280f);
+    // Hier liegt ihr Schwanz im Kampf und nach dem Sturz: flach auf der Fahrbahn des Mozzarella Blvd nach Süden, über die
+    // Kreuzung mit der Four Cheese Avenue bis an den Park (vorher schwebte er quer über die Four Cheese Avenue in den Park)
+    private static readonly Rect TailRoad = Rect.MinMaxRect(-49f, 176f, -31f, 252f);
+    // Um so viel kippt sie im Finale zur Seite: so weit, dass der Kopf auf der Straße liegt statt darüber zu schweben
+    private const float LizardFallAngle = 86f;
+    // Kopf nach dem Sturz: schaut nach Westen die Salami Street hinunter, leicht nach unten (Kinn am Boden)
+    private const float FallenHeadDip = 16f;
+    // Oberkörper nach dem Sturz um die Wirbelsäule auf den Bauch gerollt: Rückenplatten zeigen schräg nach oben
+    private const float FallenBellyRoll = -60f;
     // Kamera im Vorspann: südwestlich, Echse und Turm nebeneinander im Bild
     private static readonly Vector3 ExposeCameraFrom = new Vector3(-100f, 34f, 176f);
     private static readonly Vector3 ExposeCameraTo = new Vector3(-86f, 42f, 192f);
@@ -504,7 +516,7 @@ public static class Level5Builder
                     float rowX = frontX + away * (8f + row * 18f);
                     var lot = new Rect(rowX - 8f, z, 16f, Mathf.Min(width, area.yMax - z));
                     z += width;
-                    if (System.Array.Exists(KeepClear, clear => clear.Overlaps(lot)))
+                    if (System.Array.Exists(KeepClear, clear => clear.Overlaps(lot)) || LizardBed.Overlaps(lot))
                     {
                         continue;
                     }
@@ -531,7 +543,7 @@ public static class Level5Builder
             for (int i = 0; i < 18; i++)
             {
                 var spot = new Vector2(area.xMin + 3f + (float)random.NextDouble() * (area.width - 6f), area.yMin + 3f + (float)random.NextDouble() * (area.height - 6f));
-                if (System.Array.Exists(KeepClear, clear => clear.Contains(spot)))
+                if (System.Array.Exists(KeepClear, clear => clear.Contains(spot)) || LizardBed.Contains(spot))
                 {
                     continue;
                 }
@@ -540,7 +552,7 @@ public static class Level5Builder
         }
 
         // Spuren auf der Straße: Krater, Schutt, ein paar brennende Stellen (nicht auf dem Ostgehweg, dort läuft die Bahn)
-        foreach (float z in new[] { 232f, 270f })
+        foreach (float z in new[] { 270f, 302f })
         {
             Cylinder("Crater", ruins, new Vector3(-41f, CityLayout.RoadTop + 0.02f, z), 4.5f, 0.44f, scorched);
             Cylinder("Crater Rim", ruins, new Vector3(-41f, CityLayout.RoadTop + 0.1f, z), 5.7f, 0.3f, rubble);
@@ -548,7 +560,12 @@ public static class Level5Builder
         for (int i = 0; i < 8; i++)
         {
             float z = 225f + (float)random.NextDouble() * 85f;
-            RubblePile(ruins, new Vector3(-43f + (float)random.NextDouble() * 5f, CityLayout.RoadTop, z), 2f, rubble, facade, random);
+            float x = -43f + (float)random.NextDouble() * 5f;
+            if (TailRoad.Contains(new Vector2(x, z)))
+            {
+                continue;
+            }
+            RubblePile(ruins, new Vector3(x, CityLayout.RoadTop, z), 2f, rubble, facade, random);
         }
         // Querstraßen im Viertel sind verschüttet (Four Cheese nach Osten und Westen; im Westen nur die Südhälfte, auf dem
         // Nordgehweg läuft die Bahn)
@@ -556,9 +573,41 @@ public static class Level5Builder
         RubblePile(ruins, new Vector3(-20f, CityLayout.RoadTop, 215f), 5f, rubble, facade, random);
 
         // Rauchsäulen mit Feuer am Fuß
-        foreach (Vector3 spot in new[] { new Vector3(-75f, 0.5f, 240f), new Vector3(-12f, 0.5f, 236f), new Vector3(10f, 0.5f, 280f), new Vector3(-85f, 0.5f, 300f), new Vector3(-60f, 0.5f, 312f) })
+        foreach (Vector3 spot in new[] { new Vector3(-88f, 0.5f, 231f), new Vector3(-12f, 0.5f, 236f), new Vector3(10f, 0.5f, 280f), new Vector3(-85f, 0.5f, 300f), new Vector3(-60f, 0.5f, 312f) })
         {
             Smoke(ruins, spot);
+        }
+        CrushedBed(ruins, rubble, facade, scorched, random);
+
+        // Stadt-Deko (Laternen, Schilder, Bäume) dort, wo Schwanz und Kopf liegen, ausblenden. Westlich der Oregano Street nur
+        // in der Salami Street (sonst träfe es die Eckhäuser, deren Mitte im Ausschnitt läge)
+        LevelBuildKit.Cutout(link, "Lizard Tail", TailRoad.xMin, TailRoad.xMax, TailRoad.yMin, TailRoad.yMax, keepGround: true);
+        LevelBuildKit.Cutout(link, "Lizard Oregano", -120.5f, RuinsWest.xMin, LizardBed.yMin, LizardBed.yMax, keepGround: true);
+        LevelBuildKit.Cutout(link, "Lizard Head", -132f, -120.5f, 255.5f, 274.5f, keepGround: true);
+    }
+
+    // Wo die Echse hinfällt: dunkler, versengter Boden, flachgedrückte Wandstücke und niedriger Schutt, an den Rändern zu
+    // Haufen zusammengeschoben. Nichts davon ist höher als ~1.5 m, damit die liegende Echse nirgends hindurchragt
+    private static void CrushedBed(Transform parent, Material rubble, Material facade, Material scorched, System.Random random)
+    {
+        Transform bed = new GameObject("Crushed Bed").transform;
+        bed.SetParent(parent, false);
+        Rect area = LizardBed;
+        PrimitiveKit.Box("Scorched Ground", bed, new Vector3(area.center.x, CityLayout.Surface + 0.01f, area.center.y), new Vector3(area.width - 1f, 0.02f, area.height - 1f), scorched);
+        for (int i = 0; i < 22; i++)
+        {
+            var spot = new Vector3(area.xMin + 2f + (float)random.NextDouble() * (area.width - 4f), CityLayout.Surface, area.yMin + 2f + (float)random.NextDouble() * (area.height - 4f));
+            float size = 3f + (float)random.NextDouble() * 5f;
+            Renderer slab = PrimitiveKit.Box("Flattened Wall", bed, spot + Vector3.up * 0.2f, new Vector3(size, 0.4f + (float)random.NextDouble() * 0.4f, size * (0.5f + (float)random.NextDouble() * 0.5f)),
+                random.NextDouble() < 0.5 ? facade : rubble);
+            slab.transform.localRotation = Quaternion.Euler((float)random.NextDouble() * 8f - 4f, (float)random.NextDouble() * 360f, (float)random.NextDouble() * 8f - 4f);
+        }
+        // Zusammengeschobener Schutt am Rand (vorne zur Four Cheese Avenue und hinten zum Roboter)
+        for (int i = 0; i < 14; i++)
+        {
+            float x = area.xMin + 3f + (float)random.NextDouble() * (area.width - 6f);
+            float z = i % 2 == 0 ? area.yMin + 1.5f : area.yMax - 1.5f;
+            RubblePile(bed, new Vector3(x, CityLayout.Surface, z), 2.5f, rubble, facade, random);
         }
     }
 
@@ -750,7 +799,14 @@ public static class Level5Builder
         battle.FindProperty("breathTime").floatValue = BreathTime;
         battle.FindProperty("arrivalU").floatValue = LegU(ArrivalZ);
         battle.FindProperty("finaleU").floatValue = FourCheeseU(OreganoX);
+        PrimitiveKit.SetReferences(battle, "lizardTail", kaiju.lizardTail);
+        battle.FindProperty("fallAngle").floatValue = LizardFallAngle;
+        SetLizardPoses(battle, kaiju);
         battle.ApplyModifiedPropertiesWithoutUndo();
+        // Der Schwanz liegt im Kampf auf der Straße: nur leicht schwingen (8° pro Glied fegte die Spitze durch Park und Häuser)
+        var fightData = new SerializedObject(kaiju.fight);
+        fightData.FindProperty("tailSwing").floatValue = 1.5f;
+        fightData.ApplyModifiedPropertiesWithoutUndo();
 
         // Bildschirm-Wackeln an der Kamera
         GameObject mainCamera = GameObject.Find("Main Camera");
@@ -760,8 +816,92 @@ public static class Level5Builder
         }
     }
 
-    // Das Hochhaus fürs Intro: steht als ganzer Quader (Fassaden-Shader wie die Stadt), darin steckt schon der Stumpf mit
-    // Schutt, der nach dem Einsturz übrig bleibt. Dazu Brocken und zwei Staubwolken (Spitze, Fuß)
+    // Rechnet die Haltungen für KaijuBattle aus, indem die Echse kurz in die jeweilige Lage gedreht wird: Schwanz im Kampf
+    // (sie schaut nach Norden, Schwanz flach nach Süden auf dem Mozzarella Blvd), nach dem Sturz (gekippt, Kopf zur Salami
+    // Street, Schwanz von der Hüfte schräg zurück auf den Mozzarella Blvd). Danach steht alles wieder wie gebaut
+    private static void SetLizardPoses(SerializedObject battle, CityBuilder.KaijuParts kaiju)
+    {
+        Transform[] tail = kaiju.lizardTail;
+        Quaternion lizardRest = kaiju.lizard.localRotation, headRest = kaiju.lizardHead.localRotation, upperRest = kaiju.lizardUpper.localRotation;
+        var tailRest = new Quaternion[tail.Length];
+        for (int i = 0; i < tail.Length; i++)
+        {
+            tailRest[i] = tail[i].localRotation;
+        }
+
+        Quaternion facingNorth = lizardRest * Quaternion.Euler(0f, 180f, 0f);
+        kaiju.lizard.localRotation = facingNorth;
+        Vector3 root = tail[0].position;
+        SetQuaternions(battle, "tailFightPose", LayTail(tail, CityLayout.RoadTop,
+            new Vector2(root.x, root.z), new Vector2(root.x, root.z - 200f)));
+
+        kaiju.lizard.localRotation = facingNorth * Quaternion.Euler(0f, 0f, LizardFallAngle);
+        kaiju.lizardUpper.localRotation = upperRest * Quaternion.Euler(0f, FallenBellyRoll, 0f);
+        battle.FindProperty("upperFallen").quaternionValue = kaiju.lizardUpper.localRotation;
+        kaiju.lizardHead.rotation = Quaternion.LookRotation(Quaternion.AngleAxis(FallenHeadDip, Vector3.forward) * Vector3.left, Vector3.up);
+        battle.FindProperty("headFallen").quaternionValue = kaiju.lizardHead.localRotation;
+        root = tail[0].position;
+        SetQuaternions(battle, "tailFallenPose", LayTail(tail, CityLayout.Surface,
+            new Vector2(root.x, root.z), new Vector2(-48f, 232f), new Vector2(-41f, 214f), new Vector2(-41f, 0f)));
+
+        kaiju.lizard.localRotation = lizardRest;
+        kaiju.lizardUpper.localRotation = upperRest;
+        kaiju.lizardHead.localRotation = headRest;
+        for (int i = 0; i < tail.Length; i++)
+        {
+            tail[i].localRotation = tailRest[i];
+        }
+    }
+
+    // Legt die Schwanzkette entlang eines Pfades (Welt X/Z, beginnt an der Wurzel) auf den Boden: Jedes Glied zeigt (mit
+    // lokal -Z) auf den nächsten Punkt, der höchstens 70° tiefer liegt und sonst auf Bodenhöhe plus Glied-Radius. Glieder
+    // werden der Reihe nach gedreht, weil jedes Kind dort sitzt, wo sein Elternglied hinzeigt. Gibt die lokalen Drehungen zurück
+    private static Quaternion[] LayTail(Transform[] tail, float ground, params Vector2[] path)
+    {
+        var pose = new Quaternion[tail.Length];
+        float s = 0f, scale = 1f;
+        for (int i = 0; i < tail.Length; i++)
+        {
+            Vector3 current = tail[i].position;
+            float length = i + 1 < tail.Length ? tail[i + 1].localPosition.magnitude : 17f * scale;
+            // Segment-Kugel: 12 * scale hoch, etwas eingesunken
+            float targetY = ground + 6f * scale * 0.82f - 1f;
+            float drop = Mathf.Clamp(current.y - targetY, -0.3f * length, Mathf.Sin(70f * Mathf.Deg2Rad) * length);
+            s += Mathf.Sqrt(length * length - drop * drop);
+            Vector2 flat = PathPoint(path, s);
+            var next = new Vector3(flat.x, current.y - drop, flat.y);
+            tail[i].rotation = Quaternion.LookRotation(current - next, Vector3.up);
+            pose[i] = tail[i].localRotation;
+            scale *= 0.82f;
+        }
+        return pose;
+    }
+
+    // Punkt auf einem Streckenzug nach der Länge s (über das Ende hinaus geradeaus weiter)
+    private static Vector2 PathPoint(Vector2[] path, float s)
+    {
+        for (int i = 0; i + 1 < path.Length; i++)
+        {
+            float length = Vector2.Distance(path[i], path[i + 1]);
+            if (s <= length || i + 2 == path.Length)
+            {
+                return path[i] + (path[i + 1] - path[i]).normalized * s;
+            }
+            s -= length;
+        }
+        return path[0];
+    }
+
+    private static void SetQuaternions(SerializedObject data, string name, Quaternion[] values)
+    {
+        SerializedProperty array = data.FindProperty(name);
+        array.arraySize = values.Length;
+        for (int i = 0; i < values.Length; i++)
+        {
+            array.GetArrayElementAtIndex(i).quaternionValue = values[i];
+        }
+    }
+
     private static TowerCollapse BuildIntroTower(Material particles)
     {
         Material facade = CityBuilder.FacadeMaterialAsset;
