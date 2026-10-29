@@ -1422,12 +1422,14 @@ public static class Level5Builder
     private static readonly Vector3 CornerCameraOffset = new Vector3(8f, 6f, -0.5f);
     private const float CornerCameraLookHeight = 4f;
     //   Brocken aus dem Kampf: Landestelle x, Boden dort, ausgelöst sobald der Spieler an x vorbei ist. Auf der oberen Stufe
-    //   (Oberkante 4.3), ausgelöst oben auf der Rampe; auf der Oregano-Kreuzung, ausgelöst auf der Stufe davor (wer
-    //   durchläuft, ist knapp darunter weg, wer stehen bleibt, wird getroffen; ab x -110 läuft das Finale)
+    //   (Oberkante 4.3) und auf der Oregano-Kreuzung (ab x -110 läuft das Finale). Vom Auslöser bis zum Aufprall vergehen
+    //   1.9 s (1 s Warnung + 0.9 s Fall), so weit (~13 m bei 7 m/s) liegt der Auslöser vor der Stelle: Wer ohne zu schauen
+    //   durchläuft, kommt genau beim Aufprall an; wer die Warnung sieht, bleibt davor stehen (2026-10-29, vorher 1.3 s und
+    //   6–8 m ohne Warnung)
     private static readonly (float spotX, float ground, float triggerX)[] DebrisDrops =
     {
-        (-101.25f, 4.3f, -93f),
-        (-107.5f, CityLayout.Surface, -101.5f),
+        (-101.25f, 4.3f, -88f),
+        (-107.5f, CityLayout.Surface, -94.5f),
     };
 
     // Umgestürzter Baum entlang der Bahn: Wurzelteller am Ende, wo der Spieler ankommt (uRoot), der Stamm ist begehbar (nicht

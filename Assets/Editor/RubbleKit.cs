@@ -347,8 +347,13 @@ public static class RubbleKit
         shadow.localScale = new Vector3(size.x * 1.15f, 0.01f, size.z * 1.15f);
         PrimitiveKit.Part("Disc", PrimitiveType.Cylinder, shadow, Vector3.zero, Vector3.one, shadowMaterial);
         ParticleSystem impact = Dust(t, "Impact Dust", Vector3.zero, size.x * 1.5f);
+        // Warnung (wie die Möwe): orangener Ring um die Landestelle (zieht sich in FallingDebris zusammen) und Steinchen, die
+        // vorher auf die Stelle rieseln
+        Transform ring = WarningRing(t, Mathf.Max(size.x, size.z) * 0.6f);
+        ParticleSystem pebbles = Pebbles(t, size);
         chunk.SetActive(false);
         shadow.gameObject.SetActive(false);
+        ring.gameObject.SetActive(false);
         var data = new SerializedObject(t.gameObject.AddComponent<FallingDebris>());
         data.FindProperty("triggerU").floatValue = triggerU;
         data.FindProperty("halfSize").vector2Value = new Vector2(size.x / 2f, size.z / 2f);
@@ -357,8 +362,62 @@ public static class RubbleKit
         data.FindProperty("shadow").objectReferenceValue = shadow;
         data.FindProperty("impactDust").objectReferenceValue = impact;
         data.FindProperty("trail").objectReferenceValue = trail;
+        data.FindProperty("warningRing").objectReferenceValue = ring;
+        data.FindProperty("pebbles").objectReferenceValue = pebbles;
         data.ApplyModifiedPropertiesWithoutUndo();
         return t;
+    }
+
+    // Flacher Ring knapp über dem Boden (LineRenderer, liegt in der Ebene seines Transforms, das um 90° um X gekippt ist)
+    private static Transform WarningRing(Transform parent, float radius)
+    {
+        Material orange = PrimitiveKit.Material("Assets/Materials/City/Warning Ring.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.45f, 0.05f));
+        var go = new GameObject("Warning Ring");
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+        go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        go.transform.localScale = Vector3.one * radius;
+        var line = go.AddComponent<LineRenderer>();
+        line.useWorldSpace = false;
+        line.loop = true;
+        line.alignment = LineAlignment.TransformZ;
+        line.widthMultiplier = 0.16f;
+        line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        line.receiveShadows = false;
+        line.sharedMaterial = orange;
+        const int points = 48;
+        line.positionCount = points;
+        for (int i = 0; i < points; i++)
+        {
+            float a = i * Mathf.PI * 2f / points;
+            line.SetPosition(i, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f));
+        }
+        return go.transform;
+    }
+
+    // Steinchen und etwas Staub, die aus ~14 m auf die Landestelle rieseln (nur während Warnung und Fall, FallingDebris
+    // startet und stoppt sie). Sie brauchen ~1.3 s bis zum Boden, darum laufen sie auch nach der Warnung noch nach
+    private static ParticleSystem Pebbles(Transform parent, Vector3 size)
+    {
+        Material stone = AssetDatabase.LoadAssetAtPath<Material>("Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat");
+        ParticleSystem pebbles = Level5Builder.Particles("Pebbles", parent, stone, new Color(0.38f, 0.35f, 0.32f, 1f), new Color(0.55f, 0.5f, 0.45f, 1f),
+            lifetime: 1.35f, speed: 4f, size: new Vector2(0.22f, 0.45f), rate: 70f, radius: Mathf.Min(size.x, size.z) * 0.4f, growth: 0f);
+        pebbles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        pebbles.transform.localPosition = new Vector3(0f, 14f, 0f);
+        // Nach unten statt nach oben, mit Schwerkraft
+        pebbles.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        ParticleSystem.MainModule main = pebbles.main;
+        main.playOnAwake = false;
+        main.startLifetime = 1.35f;
+        main.gravityModifier = 1f;
+        var fade = new Gradient();
+        fade.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.05f), new GradientAlphaKey(1f, 0.9f), new GradientAlphaKey(0f, 1f) });
+        ParticleSystem.ColorOverLifetimeModule color = pebbles.colorOverLifetime;
+        color.color = fade;
+        ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = pebbles.sizeOverLifetime;
+        sizeOverLifetime.enabled = false;
+        return pebbles;
     }
 
     // Staubwolke, die nur per Emit ausgelöst wird (keine laufende Emission): graubraun, quillt auf und sinkt etwas
