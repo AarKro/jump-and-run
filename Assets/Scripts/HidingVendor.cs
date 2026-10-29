@@ -2,8 +2,9 @@ using UnityEngine;
 
 // Eisverkäufer hinter seinem umgekippten Wagen im Park (Level 5). Kauert dort die ganze Zeit (CrowdFigure.Duck halb).
 // Lädt die Echse ihren Feueratem auf (KaijuBattle ruft Shout), springt er halb hoch, winkt den Spieler mit großen Armbewegungen
-// zu sich und ruft "OVER HERE!". Kommt das Feuer (TakeCover), duckt er sich ganz weg, Arme über dem Kopf. Danach (Relax)
-// kauert er wieder. Die Arme werden in LateUpdate gesetzt, also nach der Animation von CrowdFigure (die läuft in Update).
+// zu sich und ruft "COME HERE!" (die Blase ploppt auf und pulsiert). Kommt das Feuer (TakeCover), duckt er sich ganz weg,
+// Arme über dem Kopf, die Blase verschwindet.
+// Danach (Relax) kauert er wieder. Die Arme werden in LateUpdate gesetzt, also nach der Animation von CrowdFigure (Update).
 public class HidingVendor : MonoBehaviour
 {
     [SerializeField] private CrowdFigure figure;
@@ -17,6 +18,12 @@ public class HidingVendor : MonoBehaviour
 
     private State state = State.Hiding;
     private float stateTime;
+    private Vector3 bubbleScale;
+
+    private void Awake()
+    {
+        bubbleScale = bubble.transform.localScale;
+    }
 
     private void Start()
     {
@@ -76,5 +83,11 @@ public class HidingVendor : MonoBehaviour
         float wave = Mathf.Sin(stateTime * 11f);
         rightArm.localRotation = Quaternion.Euler(150f + wave * 30f, 0f, 25f + wave * 15f);
         leftArm.localRotation = Quaternion.Euler(50f, 0f, -35f);
+
+        // Blase: ploppt in 0.35 s über die volle Größe hinaus auf (Überschwingen wie eine Feder), pulsiert dann im Takt des Winkens
+        float pop = Mathf.Clamp01(stateTime / 0.35f);
+        float overshoot = 1f + Mathf.Sin(pop * Mathf.PI) * 0.3f * (1f - pop * 0.5f);
+        float pulse = 1f + Mathf.Abs(Mathf.Sin(stateTime * 5.5f)) * 0.07f;
+        bubble.transform.localScale = bubbleScale * (pop * overshoot * pulse);
     }
 }

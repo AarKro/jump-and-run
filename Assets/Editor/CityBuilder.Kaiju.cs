@@ -59,7 +59,7 @@ public static partial class CityBuilder
     // Teile der beiden Monster, damit Level 5 sie steuern kann (Wüten mit Feueratem, Ankunft des Roboters, Kampf, Sieg)
     public struct KaijuParts
     {
-        public Transform root, lizard, lizardUpper, lizardHead, lizardArmLeft, lizardArmRight, robot, robotUpper, robotHead, robotArmLeft, robotArmRight;
+        public Transform root, lizard, lizardUpper, lizardHead, lizardJaw, lizardArmLeft, lizardArmRight, robot, robotUpper, robotHead, robotArmLeft, robotArmRight;
         public Transform[] lizardTail;
         public Renderer robotVisor;
         public KaijuFight fight;
@@ -89,7 +89,7 @@ public static partial class CityBuilder
         serialized.ApplyModifiedPropertiesWithoutUndo();
         return new KaijuParts
         {
-            root = fight, lizard = lizard.upper.parent, lizardUpper = lizard.upper, lizardHead = lizard.head,
+            root = fight, lizard = lizard.upper.parent, lizardUpper = lizard.upper, lizardHead = lizard.head, lizardJaw = lizard.jaw,
             lizardArmLeft = lizard.armLeft, lizardArmRight = lizard.armRight, lizardTail = lizard.tail,
             robot = robot.upper.parent, robotUpper = robot.upper, robotHead = robot.head, robotArmLeft = robot.armLeft,
             robotArmRight = robot.armRight, robotVisor = robot.visor, fight = fightScript,
@@ -138,7 +138,7 @@ public static partial class CityBuilder
     }
 
     // Echse, schaut nach Norden (+Z) zum Roboter. Lokal: +Z = vorne, Wurzel am Boden zwischen den Füßen
-    private static (Transform upper, Transform head, Transform armLeft, Transform armRight, Transform[] tail) BuildLizard(Transform parent, Vector3 position)
+    private static (Transform upper, Transform head, Transform armLeft, Transform armRight, Transform[] tail, Transform jaw) BuildLizard(Transform parent, Vector3 position)
     {
         Material skin = Mat("Lizard Skin", new Color(0.25f, 0.42f, 0.22f), 0.3f);
         Material belly = Mat("Lizard Belly", new Color(0.55f, 0.6f, 0.4f), 0.2f);
@@ -181,7 +181,9 @@ public static partial class CityBuilder
         PrimitiveKit.Part("Neck", PrimitiveType.Sphere, head, new Vector3(0f, -1f, 0f), new Vector3(12f, 12f, 12f), skin);
         PrimitiveKit.Part("Skull", PrimitiveType.Sphere, head, new Vector3(0f, 4f, 5f), new Vector3(11f, 10f, 15f), skin);
         PrimitiveKit.Box("Snout", head, new Vector3(0f, 3f, 12f), new Vector3(8f, 5f, 9f), skin);
-        PrimitiveKit.Box("Jaw", head, new Vector3(0f, 0f, 11f), new Vector3(7f, 2f, 8f), belly);
+        // Unterkiefer an einem Scharnier hinten am Maul: Level 5 klappt ihn zum Feueratem auf (positiv um X = Spitze nach unten)
+        Transform jaw = PrimitiveKit.Pivot("Jaw Hinge", head, new Vector3(0f, 0.5f, 7f));
+        PrimitiveKit.Box("Jaw", jaw, new Vector3(0f, -0.5f, 4f), new Vector3(7f, 2f, 8f), belly);
         PrimitiveKit.Part("Eye L", PrimitiveType.Sphere, head, new Vector3(-4f, 6.5f, 10f), Vector3.one * 1.6f, eye);
         PrimitiveKit.Part("Eye R", PrimitiveType.Sphere, head, new Vector3(4f, 6.5f, 10f), Vector3.one * 1.6f, eye);
 
@@ -208,7 +210,7 @@ public static partial class CityBuilder
             scale *= 0.82f;
         }
 
-        return (upper, head, armLeft, armRight, tail);
+        return (upper, head, armLeft, armRight, tail, jaw);
     }
 
     private static Transform LizardArm(Transform upper, int side, Material skin, Material claws)

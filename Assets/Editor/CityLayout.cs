@@ -207,6 +207,10 @@ public static class CityLayout
     // Piazza Pisa ist auch zur Margherita Avenue hin offen: ab hier bis zur Basil Street keine Häuser in der Südreihe
     public const float PiazzaSouthOpeningFrom = -236f;
     public static readonly Rect CustomerHouseLot = Rect.MinMaxRect(55f, 75.7f, 65f, 83.7f);
+    // Kundenhaus Nr. 13 in Level 5: Ostseite der Basil Street zwischen Salami Street und Calzone Road (Fassade x -170)
+    public static readonly Rect Level5CustomerLot = Rect.MinMaxRect(-170f, 287f, -162f, 297f);
+    // Beide bekommen in der Stadt ein Haus fester Größe, das ihr Level ausschneidet und durch sein Kundenhaus ersetzt
+    public static readonly Rect[] CustomerHouseLots = { CustomerHouseLot, Level5CustomerLot };
 
     // Pesto Park (Level 3): Rasen und Wege. Die Wege liegen 4 cm über dem Gehweg-Niveau, damit Prefabs (für 0.5 gebaut,
     // Wurzeln auf ganzen Metern) kaum sichtbar einsinken

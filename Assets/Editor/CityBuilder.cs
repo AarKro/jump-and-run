@@ -200,10 +200,13 @@ public static partial class CityBuilder
                     {
                         House(parent, lot, Pick(random, 8f, 10f, 11f, 13f, 14f, 18f));
                     }
-                    // Haus mit fester Größe, wo Level 1 sein Kundenhaus hineinsetzt (schneidet dieses Haus aus)
-                    if (block.Lots.Overlaps(CityLayout.CustomerHouseLot))
+                    // Haus mit fester Größe, wo Level 1 und 5 ihr Kundenhaus hineinsetzen (sie schneiden dieses Haus aus)
+                    foreach (Rect customerLot in CityLayout.CustomerHouseLots)
                     {
-                        House(parent, CityLayout.CustomerHouseLot, 10f).name = "House (Customer Lot)";
+                        if (block.Lots.Overlaps(customerLot))
+                        {
+                            House(parent, customerLot, 10f).name = "House (Customer Lot)";
+                        }
                     }
                     break;
                 case CityLayout.BlockKind.Downtown:
@@ -232,7 +235,8 @@ public static partial class CityBuilder
     private static List<Rect> Lots(Rect area, System.Random random, bool skipEast, float depth = 8f, float minWidth = 8f, float widthRange = 6f)
     {
         var lots = new List<Rect>();
-        var reserved = new List<Rect>(CityLayout.LandmarkLots) { CityLayout.CustomerHouseLot };
+        var reserved = new List<Rect>(CityLayout.LandmarkLots);
+        reserved.AddRange(CityLayout.CustomerHouseLots);
 
         void Run(float from, float to, System.Action<float, float> add)
         {

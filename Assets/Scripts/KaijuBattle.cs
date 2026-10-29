@@ -224,7 +224,8 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
                 case Phase.Charge:
                     float k = Mathf.Clamp01(phaseTime / chargeTime);
                     targetLean = -chargeLean * k;
-                    targetHead = -18f * k;
+                    // Kopf nur leicht hoch: Das Maul mit dem Feuerball soll von unten (Spielkamera) sichtbar bleiben
+                    targetHead = -10f * k;
                     breath.SetCharge(k);
                     if (phaseTime >= chargeTime)
                     {
