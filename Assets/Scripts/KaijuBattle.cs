@@ -44,6 +44,8 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     [SerializeField] private Quaternion upperFallen = Quaternion.identity;
     [Tooltip("Kopf (lokal, relativ zum gerollten Oberkörper) nach dem Sturz: Maul zur Salami Street, Kinn am Boden")]
     [SerializeField] private Quaternion headFallen = Quaternion.identity;
+    [Tooltip("Kopf-Position (lokal) nach dem Sturz: das Rollen auf den Bauch drückte ihn sonst ~6 m in die Straße")]
+    [SerializeField] private Vector3 headFallenPosition;
 
     [Header("Roboter")]
     [SerializeField] private Transform robotRoot;
@@ -110,6 +112,7 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     private Quaternion lizardRootRest, upperRest, headRest, robotRootRest, robotUpperRest, robotArmLeftRest, robotArmRightRest;
     private Vector3 robotLanding;
     private Quaternion[] tailRest;
+    private Vector3 headRestPosition;
     private Transform player;
     private PlayerController controller;
     private Coroutine sequence;
@@ -119,6 +122,7 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         lizardRootRest = lizardRoot.localRotation;
         upperRest = lizardUpper.localRotation;
         headRest = lizardHead.localRotation;
+        headRestPosition = lizardHead.localPosition;
         robotRootRest = robotRoot.localRotation;
         robotUpperRest = robotUpper.localRotation;
         robotArmLeftRest = robotArmLeft.localRotation;
@@ -176,6 +180,7 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         lizardRoot.localRotation = lizardRootRest;
         lizardUpper.localRotation = upperRest;
         lizardHead.localRotation = headRest;
+        lizardHead.localPosition = headRestPosition;
         for (int i = 0; i < tailRest.Length; i++)
         {
             lizardTail[i].localRotation = tailRest[i];
@@ -511,7 +516,9 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
             float k = Mathf.Clamp01(t / 1.8f);
             lizardUpper.localRotation = Quaternion.Slerp(upperFallStart, upperFallen, k);
             Quaternion snapped = headRest * Quaternion.Euler(-40f * Mathf.Clamp01(t / 0.3f), 0f, 0f);
-            lizardHead.localRotation = Quaternion.Slerp(snapped, headFallen, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.3f, 1.8f, t)));
+            float turnHead = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.3f, 1.8f, t));
+            lizardHead.localRotation = Quaternion.Slerp(snapped, headFallen, turnHead);
+            lizardHead.localPosition = Vector3.Lerp(headRestPosition, headFallenPosition, turnHead);
             BlendTail(tailFallStart, tailFallenPose, Mathf.SmoothStep(0f, 1f, k), 0f);
             lizardRoot.localRotation = fallStart * Quaternion.Euler(0f, 0f, fallAngle * k * k);
             cam.position = camPos;
@@ -520,6 +527,7 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         }
         lizardRoot.localRotation = fallStart * Quaternion.Euler(0f, 0f, fallAngle);
         lizardHead.localRotation = headFallen;
+        lizardHead.localPosition = headFallenPosition;
         lizardUpper.localRotation = upperFallen;
         BlendTail(tailFallStart, tailFallenPose, 1f, 0f);
         if (fallDust != null) fallDust.Emit(200);

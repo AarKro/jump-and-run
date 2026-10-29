@@ -86,8 +86,9 @@ public static class Level5Builder
     private static readonly Rect TailRoad = Rect.MinMaxRect(-49f, 176f, -31f, 252f);
     // Um so viel kippt sie im Finale zur Seite: so weit, dass der Kopf auf der Straße liegt statt darüber zu schweben
     private const float LizardFallAngle = 86f;
-    // Kopf nach dem Sturz: schaut nach Westen die Salami Street hinunter, leicht nach unten (Kinn am Boden)
-    private const float FallenHeadDip = 16f;
+    // Kopf nach dem Sturz: schaut nach Westen die Salami Street hinunter, der Unterkiefer liegt flach auf der Straße, das Maul
+    // steht so weit offen (KaijuHiccups.jawOpen; beim Hicks hebt sich der Oberkopf noch weiter)
+    private const float HiccupJawRest = 22f;
     // Oberkörper nach dem Sturz um die Wirbelsäule auf den Bauch gerollt: Rückenplatten zeigen schräg nach oben
     private const float FallenBellyRoll = -60f;
     // Kamera im Vorspann: südwestlich, Echse und Turm nebeneinander im Bild
@@ -896,6 +897,7 @@ public static class Level5Builder
         hiccups.FindProperty("mouth").objectReferenceValue = mouth;
         hiccups.FindProperty("head").objectReferenceValue = kaiju.lizardHead;
         hiccups.FindProperty("jaw").objectReferenceValue = kaiju.lizardJaw;
+        hiccups.FindProperty("jawOpen").floatValue = HiccupJawRest;
         hiccups.FindProperty("interval").floatValue = HiccupInterval;
         hiccups.FindProperty("speed").floatValue = HiccupSpeed;
         hiccups.FindProperty("streetZ").floatValue = SalamiZ;
@@ -977,8 +979,10 @@ public static class Level5Builder
         kaiju.lizard.localRotation = facingNorth * Quaternion.Euler(0f, 0f, LizardFallAngle);
         kaiju.lizardUpper.localRotation = upperRest * Quaternion.Euler(0f, FallenBellyRoll, 0f);
         battle.FindProperty("upperFallen").quaternionValue = kaiju.lizardUpper.localRotation;
-        kaiju.lizardHead.rotation = Quaternion.LookRotation(Quaternion.AngleAxis(FallenHeadDip, Vector3.forward) * Vector3.left, Vector3.up);
+        Vector3 headRestPosition = kaiju.lizardHead.localPosition;
+        PlaceFallenHead(kaiju.lizardHead, kaiju.lizardJaw);
         battle.FindProperty("headFallen").quaternionValue = kaiju.lizardHead.localRotation;
+        battle.FindProperty("headFallenPosition").vector3Value = kaiju.lizardHead.localPosition;
         root = tail[0].position;
         SetQuaternions(battle, "tailFallenPose", LayTail(tail, CityLayout.Surface,
             new Vector2(root.x, root.z), new Vector2(-48f, 232f), new Vector2(-41f, 214f), new Vector2(-41f, 0f)));
@@ -986,10 +990,42 @@ public static class Level5Builder
         kaiju.lizard.localRotation = lizardRest;
         kaiju.lizardUpper.localRotation = upperRest;
         kaiju.lizardHead.localRotation = headRest;
+        kaiju.lizardHead.localPosition = headRestPosition;
         for (int i = 0; i < tail.Length; i++)
         {
             tail[i].localRotation = tailRest[i];
         }
+    }
+
+    // Kopf nach dem Sturz (2026-10-29, er steckte ~6 m in der Straße: das Rollen auf den Bauch schwenkt den Hals-Pivot nach
+    // unten): schaut nach Westen über die Salami Street (z SalamiZ), die Schnauze um HiccupJawRest gehoben, der um ebenso viel
+    // geöffnete Unterkiefer liegt also waagrecht; so hoch gesetzt, dass er 5 cm über der Straße liegt. Der Hinterkopf darf
+    // bis 1 m in den Schutt sinken (der Hals steckt sowieso im liegenden Körper)
+    private static void PlaceFallenHead(Transform head, Transform jaw)
+    {
+        Quaternion jawRest = jaw.localRotation;
+        Vector3 pivot = head.position;
+        head.rotation = Quaternion.LookRotation(Quaternion.AngleAxis(-HiccupJawRest, Vector3.forward) * Vector3.left, Vector3.up);
+        head.position = new Vector3(pivot.x, 0f, SalamiZ);
+        jaw.localRotation = jawRest * Quaternion.Euler(HiccupJawRest, 0f, 0f);
+        float lift = CityLayout.RoadTop + 0.05f - HeadBottom(head, true);
+        lift = Mathf.Max(lift, CityLayout.RoadTop - 1f - HeadBottom(head, false));
+        head.position += Vector3.up * lift;
+        jaw.localRotation = jawRest;
+    }
+
+    // Unterkante von Schädel, Schnauze und Kiefer (oder nur des Kiefers) in Welt-Y
+    private static float HeadBottom(Transform head, bool jawOnly)
+    {
+        float bottom = float.MaxValue;
+        foreach (MeshRenderer part in head.GetComponentsInChildren<MeshRenderer>())
+        {
+            if (part.name == "Skull" && !jawOnly || part.name == "Snout" && !jawOnly || part.name == "Jaw")
+            {
+                bottom = Mathf.Min(bottom, part.bounds.min.y);
+            }
+        }
+        return bottom;
     }
 
     // Legt die Schwanzkette entlang eines Pfades (Welt X/Z, beginnt an der Wurzel) auf den Boden: Jedes Glied zeigt (mit

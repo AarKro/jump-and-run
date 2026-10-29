@@ -3,8 +3,11 @@ using UnityEngine;
 // Level 5 nach dem Finale: Die Echse liegt benommen auf der Oregano Street, das Maul offen die Salami Street hinunter. In
 // festem Takt hickst sie Feuerbälle, die die Straße entlang nach Westen rollen, über die Kreuzung mit der Basil Street (dort
 // quert die Bahn) bis an die Häuser gegenüber, wo sie verpuffen. Wie bei den Autos: deterministische Uhr, man wartet eine
-// Lücke ab oder springt drüber; getroffen = Respawn. Vor jedem Hicks klappt das Maul weiter auf, ein Glühen wächst darin und
-// der Kopf zuckt (die Warnung sieht man von der Kreuzung aus, 50 m weiter). Dazu kreisen Sterne über dem Kopf und aus den
+// Lücke ab oder springt drüber; getroffen = Respawn. Vor jedem Hicks geht das Maul weiter auf, ein Glühen wächst darin und
+// der Kopf zittert (die Warnung sieht man von der Kreuzung aus, 50 m weiter).
+// Der Unterkiefer liegt dabei flach auf der Straße (Level5Builder legt den Kopf so hin), aufgemacht wird das Maul, indem
+// sich der Oberkopf um das Kiefer-Scharnier hebt, wie bei einem Tier, das mit dem Kinn am Boden liegt (2026-10-29: vorher
+// klappte der Kiefer nach unten, dafür musste der Kopf 3 m über der Straße schweben). Dazu kreisen Sterne über dem Kopf und aus den
 // Nüstern raucht es. Alles erst, wenn sie liegt (KaijuBattle.LizardDown), ein Respawn setzt es mit dem Kampf zurück.
 //
 // Getroffen wird von Hand geprüft (Abstand in FixedUpdate) wie bei FallingDebris: Die Bälle werden per Uhr gesetzt, nicht
@@ -19,7 +22,8 @@ public class KaijuHiccups : MonoBehaviour
     [SerializeField] private Transform mouth;
     [SerializeField] private Transform head;
     [SerializeField] private Transform jaw;
-    [Tooltip("So weit steht das Maul offen (Grad), beim Hicks zusätzlich")]
+    [Tooltip("So weit steht das Maul offen (Grad), beim Hicks zusätzlich. Der Kopf ist so hingelegt, dass bei jawOpen der " +
+             "Unterkiefer flach auf der Straße liegt")]
     [SerializeField] private float jawOpen = 22f;
     [SerializeField] private float jawHiccup = 22f;
 
@@ -54,6 +58,7 @@ public class KaijuHiccups : MonoBehaviour
     private bool down;
     private int lastFizzled = -1;
     private Quaternion jawRest, headDown;
+    private Vector3 hinge;
     private Vector3 glowScale;
     private Collider playerCollider;
 
@@ -118,6 +123,11 @@ public class KaijuHiccups : MonoBehaviour
             if (head != null)
             {
                 headDown = head.localRotation;
+            }
+            if (jaw != null)
+            {
+                // Scharnier in der Welt: bleibt beim Auf- und Zumachen, wo es ist (der Kopf dreht sich darum)
+                hinge = jaw.position;
             }
             if (dazedDecor != null)
             {
@@ -234,24 +244,25 @@ public class KaijuHiccups : MonoBehaviour
             glow.gameObject.SetActive(warn > 0.02f || kick > 0f);
             glow.localScale = glowScale * Mathf.Max(warn * warn, kick);
         }
-        if (head != null)
-        {
-            // Zuckt beim Hicks kurz hoch, zittert vorher
-            float tremble = Mathf.Sin(Time.time * 41f) * warn * 1.5f;
-            head.localRotation = headDown * Quaternion.Euler(-8f * kick + tremble, 0f, 0f);
-        }
     }
 
+    // Maul auf: Oberkopf um extra Grad heben (minus um X = Schnauze hoch), Kiefer im Kopf um ebenso viel weiter aufklappen,
+    // so bleibt er in der Welt gleich liegen; dann den Kopf verschieben, bis das Scharnier wieder an seinem Platz ist.
+    // In LateUpdate: FireBreath schließt den Kiefer in seinem LateUpdate wieder (Ausführungsreihenfolge 100 = danach)
     private void LateUpdate()
     {
-        // FireBreath schließt den Kiefer in seinem LateUpdate wieder; danach (Ausführungsreihenfolge 100) erneut öffnen
-        if (down && jaw != null)
+        if (!down || jaw == null || head == null)
         {
-            float time = clock + (Time.time - Time.fixedTime);
-            int last = LastLaunched(time);
-            float warn = 1f - Mathf.Clamp01((LaunchTime(last + 1) - time) / warnTime);
-            float kick = last >= 0 ? Mathf.Clamp01(1f - (time - LaunchTime(last)) / 0.35f) : 0f;
-            jaw.localRotation = jawRest * Quaternion.Euler(jawOpen + jawHiccup * Mathf.Max(warn * warn, kick), 0f, 0f);
+            return;
         }
+        float time = clock + (Time.time - Time.fixedTime);
+        int last = LastLaunched(time);
+        float warn = 1f - Mathf.Clamp01((LaunchTime(last + 1) - time) / warnTime);
+        float kick = last >= 0 ? Mathf.Clamp01(1f - (time - LaunchTime(last)) / 0.35f) : 0f;
+        float extra = jawHiccup * Mathf.Max(warn * warn, kick);
+        float tremble = Mathf.Sin(Time.time * 41f) * warn * 1.5f;
+        head.localRotation = headDown * Quaternion.Euler(-extra + tremble, 0f, 0f);
+        jaw.localRotation = jawRest * Quaternion.Euler(jawOpen + extra - tremble, 0f, 0f);
+        head.position += hinge - jaw.position;
     }
 }
