@@ -3,12 +3,16 @@ using UnityEngine;
 // Brocken aus dem Kampf der Monster (Level 5, nach der Landung des Roboters): Kommt der Spieler an triggerU vorbei (er läuft
 // nach -u), fällt ein Fassaden-Brocken aus großer Höhe auf eine feste Stelle der Bahn (die Wurzel, auf dem Boden). Vorher
 // kündigt er sich an wie die Möwe (2026-10-29, vorher kam nur der Schatten, der Brocken selbst war bis kurz vor dem Aufprall
-// über dem Bildrand): warnTime lang rieseln Steinchen auf die Stelle, ein Schatten erscheint und ein orangener Ring zieht sich
-// dort immer wieder zusammen. Dann fällt er, der Schatten wächst weiter. Trifft der Brocken den Spieler im Fall, ist es ein
+// über dem Bildrand): warnTime lang rieseln Steinchen auf die Stelle, ein Schatten erscheint, und am oberen Bildrand, genau
+// über der Landestelle, pulsiert ein rotes Warnschild mit Pfeil nach unten (zittert stärker, je näher der Fall). Dann fällt
+// der Brocken genau dort ins Bild, das Schild verschwindet, der Schatten wächst weiter. (Erst gab es einen orangen Ring am
+// Boden, der Nutzer wollte die Warnung oben, wo der Brocken herkommt.) Trifft der Brocken den Spieler im Fall, ist es ein
 // Respawn. Danach liegt er als Stufe auf der Bahn (Collider an), bis zum nächsten Respawn.
 //
 // Getroffen wird von Hand geprüft (Abstand und Höhe in FixedUpdate) statt mit einem bewegten Trigger: Der Brocken fällt in
 // einer Sekunde 30 m, ein Trigger könnte den Spieler zwischen zwei Physik-Schritten überspringen.
+// Läuft nach ThirdPersonCamera (das Schild hängt an der Kamera, sonst hinkte es einen Frame hinterher), vor CameraShake
+[DefaultExecutionOrder(500)]
 public class FallingDebris : MonoBehaviour
 {
     private enum State { Waiting, Warning, Falling, Landed }
@@ -22,12 +26,14 @@ public class FallingDebris : MonoBehaviour
     [Header("Warnung")]
     [Tooltip("So lange rieseln Steinchen und pulsiert der Ring, bevor der Brocken fällt (s)")]
     [SerializeField] private float warnTime = 1f;
-    [Tooltip("Ring am Boden, zieht sich in der Warnung und im Fall immer wieder auf die Landestelle zusammen")]
-    [SerializeField] private Transform warningRing;
+    [Tooltip("Rotes Warnschild mit Pfeil: wird jeden Frame vor die Kamera gesetzt, am oberen Bildrand über der Landestelle")]
+    [SerializeField] private Transform indicator;
+    [Tooltip("Höhe des Schilds im Bild (0 = unten, 1 = oben)")]
+    [SerializeField] private float indicatorViewportY = 0.86f;
+    [Tooltip("So weit vor der Kamera hängt es (m): nah genug, dass nichts aus dem Level davor liegt")]
+    [SerializeField] private float indicatorDepth = 4f;
     [Tooltip("Rieselnde Steinchen über der Stelle (Warnung und Fall)")]
     [SerializeField] private ParticleSystem pebbles;
-    [Tooltip("Ringe pro Sekunde")]
-    [SerializeField] private float ringPulseRate = 2.5f;
 
     [Header("Fall")]
     [SerializeField] private float dropHeight = 18f;
@@ -52,7 +58,8 @@ public class FallingDebris : MonoBehaviour
     private Vector3 chunkRest;
     private Quaternion chunkRestRotation;
     private Vector3 shadowScale;
-    private Vector3 ringScale;
+    private Vector3 indicatorScale;
+    private Camera view;
     private Transform player;
     private Collider playerCollider;
     private KaijuBattle battle;
@@ -65,9 +72,9 @@ public class FallingDebris : MonoBehaviour
         {
             shadowScale = shadow.localScale;
         }
-        if (warningRing != null)
+        if (indicator != null)
         {
-            ringScale = warningRing.localScale;
+            indicatorScale = indicator.localScale;
         }
         GameManager.LevelReset += ResetDebris;
         ResetDebris();
@@ -87,6 +94,7 @@ public class FallingDebris : MonoBehaviour
             playerCollider = controller.GetComponent<Collider>();
         }
         battle = FindAnyObjectByType<KaijuBattle>();
+        view = Camera.main;
     }
 
     private void ResetDebris()
@@ -113,9 +121,9 @@ public class FallingDebris : MonoBehaviour
 
     private void SetWarning(bool on)
     {
-        if (warningRing != null)
+        if (indicator != null)
         {
-            warningRing.gameObject.SetActive(on);
+            indicator.gameObject.SetActive(on);
         }
         if (shadow != null)
         {
@@ -226,8 +234,7 @@ public class FallingDebris : MonoBehaviour
     }
 
     // Optik jeden Frame: In der Warnung erscheint der Schatten und wächst auf die Hälfte, im Fall auf die volle Größe; der
-    // Brocken fällt und dreht sich (zur Ruhelage hin); der Ring zieht sich immer wieder vom Doppelten auf die Grundfläche
-    // zusammen (wie ein Fadenkreuz, das einrastet)
+    // Brocken fällt und dreht sich (zur Ruhelage hin)
     private void Update()
     {
         if (state != State.Warning && state != State.Falling)
@@ -253,11 +260,29 @@ public class FallingDebris : MonoBehaviour
         {
             shadow.localScale = Vector3.Scale(shadowScale, new Vector3(shadowSize, 1f, shadowSize));
         }
-        if (warningRing != null)
+    }
+
+    // Das Warnschild nach der Kamera setzen (LateUpdate, nachdem ThirdPersonCamera sie bewegt hat): Bildposition der
+    // Landestelle, aber oben am Rand, in fester Tiefe vor der Kamera, gleich gedreht wie sie (so bleibt es gleich groß und
+    // flach zum Bildschirm). Pulsiert und zittert, je näher der Fall, desto stärker. Sobald der Brocken selbst im Bild ist,
+    // verschwindet es
+    private void LateUpdate()
+    {
+        if (indicator == null || view == null || !indicator.gameObject.activeSelf)
         {
-            float phase = Mathf.Repeat((state == State.Falling ? warnTime : 0f) + time, 1f / ringPulseRate) * ringPulseRate;
-            float ease = 1f - (1f - phase) * (1f - phase);
-            warningRing.localScale = ringScale * Mathf.Lerp(2f, 1f, ease);
+            return;
         }
+        if (state == State.Falling && view.WorldToViewportPoint(chunk.position).y < indicatorViewportY + 0.05f)
+        {
+            indicator.gameObject.SetActive(false);
+            return;
+        }
+        float time = stateTime + (Time.time - Time.fixedTime);
+        float urgency = state == State.Warning ? Mathf.Clamp01(time / warnTime) : 1f;
+        Vector3 spot = view.WorldToViewportPoint(transform.position);
+        float x = Mathf.Clamp(spot.x, 0.06f, 0.94f) + Mathf.Sin(Time.time * 47f) * 0.006f * urgency;
+        indicator.SetPositionAndRotation(view.ViewportToWorldPoint(new Vector3(x, indicatorViewportY, indicatorDepth)), view.transform.rotation);
+        float pulse = 1f + Mathf.Sin(Time.time * Mathf.Lerp(8f, 20f, urgency)) * 0.12f;
+        indicator.localScale = indicatorScale * pulse;
     }
 }

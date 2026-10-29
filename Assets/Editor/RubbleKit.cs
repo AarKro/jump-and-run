@@ -347,13 +347,12 @@ public static class RubbleKit
         shadow.localScale = new Vector3(size.x * 1.15f, 0.01f, size.z * 1.15f);
         PrimitiveKit.Part("Disc", PrimitiveType.Cylinder, shadow, Vector3.zero, Vector3.one, shadowMaterial);
         ParticleSystem impact = Dust(t, "Impact Dust", Vector3.zero, size.x * 1.5f);
-        // Warnung (wie die Möwe): orangener Ring um die Landestelle (zieht sich in FallingDebris zusammen) und Steinchen, die
-        // vorher auf die Stelle rieseln
-        Transform ring = WarningRing(t, Mathf.Max(size.x, size.z) * 0.6f);
+        // Warnung (wie die Möwe): rotes Schild oben am Bildrand über der Landestelle (setzt FallingDebris vor die Kamera) und
+        // Steinchen, die vorher auf die Stelle rieseln
+        Transform indicator = WarningIndicator(t);
         ParticleSystem pebbles = Pebbles(t, size);
         chunk.SetActive(false);
         shadow.gameObject.SetActive(false);
-        ring.gameObject.SetActive(false);
         var data = new SerializedObject(t.gameObject.AddComponent<FallingDebris>());
         data.FindProperty("triggerU").floatValue = triggerU;
         data.FindProperty("halfSize").vector2Value = new Vector2(size.x / 2f, size.z / 2f);
@@ -362,37 +361,58 @@ public static class RubbleKit
         data.FindProperty("shadow").objectReferenceValue = shadow;
         data.FindProperty("impactDust").objectReferenceValue = impact;
         data.FindProperty("trail").objectReferenceValue = trail;
-        data.FindProperty("warningRing").objectReferenceValue = ring;
+        data.FindProperty("indicator").objectReferenceValue = indicator;
         data.FindProperty("pebbles").objectReferenceValue = pebbles;
         data.ApplyModifiedPropertiesWithoutUndo();
         return t;
     }
 
-    // Flacher Ring knapp über dem Boden (LineRenderer, liegt in der Ebene seines Transforms, das um 90° um X gekippt ist)
-    private static Transform WarningRing(Transform parent, float radius)
+    // Warnschild: rote Scheibe mit weißem "!", darunter ein roter Pfeil nach unten. Gebaut für 4 m vor der Kamera (dort ist
+    // das Bild 4.6 m hoch, die Scheibe ~8 % davon); lokal -Z zeigt zur Kamera (FallingDebris dreht es wie die Kamera)
+    private static Transform WarningIndicator(Transform parent)
     {
-        Material orange = PrimitiveKit.Material("Assets/Materials/City/Warning Ring.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.45f, 0.05f));
-        var go = new GameObject("Warning Ring");
-        go.transform.SetParent(parent, false);
-        go.transform.localPosition = new Vector3(0f, 0.04f, 0f);
-        go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        go.transform.localScale = Vector3.one * radius;
-        var line = go.AddComponent<LineRenderer>();
-        line.useWorldSpace = false;
-        line.loop = true;
-        line.alignment = LineAlignment.TransformZ;
-        line.widthMultiplier = 0.16f;
-        line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        line.receiveShadows = false;
-        line.sharedMaterial = orange;
-        const int points = 48;
-        line.positionCount = points;
-        for (int i = 0; i < points; i++)
+        Material red = PrimitiveKit.Material("Assets/Materials/City/Warning Red.mat", PrimitiveKit.UnlitShader, new Color(0.9f, 0.08f, 0.05f));
+        Material white = PrimitiveKit.Material("Assets/Materials/City/Warning White.mat", PrimitiveKit.UnlitShader, Color.white);
+        Transform sign = PrimitiveKit.Pivot("Warning Indicator", parent, Vector3.zero);
+        // Weißer Rand, rote Scheibe davor (Zylinder um 90° gekippt: Deckfläche zur Kamera)
+        Renderer rim = PrimitiveKit.Part("Rim", PrimitiveType.Cylinder, sign, new Vector3(0f, 0f, 0.01f), new Vector3(0.42f, 0.005f, 0.42f), white);
+        rim.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        Renderer disc = PrimitiveKit.Part("Disc", PrimitiveType.Cylinder, sign, Vector3.zero, new Vector3(0.36f, 0.005f, 0.36f), red);
+        disc.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        TMPro.TextMeshPro mark = PrimitiveKit.Text("Mark", sign, new Vector3(0f, 0.005f, -0.01f), new Vector2(0.3f, 0.3f), "!", Color.white);
+        mark.fontSizeMax = 3.2f;
+        var arrow = new GameObject("Arrow");
+        arrow.transform.SetParent(sign, false);
+        arrow.transform.localPosition = new Vector3(0f, -0.23f, 0f);
+        arrow.AddComponent<MeshFilter>().sharedMesh = ArrowMesh();
+        arrow.AddComponent<MeshRenderer>().sharedMaterial = red;
+        foreach (Renderer part in sign.GetComponentsInChildren<Renderer>())
         {
-            float a = i * Mathf.PI * 2f / points;
-            line.SetPosition(i, new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f));
+            part.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            part.receiveShadows = false;
         }
-        return go.transform;
+        sign.gameObject.SetActive(false);
+        return sign;
+    }
+
+    // Dreieck mit der Spitze nach unten in der XY-Ebene (beidseitig), Ursprung an der Oberkante. Als Asset gespeichert
+    private static Mesh ArrowMesh()
+    {
+        PrimitiveKit.EnsureFolder("Assets", "Meshes");
+        const string path = "Assets/Meshes/Warning Arrow.asset";
+        Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (mesh == null)
+        {
+            mesh = new Mesh { name = "Warning Arrow" };
+            AssetDatabase.CreateAsset(mesh, path);
+        }
+        mesh.Clear();
+        mesh.vertices = new[] { new Vector3(-0.14f, 0f, 0f), new Vector3(0.14f, 0f, 0f), new Vector3(0f, -0.16f, 0f) };
+        mesh.triangles = new[] { 0, 1, 2, 0, 2, 1 };
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        EditorUtility.SetDirty(mesh);
+        return mesh;
     }
 
     // Steinchen und etwas Staub, die aus ~14 m auf die Landestelle rieseln (nur während Warnung und Fall, FallingDebris
