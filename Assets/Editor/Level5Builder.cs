@@ -1289,8 +1289,9 @@ public static class Level5Builder
     //     unten vor derselben Säule. Landehaufen dahinter
     //   Rasen-Stück im Park: umgestürzter Baum (auf den Stamm, über die brennende Krone), zwei Hochhaus-Brocken, ein brennender Krater
     //     (hineinfallen = Respawn), Platte hinunter. Danach landet der Roboter
-    //   Four Cheese Avenue: das umgestürzte Hochhaus-Stück aus den Ruinen schräg hinauf bis 6.2 m, Stufen hinunter auf die
-    //     Oregano Street (Finale), danach Balkone, ein Stahlträger, Schuttberg mit brennendem Krater und Platte hinunter
+    //   Four Cheese Avenue: das Hochhaus-Stück, das vor dem Spieler umkippt, schräg hinauf bis 6.2 m, Stufen hinunter auf die
+    //     Oregano Street (Finale), dabei fallen Brocken aus dem Kampf. Danach Balkone, ein Stahlträger, zwei Bruchplatten über
+    //     einem brennenden Krater, Schuttberg und Platte hinunter
     // Fällt man irgendwo daneben, landet man auf dem Gehweg (kostet nur Zeit); tödlich sind nur Feuer und Krater
     private static void BuildRubble()
     {
@@ -1326,21 +1327,55 @@ public static class Level5Builder
         RubbleKit.Step(rubble, L(189f), L(193f), park, 3.2f, seed++, towerChunk: true);
         RubbleKit.Slab(rubble, L(193f), 3.2f, L(199f), park, seed++);
 
-        // Four Cheese Avenue: umgestürztes Hochhaus vor der Oregano Street
+        // Four Cheese Avenue: Hochhaus-Stück vor der Oregano Street. Es steht noch, bis der Spieler auf dem Rasen-Stück
+        // ToppleTriggerZ erreicht, dann kippt es von ihm weg auf den Schuttberg (TopplingRuin) und ist die Rampe.
         // Das untere Ende beginnt bündig mit dem Gehweg: Schon eine 30 cm hohe Kante hält den Spieler auf (er steigt nicht
         // von selbst über Stufen, nur Schrägen hinauf)
-        RubbleKit.TowerPiece(rubble, F(-84f), walk, F(-99f), 6.2f, seed++);
+        Transform pivot = RubbleKit.ToppledTower(rubble, F(-84f), walk, F(-99f), 6.2f, seed++, out float standingTilt, out Collider towerSolid);
+        var ruin = new SerializedObject(pivot.gameObject.AddComponent<TopplingRuin>());
+        ruin.FindProperty("triggerU").floatValue = L(ToppleTriggerZ);
+        ruin.FindProperty("pivot").objectReferenceValue = pivot;
+        ruin.FindProperty("standingTilt").floatValue = standingTilt;
+        PrimitiveKit.SetReferences(ruin, "solids", towerSolid);
+        // Staub nicht am Drehpunkt aufhängen, er drehte sich sonst mit
+        ParticleSystem baseDust = RubbleKit.Dust(rubble, "Base Dust", Vector3.zero, 5f);
+        baseDust.transform.position = pivot.position + pivot.rotation * new Vector3(-2f, 0.3f, 2f);
+        ruin.FindProperty("baseDust").objectReferenceValue = baseDust;
+        ruin.FindProperty("impactDust").objectReferenceValue = RubbleKit.Dust(rubble, "Topple Dust", Vector3.zero, 12f);
+        ruin.ApplyModifiedPropertiesWithoutUndo();
+        var impactAt = (ParticleSystem)ruin.FindProperty("impactDust").objectReferenceValue;
+        impactAt.transform.position = LevelBuildKit.Lane.PointAt(F(-96f)) + Vector3.up * 3f;
         RubbleKit.Step(rubble, F(-100f), F(-102.5f), walk, 4.3f, seed++);
         RubbleKit.Step(rubble, F(-102.5f), F(-105f), walk, 2.6f, seed++);
+        // Brocken aus dem Kampf: einer landet auf der oberen Stufe, einer auf der Kreuzung der Oregano Street (vor dem Finale)
+        foreach (var (spotX, ground, triggerX) in DebrisDrops)
+        {
+            RubbleKit.FallingChunk(rubble, F(spotX), ground, F(triggerX), seed++);
+        }
         // ... hinter der Oregano Street: Balkone der stehen gebliebenen Häuser (Oberkante = Wurzel + 0.5), Träger, Schuttberg
         LevelBuildKit.Place("Balcony", Mathf.Round(F(-121f)), 2, rubble);
         LevelBuildKit.Place("Balcony", Mathf.Round(F(-125.5f)), 4, rubble);
         RubbleKit.Beam(rubble, F(-130f), F(-135f), 5f, F(-132f), walk, seed++);
-        RubbleKit.Step(rubble, F(-137f), F(-141f), walk, 4f, seed++);
-        RubbleKit.Crater(rubble, F(-141f), F(-145.5f), walk, seed++);
-        RubbleKit.Step(rubble, F(-145.5f), F(-149f), walk, 3.5f, seed++);
+        // ... über den brennenden Krater auf zwei Bruchplatten (halten nach dem Landen nur kurz, wer zögert, fällt ins Feuer)
+        RubbleKit.Crater(rubble, F(-135.5f), F(-145f), walk, seed++);
+        RubbleKit.CrumblingSlab(rubble, F(-136.5f), F(-139.5f), 4.6f, seed++);
+        RubbleKit.CrumblingSlab(rubble, F(-140.5f), F(-143.5f), 4.2f, seed++);
+        RubbleKit.Step(rubble, F(-145f), F(-149f), walk, 3.5f, seed++);
         RubbleKit.Slab(rubble, F(-149f), 3.5f, F(-155f), walk, seed++);
     }
+
+    // Lebendiger Schutt auf der Four Cheese Avenue (2026-10-29, nach dem Wunsch, dass Schutt "live" passiert):
+    //   Hochhaus-Stück kippt um, sobald der Spieler auf dem Rasen-Stück hier ist (nach der Landung des Roboters bei z 205,
+    //   gut 2 s bevor er an seinem Fuß ankommt)
+    private const float ToppleTriggerZ = 208f;
+    //   Brocken aus dem Kampf: Landestelle x, Boden dort, ausgelöst sobald der Spieler an x vorbei ist. Auf der oberen Stufe
+    //   (Oberkante 4.3), ausgelöst oben auf der Rampe; auf der Oregano-Kreuzung, ausgelöst auf der Stufe davor (wer
+    //   durchläuft, ist knapp darunter weg, wer stehen bleibt, wird getroffen; ab x -110 läuft das Finale)
+    private static readonly (float spotX, float ground, float triggerX)[] DebrisDrops =
+    {
+        (-101.25f, 4.3f, -93f),
+        (-107.5f, CityLayout.Surface, -101.5f),
+    };
 
     // Umgestürzter Baum entlang der Bahn: Wurzelteller am Ende, wo der Spieler ankommt (uRoot), der Stamm ist begehbar (nicht
     // heiß), nur die Krone am anderen Ende (uCrown, crownLength lang) brennt (Berührung = Respawn). Auf den Stamm springen,

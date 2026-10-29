@@ -122,6 +122,63 @@ public static class RubbleKit
     // ragt es weit in die Ruinen, nach vorne nur bis knapp vor die Bahn (die Kamera steht davor)
     public static Transform TowerPiece(Transform parent, float uA, float yA, float uB, float yB, int seed)
     {
+        return BuildTower(parent, uA, yA, uB, yB, seed, false, facade);
+    }
+
+    // Wie TowerPiece, aber es steht anfangs aufrecht und kippt erst um, wenn der Spieler kommt (TopplingRuin): Drehpunkt am
+    // unteren Ende (dort bricht es vom Fundament ab, das Dach liegt am oberen Ende auf dem Schutt). Fassade in einer einzigen
+    // Farbe (RuinFacade), weil es sich bewegt. Gibt den Drehpunkt zurück (liegende Lage), dazu den Winkel um dessen lokale Z,
+    // um den es stehend gedreht ist, und den begehbaren Collider
+    public static Transform ToppledTower(Transform parent, float uLow, float yLow, float uHigh, float yHigh, int seed,
+        out float standingTilt, out Collider solid)
+    {
+        Transform tower = BuildTower(parent, uLow, yLow, uHigh, yHigh, seed, true, RuinFacade());
+        Transform pivot = new GameObject("Topple Pivot").transform;
+        pivot.SetParent(parent, false);
+        pivot.SetPositionAndRotation(Point(uLow) + Vector3.up * yLow, Frame(uLow));
+        tower.SetParent(pivot, true);
+        // Liegend zeigt die Achse vom Drehpunkt zum hohen Ende schräg nach oben (Steigung a), stehend senkrecht: um 90 - a
+        // zurückdrehen, und zwar zum Spieler hin (der kommt vom niedrigen Ende)
+        float slope = Mathf.Atan2(yHigh - yLow, Mathf.Abs(uHigh - uLow)) * Mathf.Rad2Deg;
+        standingTilt = (90f - slope) * Mathf.Sign(uHigh - uLow);
+        solid = tower.GetComponent<Collider>();
+        // Bruchkante am Fundament: ein paar Brocken um den Fuß (bleiben liegen)
+        var random = new System.Random(seed + 7);
+        for (int i = 0; i < 6; i++)
+        {
+            float size = Lerp(random, 0.6f, 1.3f);
+            Renderer chunk = PrimitiveKit.Box("Base Chunk", pivot, new Vector3(Lerp(random, -0.5f, 2.5f) * -Mathf.Sign(uHigh - uLow), size * 0.3f - 0.2f, Lerp(random, 1.4f, 5.5f)),
+                new Vector3(size * 1.4f, size, size), random.NextDouble() < 0.5 ? rubble : concrete);
+            chunk.transform.localRotation = RandomTilt(random, 30f);
+        }
+        return pivot;
+    }
+
+    // Fassaden-Material in einer einzigen, rußigen Farbe, ohne helle Fenster: Der Fassaden-Shader wählt Farbe und Fenster aus
+    // der Position des Würfels, bei einem bewegten Würfel flackerte sonst beides
+    public static Material RuinFacade()
+    {
+        const string path = "Assets/Materials/City/Facade Ruin.mat";
+        Material source = CityBuilder.FacadeMaterialAsset;
+        Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (material == null)
+        {
+            material = new Material(source);
+            AssetDatabase.CreateAsset(material, path);
+        }
+        material.CopyPropertiesFromMaterial(source);
+        var soot = new Color(0.5f, 0.45f, 0.4f);
+        for (int i = 0; i < 6; i++)
+        {
+            material.SetColor($"_Color{i}", soot);
+        }
+        material.SetFloat("_LitChance", 0f);
+        EditorUtility.SetDirty(material);
+        return material;
+    }
+
+    private static Transform BuildTower(Transform parent, float uA, float yA, float uB, float yB, int seed, bool roofAtHigh, Material wall)
+    {
         LoadMaterials();
         const float thickness = 4.5f, front = -1.1f, back = 6f;
         if (uB < uA)
@@ -142,11 +199,15 @@ public static class RubbleKit
         PrimitiveKit.AddBoxCollider(go, Vector3.zero, new Vector3(length, thickness, back - front));
         // Das Fassaden-Shader zeichnet Fenster nur auf Seitenflächen, oben und unten ist Dach. Die Lauffläche ist eine
         // Seitenwand des Turms: den Quader um 90° kippen (seine lokale Z zeigt nach oben), Tiefe und Dicke tauschen
-        Renderer tower = PrimitiveKit.Box("Tower", t, Vector3.zero, new Vector3(length, back - front, thickness), facade);
+        Renderer tower = PrimitiveKit.Box("Tower", t, Vector3.zero, new Vector3(length, back - front, thickness), wall);
         tower.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
         var random = new System.Random(seed);
         // Dachkante am unteren Ende, Antenne abgeknickt; am oberen Ende Bruchkante mit Eisen und Brocken
         float low = yA < yB ? -1f : 1f;
+        if (roofAtHigh)
+        {
+            low = -low;
+        }
         // Dachkante: ragt am Ende heraus, aber nicht über die Lauffläche (sonst stünde dort eine Schwelle)
         PrimitiveKit.Box("Roof Edge", t, new Vector3(low * (length / 2f + 0.15f), -0.1f, 0f), new Vector3(0.3f, thickness - 0.2f, back - front + 0.3f), concrete);
         for (int i = 0; i < 10; i++)
@@ -159,7 +220,7 @@ public static class RubbleKit
         {
             float size = Lerp(random, 0.8f, 1.8f);
             Renderer shard = PrimitiveKit.Box("Shard", t, new Vector3(-low * (length / 2f + Lerp(random, -0.4f, 0.5f)), Lerp(random, -thickness / 2f, thickness / 2f - 0.6f), Lerp(random, -0.8f, 3.5f)),
-                new Vector3(size * 0.6f, size, size), random.NextDouble() < 0.5 ? concrete : facade);
+                new Vector3(size * 0.6f, size, size), random.NextDouble() < 0.5 ? concrete : wall);
             shard.transform.localRotation = RandomTilt(random, 35f);
         }
         return t;
@@ -195,6 +256,120 @@ public static class RubbleKit
             PrimitiveKit.Box("Brace", column, new Vector3(0f, columnHeight / 2f - 0.1f, -0.65f), new Vector3(0.12f, 0.2f, 1.3f), steel);
         }
         return t;
+    }
+
+    // Bruchplatte (CrumblingSlab): waagerecht, Oberkante top, von uA bis uB. Hält nach dem Betreten nur kurz, dann fällt sie.
+    // Risse oben, Eisen an den Enden, damit man sieht, dass sie nicht hält
+    public static Transform CrumblingSlab(Transform parent, float uA, float uB, float top, int seed)
+    {
+        LoadMaterials();
+        const float thickness = 0.5f;
+        float length = Mathf.Abs(uB - uA);
+        Transform t = Piece(parent, "Crumbling Slab", uA, uB, top - thickness / 2f, GroundLayer);
+        PrimitiveKit.AddBoxCollider(t.gameObject, Vector3.zero, new Vector3(length, thickness, WalkDepth + 0.4f));
+        var body = t.gameObject.AddComponent<Rigidbody>();
+        body.isKinematic = true;
+        body.interpolation = RigidbodyInterpolation.Interpolate;
+        body.constraints = RigidbodyConstraints.None;
+        Transform visual = PrimitiveKit.Pivot("Visual", t, Vector3.zero);
+        PrimitiveKit.Box("Slab", visual, Vector3.zero, new Vector3(length, thickness, WalkDepth + 0.8f), concrete);
+        var random = new System.Random(seed);
+        // Risse: dunkle, dünne Streifen knapp über der Oberkante, schräg über die Platte
+        for (int i = 0; i < 4; i++)
+        {
+            Renderer crack = PrimitiveKit.Box("Crack", visual, new Vector3(Lerp(random, -length / 2.5f, length / 2.5f), thickness / 2f + 0.005f, Lerp(random, -0.8f, 0.8f)),
+                new Vector3(Lerp(random, 0.8f, 1.6f), 0.01f, 0.07f), scorch);
+            crack.transform.localRotation = Quaternion.Euler(0f, Lerp(random, -70f, 70f), 0f);
+        }
+        foreach (float end in new[] { -1f, 1f })
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                Renderer bar = PrimitiveKit.Part("Rebar", PrimitiveType.Cylinder, visual, new Vector3(end * (length / 2f + 0.25f), 0f, Lerp(random, -1.1f, 1.1f)),
+                    new Vector3(0.05f, 0.3f, 0.05f), rebar);
+                bar.transform.localRotation = Quaternion.Euler(Lerp(random, -20f, 20f), 0f, 90f + Lerp(random, -35f, 35f));
+            }
+        }
+        // Darunter hängen ein paar Brocken (fallen mit)
+        for (int i = 0; i < 3; i++)
+        {
+            float size = Lerp(random, 0.3f, 0.6f);
+            Renderer chunk = PrimitiveKit.Box("Hanging Chunk", visual, new Vector3(Lerp(random, -length / 3f, length / 3f), -thickness / 2f - size * 0.3f, Lerp(random, -0.8f, 0.8f)),
+                new Vector3(size * 1.4f, size, size), rubble);
+            chunk.transform.localRotation = RandomTilt(random, 25f);
+        }
+        ParticleSystem dust = Dust(t, "Dust", new Vector3(0f, -thickness / 2f, 0f), length);
+        var data = new SerializedObject(t.gameObject.AddComponent<global::CrumblingSlab>());
+        data.FindProperty("visual").objectReferenceValue = visual;
+        data.FindProperty("dust").objectReferenceValue = dust;
+        data.ApplyModifiedPropertiesWithoutUndo();
+        return t;
+    }
+
+    // Brocken aus dem Kampf (FallingDebris), landet bei u auf dem Boden (ground). Liegt danach als Stufe da (size.y hoch)
+    public static Transform FallingChunk(Transform parent, float u, float ground, float triggerU, int seed)
+    {
+        LoadMaterials();
+        var size = new Vector3(2.2f, 1.2f, 2.2f);
+        Transform t = Piece(parent, "Falling Debris", u, u, ground, 0);
+        // Brocken: ein Stück Fassade (eine Farbe, er bewegt sich) mit Beton und Eisen daran
+        var chunk = new GameObject("Chunk") { layer = GroundLayer };
+        chunk.transform.SetParent(t, false);
+        chunk.transform.localPosition = new Vector3(0f, size.y / 2f, 0f);
+        chunk.transform.localRotation = Quaternion.Euler(0f, 6f, 0f);
+        BoxCollider solid = PrimitiveKit.AddBoxCollider(chunk, Vector3.zero, size);
+        PrimitiveKit.Box("Facade Piece", chunk.transform, new Vector3(0f, 0f, 0.15f), new Vector3(size.x, size.y, size.z - 0.3f), RuinFacade());
+        var random = new System.Random(seed);
+        for (int i = 0; i < 4; i++)
+        {
+            float s = Lerp(random, 0.4f, 0.8f);
+            Renderer piece = PrimitiveKit.Box("Concrete", chunk.transform, new Vector3(Lerp(random, -0.8f, 0.8f), Lerp(random, -0.3f, 0.45f), Lerp(random, -1f, 1f)),
+                new Vector3(s * 1.3f, s, s), concrete);
+            piece.transform.localRotation = RandomTilt(random, 25f);
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            Renderer bar = PrimitiveKit.Part("Rebar", PrimitiveType.Cylinder, chunk.transform, new Vector3(Lerp(random, -0.8f, 0.8f), size.y / 2f + 0.3f, Lerp(random, -0.8f, 0.8f)),
+                new Vector3(0.05f, 0.45f, 0.05f), rebar);
+            bar.transform.localRotation = Quaternion.Euler(Lerp(random, -35f, 35f), 0f, Lerp(random, -35f, 35f));
+        }
+        Material smokeMaterial = AssetDatabase.LoadAssetAtPath<Material>("Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat");
+        ParticleSystem trail = Level5Builder.Particles("Trail", chunk.transform, smokeMaterial, new Color(0.2f, 0.19f, 0.18f, 0.6f), new Color(0.35f, 0.33f, 0.3f, 0.45f),
+            lifetime: 1.4f, speed: 0.5f, size: new Vector2(1.2f, 2.2f), rate: 35f, radius: 0.6f, growth: 1.2f);
+        trail.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        ParticleSystem.MainModule trailMain = trail.main;
+        trailMain.playOnAwake = false;
+        // Schatten wie bei der Möwe: dunkle Scheibe knapp über dem Boden, wächst im Fall
+        Material shadowMaterial = PrimitiveKit.Material("Assets/Materials/Gull Shadow.mat", PrimitiveKit.UnlitShader, new Color(0.12f, 0.12f, 0.14f));
+        Transform shadow = PrimitiveKit.Pivot("Shadow", t, new Vector3(0f, 0.02f, 0f));
+        shadow.localScale = new Vector3(size.x * 1.15f, 0.01f, size.z * 1.15f);
+        PrimitiveKit.Part("Disc", PrimitiveType.Cylinder, shadow, Vector3.zero, Vector3.one, shadowMaterial);
+        ParticleSystem impact = Dust(t, "Impact Dust", Vector3.zero, size.x * 1.5f);
+        chunk.SetActive(false);
+        shadow.gameObject.SetActive(false);
+        var data = new SerializedObject(t.gameObject.AddComponent<FallingDebris>());
+        data.FindProperty("triggerU").floatValue = triggerU;
+        data.FindProperty("halfSize").vector2Value = new Vector2(size.x / 2f, size.z / 2f);
+        data.FindProperty("chunk").objectReferenceValue = chunk.transform;
+        data.FindProperty("solid").objectReferenceValue = solid;
+        data.FindProperty("shadow").objectReferenceValue = shadow;
+        data.FindProperty("impactDust").objectReferenceValue = impact;
+        data.FindProperty("trail").objectReferenceValue = trail;
+        data.ApplyModifiedPropertiesWithoutUndo();
+        return t;
+    }
+
+    // Staubwolke, die nur per Emit ausgelöst wird (keine laufende Emission): graubraun, quillt auf und sinkt etwas
+    public static ParticleSystem Dust(Transform parent, string name, Vector3 localPosition, float width)
+    {
+        Material smokeMaterial = AssetDatabase.LoadAssetAtPath<Material>("Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat");
+        ParticleSystem dust = Level5Builder.Particles(name, parent, smokeMaterial, new Color(0.55f, 0.5f, 0.44f, 0.75f), new Color(0.7f, 0.66f, 0.6f, 0.6f),
+            lifetime: 1.6f, speed: 3f, size: new Vector2(0.8f, 1.8f), rate: 0f, radius: width / 2f, growth: 1.6f);
+        dust.transform.localPosition = localPosition;
+        ParticleSystem.MainModule main = dust.main;
+        main.gravityModifier = 0.15f;
+        main.maxParticles = 200;
+        return dust;
     }
 
     // Krater mit brennendem Grund: fällt man hinein, ist es vorbei (Respawn). Dunkle Brandfläche, Brocken am Rand, Feuer

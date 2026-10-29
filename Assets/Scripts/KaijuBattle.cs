@@ -75,6 +75,8 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     private enum Phase { Charge, Breath, Recover }
 
     private Stage stage = Stage.Rampage;
+    // Der Roboter steht und kämpft (ab dem Ende der Ankunft): Erst dann fliegen Brocken aus dem Kampf (FallingDebris)
+    public bool RobotLanded => stage >= Stage.Fight;
     private Phase phase = Phase.Charge;
     private float phaseTime;
     private bool breathActive;
