@@ -2,7 +2,7 @@ using UnityEditor;
 using UnityEngine;
 
 // Baut die Prefabs für den Feuerwehr-Abschnitt in Level 5 (unterer Mozzarella Blvd): brennende Stelle mit Feuerwehrmann
-// (FirePatch), breites Dauerfeuer, Löschfahrzeug, Drehleiter-Fahrzeug (LadderBoom) und den Rettungskorb (MovingPlatform).
+// (FirePatch), Feuersäule (ebenso, hoch und schmal), breites Dauerfeuer, Löschfahrzeug, Drehleiter-Fahrzeug (LadderBoom) und den Rettungskorb (MovingPlatform).
 // Menü: Tools > Jump and Run > City > Build Fire Prefabs. Mehrfach ausführbar, Prefabs werden ersetzt.
 //
 // Konvention wie bei den Stadt-Prefabs: Wurzel auf der Laufbahn (lokal +X = +u, +Z = hinten zu den Häusern, -Z = Kamera),
@@ -18,6 +18,10 @@ public static class FireSetup
 
     public const float PatchLength = 7f;
     public const float BedLength = 12f;
+    // Feuersäule zwischen den Stahlträgern: Die Lücke ist 2.5 m, der Trigger 1.4 m (wer an der Trägerkante steht, ragt mit
+    // seiner Kapsel 0.5 m hinein und soll nicht verbrennen). Er reicht bis 9 m: höher, als man von den Trägern (5 m) springt
+    public const float ColumnLength = 1.4f;
+    public const float ColumnHazardHeight = 8.5f;
     // Feuerwehrmann auf der Fahrbahn gleich hinter dem Bordstein (der liegt 1 m vor der Bahn). Die Fahrzeuge stehen nicht bei
     // den Stellen, sondern in den Lücken dazwischen (sonst verdecken sie die Feuerwehrleute), auch dicht am Bordstein
     public const float FirefighterZ = -2.6f;
@@ -37,6 +41,7 @@ public static class FireSetup
         PrimitiveKit.EnsureFolder("Assets/Prefabs", "Fire");
         CreateMaterials();
         BuildFirePatch();
+        BuildFireColumn();
         BuildFireBed();
         BuildFireTruck();
         BuildLadderTruck();
@@ -178,14 +183,67 @@ public static class FireSetup
 
     private static void BuildFirePatch()
     {
-        GameObject root = FireBase("Fire Patch", PatchLength, 1.2f, out _, out SerializedObject data);
+        GameObject root = BuildFirefighterFire("Fire Patch", PatchLength, 1.2f, out SerializedObject data);
+        data.FindProperty("sweepHalf").floatValue = PatchLength / 2f - 0.7f;
+        data.ApplyModifiedPropertiesWithoutUndo();
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Fire Patch.prefab");
+    }
+
+    // Feuersäule aus einer geborstenen Gasleitung in der Lücke zwischen zwei Stahlträgern (Level 5): schmal, aber so hoch,
+    // dass man nicht drüberspringen kann (der Trigger reicht bis über die Sprunghöhe von den Trägern aus). Gleicher Takt mit
+    // Feuerwehrmann wie die Stellen: Wer auf dem Träger steht, wartet, bis er sie gelöscht hat
+    private static void BuildFireColumn()
+    {
+        GameObject root = BuildFirefighterFire("Fire Column", ColumnLength, ColumnHazardHeight, out SerializedObject data);
+        Transform t = root.transform;
+        // Hohe Flammen: schneller und länger nach oben, Rauch erst über den Trägern
+        var fire = (ParticleSystem)data.FindProperty("fire").objectReferenceValue;
+        var core = (ParticleSystem)data.FindProperty("fireCore").objectReferenceValue;
+        var smoke = (ParticleSystem)data.FindProperty("smoke").objectReferenceValue;
+        TallFlames(fire, 10f, 1.1f, 1.6f);
+        TallFlames(core, 9f, 0.85f, 1.2f);
+        BoxShape(fire, ColumnLength, 0.9f);
+        BoxShape(core, ColumnLength * 0.7f, 0.6f);
+        smoke.transform.localPosition = new Vector3(0f, Surface + 8f, 0f);
+        var glow = (Light)data.FindProperty("glow").objectReferenceValue;
+        glow.transform.localPosition = new Vector3(0f, Surface + 3f, -0.8f);
+        glow.range = 9f;
+        glow.intensity = 6f;
+        // Geborstene Leitung: ein Rohrstumpf mit Flansch aus einem aufgerissenen Loch im Gehweg
+        Material pipe = Lit("Gas Pipe", new Color(0.55f, 0.5f, 0.2f), 0.4f);
+        PrimitiveKit.Box("Broken Slab", t, new Vector3(0f, Surface + 0.02f, 0f), new Vector3(2.2f, 0.06f, 1.9f), charred);
+        PrimitiveKit.Part("Gas Pipe", PrimitiveType.Cylinder, t, new Vector3(0f, Surface + 0.25f, 0.1f), new Vector3(0.5f, 0.3f, 0.5f), pipe)
+            .transform.localRotation = Quaternion.Euler(8f, 0f, -10f);
+        PrimitiveKit.Part("Flange", PrimitiveType.Cylinder, t, new Vector3(0.05f, Surface + 0.55f, 0.15f), new Vector3(0.75f, 0.05f, 0.75f), pipe)
+            .transform.localRotation = Quaternion.Euler(8f, 0f, -10f);
+        data.FindProperty("sweepHalf").floatValue = 0.3f;
+        // Er zielt in die Flammen, nicht nur auf den Boden (sonst sähe es aus, als lösche er daneben)
+        data.FindProperty("sprayHeight").floatValue = 2.5f;
+        data.ApplyModifiedPropertiesWithoutUndo();
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Fire Column.prefab");
+    }
+
+    private static void TallFlames(ParticleSystem system, float speed, float lifetime, float size)
+    {
+        ParticleSystem.MainModule main = system.main;
+        main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.7f, speed);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(lifetime * 0.75f, lifetime);
+        main.startSize = new ParticleSystem.MinMaxCurve(size, size * 1.6f);
+        ParticleSystem.EmissionModule emission = system.emission;
+        emission.rateOverTime = 45f;
+    }
+
+    // Brennende Stelle mit Feuerwehrmann, Dampf und nassem Fleck (Stelle und Säule)
+    private static GameObject BuildFirefighterFire(string name, float length, float hazardHeight, out SerializedObject data)
+    {
+        GameObject root = FireBase(name, length, hazardHeight, out _, out data);
         Transform t = root.transform;
 
         ParticleSystem steam = Level5Builder.Particles("Steam", t, smokeMaterial, new Color(0.92f, 0.93f, 0.95f, 0.5f), new Color(0.8f, 0.82f, 0.85f, 0.35f),
             lifetime: 1.8f, speed: 1.6f, size: new Vector2(0.9f, 1.7f), rate: 0f, radius: 1f, growth: 1.5f);
-        BoxShape(steam, PatchLength, 1.4f);
+        BoxShape(steam, length, 1.4f);
         steam.transform.localPosition = new Vector3(0f, Surface + 0.1f, 0f);
-        Renderer wetSpot = PrimitiveKit.Quad("Wet", t, new Vector3(0f, Surface + 0.012f, 0f), new Vector2(PatchLength + 0.4f, 1.9f), wet);
+        Renderer wetSpot = PrimitiveKit.Quad("Wet", t, new Vector3(0f, Surface + 0.012f, 0f), new Vector2(Mathf.Max(length, 2f) + 0.4f, 1.9f), wet);
         wetSpot.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
         // Feuerwehrmann: dieselbe Pillen-Figur wie der Kunde, gelbe Jacke mit Reflexstreifen, roter Helm mit langem Nackenschutz,
@@ -225,11 +283,10 @@ public static class FireSetup
         data.FindProperty("nozzle").objectReferenceValue = nozzle;
         data.FindProperty("jet").objectReferenceValue = jet;
         data.FindProperty("splash").objectReferenceValue = splash;
-        data.FindProperty("sweepHalf").floatValue = PatchLength / 2f - 0.7f;
         PrimitiveKit.SetReferences(data, "coatRenderers", f.body, f.leftArmMesh, f.rightArmMesh);
         PrimitiveKit.SetReferences(data, "skinRenderers", f.head);
         data.ApplyModifiedPropertiesWithoutUndo();
-        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Fire Patch.prefab");
+        return root;
     }
 
     // Wasserstrahl: schmaler Kegel entlang lokal Z der Düse, die Tropfen fallen mit der Schwerkraft (Welt-Simulation, so

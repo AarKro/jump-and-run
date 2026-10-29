@@ -44,6 +44,8 @@ public class FirePatch : MonoBehaviour
     [SerializeField] private Vector3 houseTarget = new Vector3(1.5f, 5f, 3f);
     [Tooltip("Beim Löschen fährt der Strahl entlang der Stelle hin und her (halbe Länge)")]
     [SerializeField] private float sweepHalf = 2.8f;
+    [Tooltip("In dieser Höhe (lokal) trifft der Strahl beim Löschen: Boden 0.5, bei der hohen Feuersäule in die Flammen")]
+    [SerializeField] private float sprayHeight = 0.5f;
 
     [Header("Teile")]
     [SerializeField] private ParticleSystem fire;
@@ -266,7 +268,7 @@ public class FirePatch : MonoBehaviour
         float t = CycleTime;
         // Etwas Bewegung im Haus, damit der Strahl nicht starr steht
         Vector3 house = houseTarget + new Vector3(Mathf.Sin(Time.time * 0.9f) * 0.8f, Mathf.Sin(Time.time * 1.3f) * 0.4f, 0f);
-        Vector3 patchStart = new Vector3(-sweepHalf, 0.5f, 0f);
+        Vector3 patchStart = new Vector3(-sweepHalf, sprayHeight, 0f);
         Vector3 local;
         if (t < burnTime - aimDownTime)
         {
@@ -280,7 +282,7 @@ public class FirePatch : MonoBehaviour
         {
             // Einmal hin und zurück über die ganze Länge
             float k = (t - burnTime) / sprayTime;
-            local = new Vector3(-sweepHalf * Mathf.Cos(k * 2f * Mathf.PI), 0.5f, 0f);
+            local = new Vector3(-sweepHalf * Mathf.Cos(k * 2f * Mathf.PI), sprayHeight, 0f);
         }
         else if (t < burnTime + sprayTime + aimUpTime)
         {
