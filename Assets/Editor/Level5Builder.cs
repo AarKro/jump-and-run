@@ -155,6 +155,7 @@ public static class Level5Builder
         BuildRuins(link);
         BuildKaiju();
         BuildGameplay();
+        BuildFirefighters();
         BuildPanic();
 
         LevelBuildKit.SetupEssentials(Mathf.Round(BasilU(GoalZ)), "13", KeepWarmTime,
@@ -1057,6 +1058,119 @@ public static class Level5Builder
             PrimitiveKit.Box("Top", chunk.transform, new Vector3(0.3f, 0.7f, 0.2f), new Vector3(1f, 0.5f, 1.4f), rubble).transform.localRotation = Quaternion.Euler(0f, 0f, 12f);
             PrimitiveKit.AddBoxCollider(chunk, Vector3.zero, new Vector3(1.6f, 1.2f, 2.2f));
         }
+    }
+
+    // ---------- Feuerwehr (unterer Mozzarella Blvd) ----------
+    //   Brennende Stellen auf dem Gehweg (7 m, zu lang zum Drüberspringen), je ein Feuerwehrmann löscht sie im Takt (FirePatch):
+    //   erst eine allein (Takt lernen), dann zwei hintereinander mit versetztem Takt (auf der Insel dazwischen warten), dann ein
+    //   breites Dauerfeuer, über das der Korb einer Drehleiter fährt (Chili 1 darüber). Die Fahrzeuge stehen auf der Fahrbahn
+    //   vor der Bahn, darum steht die Kamera hier höher und weiter weg (sie stünde sonst neben bzw. in den Fahrzeugen)
+    // Mitte der Stelle (z), Takt-Versatz (s). Stelle 3 wird 3 s nach Stelle 2 sicher: Wer Stelle 2 gleich am Anfang ihrer
+    // sicheren Zeit überquert, wartet auf der Insel gut eine Sekunde
+    private static readonly (float z, float offset)[] FirePatches = { (29f, 0f), (44f, 1.5f), (56f, -1.5f) };
+    private const float FireBedZ = 72f;
+    private const float BasketFromZ = 64f, BasketToZ = 80f;
+    private const float BasketY = 1f;     // Oberkante 1.5, ein Meter über dem Gehweg
+    // Die Fahrzeuge stehen in den Lücken neben den Stellen, nicht davor (sonst verdecken sie die Feuerwehrleute): Löschfahrzeuge
+    // vor Stelle 1 und zwischen 1 und 2, die Drehleiter hinter dem breiten Feuer (die Leiter reicht schräg zurück zum Korb)
+    private static readonly float[] FireTruckZ = { 18f, 36f };
+    // Zu welchem Löschfahrzeug der Schlauch jeder Stelle läuft
+    private static readonly int[] HoseTruck = { 0, 1, 1 };
+    private const float LadderTruckZ = 83f;   // Drehkranz 3 m weiter südlich, gleich hinter dem Ende des Feuers
+    private const float FireZoneFromZ = 14f, FireZoneToZ = 90f;
+    private static readonly Vector3 FireCameraOffset = new Vector3(0f, 8f, -12f);
+    private const float FireCameraLookHeight = 3f;
+
+    private static void BuildFirefighters()
+    {
+        Transform section = new GameObject("Firefighters").transform;
+        section.SetParent(gameplayParent, false);
+        string folder = FireSetup.PrefabFolder;
+        foreach (float z in FireTruckZ)
+        {
+            LevelBuildKit.PlaceAsset($"{folder}/Fire Truck.prefab", LowerMozzarellaU(z), 0, section);
+        }
+        Material hose = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Fire Hose.mat");
+        for (int i = 0; i < FirePatches.Length; i++)
+        {
+            var patch = FirePatches[i];
+            float u = LowerMozzarellaU(patch.z);
+            GameObject fire = LevelBuildKit.PlaceAsset($"{folder}/Fire Patch.prefab", u, 0, section);
+            var data = new SerializedObject(fire.GetComponent<FirePatch>());
+            data.FindProperty("startOffset").floatValue = patch.offset;
+            data.ApplyModifiedPropertiesWithoutUndo();
+            // Dort, wo er hinspritzt, brennt das Haus
+            Vector3 house = fire.transform.TransformPoint(new Vector3(1.5f, 5f, 2.7f));
+            HouseFire(section, house);
+
+            // Schlauch: von seinen Füßen auf die Fahrbahn zwischen Bordstein und Fahrzeug, dort entlang bis zum Fahrzeug, dann
+            // zur Pumpe an dessen Seite (zur Bahn hin)
+            float truckZ = FireTruckZ[HoseTruck[i]];
+            float toTruck = Mathf.Sign(truckZ - patch.z);
+            float endZ = truckZ - toTruck * (FireSetup.TruckLength / 2f - 1f);
+            float runLocalZ = FireSetup.FirefighterZ + 0.5f;
+            float pumpLocalZ = FireSetup.TruckZ + FireSetup.TruckWidth / 2f;
+            Vector3 feet = HosePoint(patch.z, FireSetup.FirefighterZ - 0.2f);
+            Vector3 bend = HosePoint(patch.z + toTruck * 0.8f, runLocalZ);
+            Vector3 run = HosePoint(endZ, runLocalZ);
+            Vector3 pump = HosePoint(endZ + toTruck * 0.6f, pumpLocalZ);
+            HoseSegment(section, feet, bend, hose);
+            HoseSegment(section, bend, run, hose);
+            HoseSegment(section, run, pump, hose);
+        }
+
+        LevelBuildKit.PlaceAsset($"{folder}/Fire Bed.prefab", LowerMozzarellaU(FireBedZ), 0, section);
+        HouseFire(section, LevelBuildKit.Lane.PointAt(LowerMozzarellaU(FireBedZ - 3f)) + LevelBuildKit.Frame(LowerMozzarellaU(FireBedZ)) * new Vector3(0f, 4f, 2.7f));
+        HouseFire(section, LevelBuildKit.Lane.PointAt(LowerMozzarellaU(FireBedZ + 4f)) + LevelBuildKit.Frame(LowerMozzarellaU(FireBedZ)) * new Vector3(0f, 7f, 2.7f));
+
+        float fromU = LowerMozzarellaU(BasketFromZ);
+        GameObject basket = LevelBuildKit.PlaceAsset($"{folder}/Rescue Basket.prefab", fromU, BasketY, section);
+        basket.transform.Find("moving platform start").position = LevelBuildKit.Lane.PointAt(fromU) + Vector3.up * BasketY;
+        basket.transform.Find("moving platform end").position = LevelBuildKit.Lane.PointAt(LowerMozzarellaU(BasketToZ)) + Vector3.up * BasketY;
+        GameObject ladderTruck = LevelBuildKit.PlaceAsset($"{folder}/Ladder Truck.prefab", LowerMozzarellaU(LadderTruckZ), 0, section);
+        var boom = new SerializedObject(ladderTruck.GetComponent<LadderBoom>());
+        boom.FindProperty("basket").objectReferenceValue = basket.transform;
+        boom.FindProperty("basketMount").vector3Value = FireSetup.BasketMount;
+        boom.ApplyModifiedPropertiesWithoutUndo();
+        // Chili 1 über der Mitte des Feuers: vom fahrenden Korb aus hochspringen
+        LevelBuildKit.HeatPickup(LowerMozzarellaU(FireBedZ), 4, section);
+
+        var zone = new SerializedObject(new GameObject("Fire Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
+        // u läuft hier nach Süden: das nördliche Ende ist das kleinere u
+        zone.FindProperty("fromU").floatValue = LowerMozzarellaU(FireZoneToZ);
+        zone.FindProperty("toU").floatValue = LowerMozzarellaU(FireZoneFromZ);
+        zone.FindProperty("blend").floatValue = 8f;
+        zone.FindProperty("offset").vector3Value = FireCameraOffset;
+        zone.FindProperty("lookHeight").floatValue = FireCameraLookHeight;
+        zone.ApplyModifiedPropertiesWithoutUndo();
+        ((CameraZone)zone.targetObject).transform.SetParent(section, false);
+    }
+
+    // Punkt auf der Fahrbahn bei z (Mozzarella Blvd), lokal z im Lane-Rahmen (negativ = zur Kamera)
+    private static Vector3 HosePoint(float z, float localZ)
+    {
+        float u = LowerMozzarellaU(z);
+        return LevelBuildKit.Lane.PointAt(u) + LevelBuildKit.Frame(u) * new Vector3(0f, CityLayout.RoadTop + 0.06f, localZ);
+    }
+
+    private static void HoseSegment(Transform parent, Vector3 a, Vector3 b, Material material)
+    {
+        Renderer piece = PrimitiveKit.Box("Hose", parent, Vector3.zero, new Vector3(0.12f, 0.12f, Vector3.Distance(a, b) + 0.12f), material);
+        piece.transform.SetPositionAndRotation((a + b) / 2f, Quaternion.LookRotation(b - a, Vector3.up));
+    }
+
+    // Flammen aus einem Fenster an der Fassade, darüber Rauch (Kulisse)
+    private static void HouseFire(Transform parent, Vector3 at)
+    {
+        Material particles = AssetDatabase.LoadAssetAtPath<Material>("Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat");
+        Material additive = FireAdditiveMaterial(particles);
+        Transform spot = PrimitiveKit.Pivot("House Fire", parent, Vector3.zero);
+        spot.position = at;
+        Particles("Flames", spot, additive, new Color(1f, 0.42f, 0.08f, 0.9f), new Color(1f, 0.75f, 0.2f, 0.9f),
+            lifetime: 1f, speed: 2.5f, size: new Vector2(1f, 2f), rate: 30f, radius: 1f, growth: -0.4f);
+        ParticleSystem smoke = Particles("Smoke", spot, particles, new Color(0.16f, 0.15f, 0.15f, 0.7f), new Color(0.3f, 0.28f, 0.27f, 0.5f),
+            lifetime: 7f, speed: 3f, size: new Vector2(2.5f, 5f), rate: 4f, radius: 1f, growth: 2f);
+        smoke.transform.localPosition = Vector3.up * 1.5f;
     }
 
     // Leute in Panik: fliehen auf einem Streifen 2.4 m hinter der Bahn (zwischen Bahn und Häusern/Ruinen) weg von der Echse:
