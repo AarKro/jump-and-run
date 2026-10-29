@@ -171,6 +171,7 @@ public static class Level5Builder
         BuildKaiju();
         BuildGameplay();
         BuildFirefighters();
+        BuildFireStation();
         BuildRubble();
         BuildPanic();
 
@@ -1490,6 +1491,20 @@ public static class Level5Builder
     private const float FireZoneFromZ = 14f, FireZoneToZ = 90f;
     private static readonly Vector3 FireCameraOffset = new Vector3(0f, 8f, -12f);
     private const float FireCameraLookHeight = 3f;
+
+    // ---------- Checkpoint: Feuerwache ----------
+    //   Gleich nach dem Feuerwehr-Abschnitt, vor der Crust Street, auf dem Eckgrundstück an der Fassade (dasselbe Grundstück
+    //   wie der Bauwagen in Level 3: 8 m entlang der Bahn, 10.8 m tief). Prefab aus FireSetup, ersetzt das Stadthaus dort
+    //   per Cutout. Der einzige Checkpoint von Level 5 (2026-10-29): alles danach (Feueratem, Roboter, Brocken, Finale,
+    //   Hickser) beginnt nach einem Tod von hier aus neu
+    private const float FireStationZ = 98f;
+
+    private static void BuildFireStation()
+    {
+        LevelBuildKit.Cutout(GameObject.Find("City Link").transform, "Fire Station Lot", MozzarellaX + 3f, MozzarellaX + 3f + 10.8f,
+            FireStationZ - 4f, FireStationZ + 4f);
+        LevelBuildKit.PlaceAsset($"{FireSetup.PrefabFolder}/Fire Station.prefab", Mathf.Round(LowerMozzarellaU(FireStationZ)), 0, gameplayParent);
+    }
 
     private static void BuildFirefighters()
     {

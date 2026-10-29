@@ -3,6 +3,7 @@ using UnityEngine;
 
 // Baut die Prefabs für den Feuerwehr-Abschnitt in Level 5 (unterer Mozzarella Blvd): brennende Stelle mit Feuerwehrmann
 // (FirePatch), Feuersäule (ebenso, hoch und schmal), breites Dauerfeuer, Löschfahrzeug, Drehleiter-Fahrzeug (LadderBoom) und den Rettungskorb (MovingPlatform).
+// Dazu die Feuerwache (Checkpoint von Level 5, gleich nach dem Feuerwehr-Abschnitt).
 // Menü: Tools > Jump and Run > City > Build Fire Prefabs. Mehrfach ausführbar, Prefabs werden ersetzt.
 //
 // Konvention wie bei den Stadt-Prefabs: Wurzel auf der Laufbahn (lokal +X = +u, +Z = hinten zu den Häusern, -Z = Kamera),
@@ -46,8 +47,159 @@ public static class FireSetup
         BuildFireTruck();
         BuildLadderTruck();
         BuildRescueBasket();
+        BuildFireStation();
         AssetDatabase.SaveAssets();
         Debug.Log("FireSetup: Feuerwehr-Prefabs gebaut.");
+    }
+
+    [MenuItem("Tools/Jump and Run/City/Build Fire Station Prefab")]
+    public static void BuildFireStationOnly()
+    {
+        PrimitiveKit.EnsureFolder("Assets/Prefabs", "Fire");
+        CreateMaterials();
+        BuildFireStation();
+        AssetDatabase.SaveAssets();
+    }
+
+    // ---------- Feuerwache (Checkpoint) ----------
+
+    // Feuerwache "No. 5" auf dem Eckgrundstück vor der Crust Street (dasselbe wie der Bauwagen in Level 3: 8 m entlang der
+    // Bahn, von der Fassadenlinie lokal z 3 bis z 13.8; ersetzt ein Stadthaus per Cutout und bringt eigenen Boden mit).
+    // Zweistöckig aus rotem Backstein: rechts (lokal +X, dort kommt der Spieler her) ein offenes, leeres Fahrzeugtor (die
+    // Wagen sind draußen beim Löschen), links die Tür mit SpawnDoor (dahinter ein dunkler Raum, dort wartet der Spieler vor
+    // dem Respawn). Bis zum Checkpoint dunkel; danach gehen die Fenster an, die rote Rundumleuchte auf dem Dach dreht sich
+    // und "Checkpoint unlocked!" steigt auf (SiteOfficeEffects, ohne Tor)
+    private static void BuildFireStation()
+    {
+        const float facade = 3f, back = 13.8f, halfWidth = 4f, wall = 0.3f;
+        const float groundTop = Surface + 3.8f, roof = Surface + 7f;
+        const float bayLeft = 0f, bayRight = 3.6f;
+        const float doorLeft = -2.9f, doorRight = -1.9f, doorHeight = 2.1f;
+        Material brick = Lit("Station Brick", new Color(0.6f, 0.23f, 0.16f), 0.15f);
+        Material stone = Lit("Station Stone", new Color(0.86f, 0.83f, 0.76f));
+        Material concrete = Lit("Station Floor", new Color(0.5f, 0.5f, 0.48f));
+        Material inside = Lit("Station Inside", new Color(0.62f, 0.6f, 0.56f));
+        Material yellowLine = Lit("Station Line", new Color(0.95f, 0.78f, 0.15f));
+        Material oil = Lit("Oil Stain", new Color(0.12f, 0.12f, 0.12f), 0.6f);
+        Material windowDark = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialFolder}/Window Glass.mat");
+        Material windowLit = PrimitiveKit.Material($"{MaterialFolder}/Window Lit.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.86f, 0.55f));
+        Material room = PrimitiveKit.Material($"{MaterialFolder}/Interior Dark.mat", PrimitiveKit.UnlitShader, new Color(0.07f, 0.05f, 0.04f));
+        Material beaconOff = Lit("Station Beacon Off", new Color(0.45f, 0.08f, 0.06f), 0.6f);
+        Material beaconOn = Unlit("Station Beacon On", new Color(1f, 0.15f, 0.1f));
+
+        var root = new GameObject("Fire Station");
+        Transform t = root.transform;
+        // Boden: Vorplatz und Halle aus Beton, Oberkante 5 mm unter dem Gehweg (keine flackernde Schnittkante)
+        PrimitiveKit.Box("Floor", t, new Vector3(0f, (Surface - 0.005f - 6f) / 2f, (facade + back) / 2f),
+            new Vector3(halfWidth * 2f, Surface - 0.005f + 6f, back - facade), concrete);
+
+        // Außenwände: Vorderwand in Stücken um Tor und Tür, darüber das Obergeschoss in einem Stück
+        float frontZ = facade + wall / 2f;
+        void Front(string name, float x0, float x1, float y0, float y1) =>
+            PrimitiveKit.Box(name, t, new Vector3((x0 + x1) / 2f, (y0 + y1) / 2f, frontZ), new Vector3(x1 - x0, y1 - y0, wall), brick);
+        Front("Pier Left", -halfWidth, doorLeft, Surface, groundTop);
+        Front("Pier Middle", doorRight, bayLeft, Surface, groundTop);
+        Front("Pier Right", bayRight, halfWidth, Surface, groundTop);
+        Front("Over Door", doorLeft, doorRight, Surface + doorHeight, groundTop);
+        Front("Upper Floor", -halfWidth, halfWidth, groundTop, roof);
+        foreach (float x in new[] { -halfWidth + wall / 2f, halfWidth - wall / 2f })
+        {
+            PrimitiveKit.Box("Side Wall", t, new Vector3(x, (Surface + roof) / 2f, (facade + back) / 2f), new Vector3(wall, roof - Surface, back - facade), brick);
+        }
+        PrimitiveKit.Box("Back Wall", t, new Vector3(0f, (Surface + roof) / 2f, back - wall / 2f), new Vector3(halfWidth * 2f, roof - Surface, wall), brick);
+        PrimitiveKit.Box("Roof", t, new Vector3(0f, roof + 0.15f, (facade + back) / 2f), new Vector3(halfWidth * 2f + 0.2f, 0.3f, back - facade + 0.2f), stone);
+        PrimitiveKit.Box("Parapet", t, new Vector3(0f, roof + 0.5f, facade + 0.1f), new Vector3(halfWidth * 2f + 0.2f, 0.5f, 0.25f), stone);
+        PrimitiveKit.Box("Base Course", t, new Vector3(0f, Surface + 0.2f, facade - 0.02f), new Vector3(halfWidth * 2f, 0.4f, 0.06f), stone);
+
+        // Fahrzeughalle hinter dem Tor: Decke, Trennwand, leer; nur Spuren, wo der Wagen stand
+        PrimitiveKit.Box("Bay Ceiling", t, new Vector3((bayLeft + bayRight) / 2f, groundTop + 0.15f, (facade + back) / 2f), new Vector3(bayRight - bayLeft, 0.3f, back - facade - 0.4f), inside);
+        PrimitiveKit.Box("Bay Wall", t, new Vector3(bayLeft - 0.1f, (Surface + groundTop) / 2f, (facade + back) / 2f + 0.2f), new Vector3(0.2f, groundTop - Surface, back - facade - 0.4f), inside);
+        PrimitiveKit.Box("Bay Back", t, new Vector3((bayLeft + bayRight) / 2f, (Surface + groundTop) / 2f, back - wall - 0.02f), new Vector3(bayRight - bayLeft, groundTop - Surface, 0.04f), inside);
+        foreach (float x in new[] { bayLeft + 0.35f, bayRight - 0.35f })
+        {
+            PrimitiveKit.Box("Bay Line", t, new Vector3(x, Surface + 0.005f, (facade + back) / 2f), new Vector3(0.12f, 0.01f, back - facade - 1f), yellowLine);
+        }
+        PrimitiveKit.Box("Oil Stain", t, new Vector3((bayLeft + bayRight) / 2f + 0.2f, Surface + 0.006f, 8.5f), new Vector3(1.1f, 0.01f, 0.8f), oil);
+        // Haken mit Helmen und eine aufgerollte Schlauchrolle an der Trennwand
+        for (int i = 0; i < 3; i++)
+        {
+            PrimitiveKit.Part("Helmet", PrimitiveType.Sphere, t, new Vector3(bayLeft + 0.2f, Surface + 1.7f, 6.5f + i * 0.9f), new Vector3(0.36f, 0.26f, 0.36f), helmet);
+        }
+        Renderer reel = PrimitiveKit.Part("Hose Reel", PrimitiveType.Cylinder, t, new Vector3(bayLeft + 0.3f, Surface + 1f, 10.5f), new Vector3(1f, 0.15f, 1f), hose);
+        reel.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+        // Rolltor oben eingerollt, roter Rahmen ums Tor
+        PrimitiveKit.Box("Rolled Door", t, new Vector3((bayLeft + bayRight) / 2f, groundTop - 0.2f, facade + 0.45f), new Vector3(bayRight - bayLeft, 0.4f, 0.4f), red);
+        PrimitiveKit.Box("Bay Frame Top", t, new Vector3((bayLeft + bayRight) / 2f, groundTop - 0.06f, facade - 0.02f), new Vector3(bayRight - bayLeft + 0.3f, 0.12f, 0.08f), red);
+        foreach (float x in new[] { bayLeft, bayRight })
+        {
+            PrimitiveKit.Box("Bay Frame Side", t, new Vector3(x, (Surface + groundTop) / 2f, facade - 0.02f), new Vector3(0.15f, groundTop - Surface, 0.08f), red);
+        }
+
+        // Tür mit dunklem Raum dahinter (Spieler wartet dort vor dem Respawn), Türflügel öffnet nach innen
+        float doorCenter = (doorLeft + doorRight) / 2f, doorWidth = doorRight - doorLeft;
+        PrimitiveKit.Box("Interior", t, new Vector3(doorCenter, Surface + doorHeight / 2f, facade + 0.3f + 1f), new Vector3(doorWidth, doorHeight, 2f), room);
+        Transform hinge = PrimitiveKit.Pivot("Door Hinge", t, new Vector3(doorLeft, Surface, facade + 0.04f));
+        PrimitiveKit.Box("Door Leaf", hinge, new Vector3(doorWidth / 2f, doorHeight / 2f, 0f), new Vector3(doorWidth, doorHeight, 0.06f), red);
+        PrimitiveKit.Part("Door Handle", PrimitiveType.Sphere, hinge, new Vector3(doorWidth - 0.15f, doorHeight / 2f, -0.05f), Vector3.one * 0.08f, chrome);
+
+        // Schild zwischen den Geschossen, Fenster: oben drei, unten eins neben der Tür (aus bis zum Checkpoint)
+        PrimitiveKit.Box("Sign Board", t, new Vector3(0f, groundTop + 0.55f, facade - 0.04f), new Vector3(halfWidth * 2f - 0.8f, 0.75f, 0.06f), red);
+        PrimitiveKit.Text("Sign Text", t, new Vector3(0f, groundTop + 0.55f, facade - 0.08f), new Vector2(halfWidth * 2f - 1.2f, 0.6f), "FIRE STATION No. 5", Color.white);
+        var windows = new System.Collections.Generic.List<Renderer>();
+        foreach (float x in new[] { -2.6f, 0f, 2.6f })
+        {
+            windows.Add(PrimitiveKit.Quad("Window", t, new Vector3(x, groundTop + 1.9f, facade - 0.01f), new Vector2(1.3f, 1.2f), windowDark));
+            PrimitiveKit.Box("Sill", t, new Vector3(x, groundTop + 1.25f, facade - 0.06f), new Vector3(1.5f, 0.1f, 0.12f), stone);
+        }
+        windows.Add(PrimitiveKit.Quad("Window", t, new Vector3(-1f, Surface + 1.6f, facade - 0.01f), new Vector2(0.9f, 1f), windowDark));
+
+        // Rote Rundumleuchte auf dem Dach über dem Tor: Glas aus/an, darin ein drehender Lichtkegel
+        Vector3 beaconAt = new Vector3((bayLeft + bayRight) / 2f, roof + 0.3f, facade + 0.6f);
+        PrimitiveKit.Part("Beacon Base", PrimitiveType.Cylinder, t, beaconAt - Vector3.up * 0.25f, new Vector3(0.45f, 0.05f, 0.45f), chrome);
+        Renderer beaconGlass = PrimitiveKit.Part("Beacon Glass", PrimitiveType.Cylinder, t, beaconAt, new Vector3(0.36f, 0.2f, 0.36f), beaconOff);
+        Transform rotor = PrimitiveKit.Pivot("Beacon Rotor", t, beaconAt);
+        var lightObject = new GameObject("Beacon Light");
+        lightObject.transform.SetParent(rotor, false);
+        var spot = lightObject.AddComponent<Light>();
+        spot.type = LightType.Spot;
+        spot.color = new Color(1f, 0.15f, 0.1f);
+        spot.intensity = 45f;
+        spot.range = 16f;
+        spot.spotAngle = 35f;
+        spot.shadows = LightShadows.None;
+        rotor.gameObject.SetActive(false);
+
+        Transform insidePoint = PrimitiveKit.Pivot("Inside Point", t, new Vector3(doorCenter, Surface + 0.5f, facade + 1.4f));
+        Transform outsidePoint = PrimitiveKit.Pivot("Outside Point", t, new Vector3(doorCenter, Surface + 0.5f, 0f));
+        var door = root.AddComponent<SpawnDoor>();
+        var doorSettings = new SerializedObject(door);
+        doorSettings.FindProperty("insidePoint").objectReferenceValue = insidePoint;
+        doorSettings.FindProperty("outsidePoint").objectReferenceValue = outsidePoint;
+        doorSettings.FindProperty("doorLeaf").objectReferenceValue = hinge;
+        doorSettings.ApplyModifiedPropertiesWithoutUndo();
+
+        TMPro.TextMeshPro unlocked = CityPropsSetup.BuildUnlockedText(t, new Vector3(0f, roof + 1.6f, facade - 0.6f));
+        ParticleSystem sparkles = CityPropsSetup.BuildSparkles(t);
+
+        // Auslöser auf der Bahn vor der Tür (wie beim Café)
+        PrimitiveKit.AddBoxCollider(root, new Vector3(doorCenter, Surface + 1.5f, 0f), new Vector3(1.5f, 3f, 3f), true);
+        var checkpoint = new SerializedObject(root.AddComponent<Checkpoint>());
+        checkpoint.FindProperty("door").objectReferenceValue = door;
+        checkpoint.ApplyModifiedPropertiesWithoutUndo();
+
+        var fx = new SerializedObject(root.AddComponent<SiteOfficeEffects>());
+        PrimitiveKit.SetReferences(fx, "windows", windows.ToArray());
+        fx.FindProperty("windowsClosed").objectReferenceValue = windowDark;
+        fx.FindProperty("windowsOpen").objectReferenceValue = windowLit;
+        fx.FindProperty("beaconGlass").objectReferenceValue = beaconGlass;
+        fx.FindProperty("beaconOff").objectReferenceValue = beaconOff;
+        fx.FindProperty("beaconOn").objectReferenceValue = beaconOn;
+        fx.FindProperty("beaconRotor").objectReferenceValue = rotor;
+        fx.FindProperty("unlockedText").objectReferenceValue = unlocked;
+        fx.FindProperty("sparkles").objectReferenceValue = sparkles;
+        fx.ApplyModifiedPropertiesWithoutUndo();
+
+        PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Fire Station.prefab");
     }
 
     private static Material Lit(string name, Color color, float smoothness = 0.25f) =>

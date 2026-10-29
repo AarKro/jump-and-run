@@ -2,9 +2,9 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 
-// Bauwagen als Checkpoint (Level 3, Baustelle am Mozzarella Blvd):
+// Bauwagen als Checkpoint (Level 3, Baustelle am Mozzarella Blvd), auch für die Feuerwache in Level 5 (ohne Tor):
 // vorher dunkel (Fenster aus, Rundumleuchte aus, Tor zu mit "CLOSED"-Schild),
-// danach Fenster an, die gelbe Rundumleuchte dreht sich, das Tor schwingt auf und "Checkpoint unlocked!" steigt auf.
+// danach Fenster an, die Rundumleuchte dreht sich, das Tor schwingt auf und "Checkpoint unlocked!" steigt auf.
 // Gehört zum Level (nicht zur Stadt), beim Neustart wird es mit der Level-Szene neu geladen: kein Zurücksetzen nötig
 [RequireComponent(typeof(Checkpoint))]
 public class SiteOfficeEffects : MonoBehaviour
