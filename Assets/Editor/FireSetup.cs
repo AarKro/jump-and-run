@@ -200,8 +200,8 @@ public static class FireSetup
         var fire = (ParticleSystem)data.FindProperty("fire").objectReferenceValue;
         var core = (ParticleSystem)data.FindProperty("fireCore").objectReferenceValue;
         var smoke = (ParticleSystem)data.FindProperty("smoke").objectReferenceValue;
-        TallFlames(fire, 10f, 1.1f, 1.6f);
-        TallFlames(core, 9f, 0.85f, 1.2f);
+        TallFlames(fire, 10f, 1.1f, 2.2f, 110f);
+        TallFlames(core, 9f, 0.85f, 1.5f, 80f);
         BoxShape(fire, ColumnLength, 0.9f);
         BoxShape(core, ColumnLength * 0.7f, 0.6f);
         smoke.transform.localPosition = new Vector3(0f, Surface + 8f, 0f);
@@ -223,14 +223,24 @@ public static class FireSetup
         PrimitiveKit.SavePrefab(root, $"{PrefabFolder}/Fire Column.prefab");
     }
 
-    private static void TallFlames(ParticleSystem system, float speed, float lifetime, float size)
+    // Dichte, hohe Flammen: viele große Teilchen, die beim Aufsteigen nur wenig schrumpfen (eine schmale Säule aus wenigen
+    // Teilchen sah aus wie Funkenflug)
+    private static void TallFlames(ParticleSystem system, float speed, float lifetime, float size, float rate)
     {
         ParticleSystem.MainModule main = system.main;
         main.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.7f, speed);
         main.startLifetime = new ParticleSystem.MinMaxCurve(lifetime * 0.75f, lifetime);
         main.startSize = new ParticleSystem.MinMaxCurve(size, size * 1.6f);
         ParticleSystem.EmissionModule emission = system.emission;
-        emission.rateOverTime = 45f;
+        emission.rateOverTime = rate;
+        ParticleSystem.SizeOverLifetimeModule growth = system.sizeOverLifetime;
+        growth.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(new Keyframe(0f, 0.8f), new Keyframe(0.3f, 1f), new Keyframe(1f, 0.45f)));
+        // Gleich sichtbar statt erst nach 15 % der Lebenszeit: Die Säule soll unten am Rohr anfangen
+        var fade = new Gradient();
+        fade.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[] { new GradientAlphaKey(0.6f, 0f), new GradientAlphaKey(1f, 0.1f), new GradientAlphaKey(0.8f, 0.6f), new GradientAlphaKey(0f, 1f) });
+        ParticleSystem.ColorOverLifetimeModule color = system.colorOverLifetime;
+        color.color = fade;
     }
 
     // Brennende Stelle mit Feuerwehrmann, Dampf und nassem Fleck (Stelle und Säule)

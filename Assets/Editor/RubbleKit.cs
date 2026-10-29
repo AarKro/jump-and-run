@@ -135,7 +135,9 @@ public static class RubbleKit
         Transform tower = BuildTower(parent, uLow, yLow, uHigh, yHigh, seed, true, RuinFacade());
         Transform pivot = new GameObject("Topple Pivot").transform;
         pivot.SetParent(parent, false);
-        pivot.SetPositionAndRotation(Point(uLow) + Vector3.up * yLow, Frame(uLow));
+        // Drehachse im Rahmen des Turms (Mitte), nicht am Fuß: Der kann schon in einer Kurve liegen (Level 5: 1.3 m), dann
+        // stünde der Turm schief zur Seite gekippt
+        pivot.SetPositionAndRotation(Point(uLow) + Vector3.up * yLow, Frame((uLow + uHigh) / 2f));
         tower.SetParent(pivot, true);
         // Liegend zeigt die Achse vom Drehpunkt zum hohen Ende schräg nach oben (Steigung a), stehend senkrecht: um 90 - a
         // zurückdrehen, und zwar zum Spieler hin (der kommt vom niedrigen Ende)

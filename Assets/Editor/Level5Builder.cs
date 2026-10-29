@@ -85,7 +85,8 @@ public static class Level5Builder
     private const float ExposeDuration = 6f;
     private const float TailYaw = 35f;
     // ---------- Feueratem (einmal, beim Betreten des Parks) ----------
-    //   Auslöser: Der Spieler biegt vom Mozzarella Blvd auf den Südost-Diagonalweg. Die Echse lädt 4 s auf, der Eisverkäufer
+    //   Auslöser: Der Spieler hat auf dem Südost-Diagonalweg die liegende Statue hinter sich (sonst bliebe für das Chili darauf
+    //   keine Zeit, 2026-10-29; vorher schon beim Abbiegen vom Mozzarella Blvd). Die Echse lädt auf, der Eisverkäufer
     //   hinter seinem umgekippten Wagen (TruckS vom Brunnen, hinter der Bahn = zur Echse hin) ruft, dann 3 s Feuer auf dem
     //   ganzen Park-Stück der Bahn, außer direkt vor dem Wagen. Bäume nördlich des Wegs fangen Feuer
     private const float TruckS = IceCreamTruckKit.S;
@@ -96,8 +97,9 @@ public static class Level5Builder
     // Blvd, dort stehen keine Häuser), Blick leicht nach oben: Spieler und Wagen unten, die Echse (~110 m nördlich) oben
     private static readonly Vector3 BreathCameraOffset = new Vector3(18f, 6f, -16f);
     private const float BreathCameraLookHeight = 8.3f;
-    // Der Wagen steht seit 2026-10-27 6 m weiter im Park (gleiche Stelle wie in Level 3): eine halbe Sekunde mehr zum Hinlaufen
-    private const float BreathChargeTime = 5f;
+    // Vom Auslöser hinter der Statue bis in den Schutz des Wagens sind es ~10 m (1.5 s), 3.5 s Aufladen lassen gut 2 s Luft
+    // (vorher 5 s ab der Abbiegung, ~23 m)
+    private const float BreathChargeTime = 3.5f;
     private const float BreathTime = 4.5f;
 
     // ---------- Roboter ----------
@@ -321,6 +323,8 @@ public static class Level5Builder
     private const float StatueBodyHeight = 1.5f, StatueBodyLength = 4.4f;
     private const float StatuePizzaTop = 3.5f, StatuePizzaRadius = 1.1f;
     private const float StatueChiliY = 5f;
+    // Hier (hinter der Pizza, in Laufrichtung) beginnt der Auslöser des Feueratems
+    private static float statueEndU;
 
     private static void BuildStatueClimb()
     {
@@ -329,12 +333,10 @@ public static class Level5Builder
         // Die Pizza (und das Chili, Prefab-Wurzeln stehen auf ganzen Metern) auf ganzem u, der Körper schließt in +u an
         Vector2 offset = CityLayout.FoundersCircle - CityLayout.ParkCenter;
         float centerU = ParkSEU(Vector2.Dot(offset, DirSE));
-        float pizzaU = Mathf.Round(centerU - 1f);
+        // Der Körper muss vor der Biegung enden (die Collider liegen gerade im Lane-Rahmen): notfalls weiter in den Park
+        float pizzaU = Mathf.Min(Mathf.Round(centerU - 1f), Mathf.Floor(pieceStartU[7] - 0.5f - 0.4f - StatueBodyLength));
         float bodyU = pizzaU + 0.4f + StatueBodyLength / 2f;
-        if (bodyU + StatueBodyLength / 2f > pieceStartU[7] - 0.5f)
-        {
-            Debug.LogWarning($"Level5Builder: Die liegende Statue reicht bis in die Biegung (u {bodyU + StatueBodyLength / 2f:F1}, Biegung ab {pieceStartU[7]:F1})");
-        }
+        statueEndU = pizzaU - StatuePizzaRadius - 0.5f;
         Transform statue = new GameObject("Founder Statue (fallen)").transform;
         statue.SetParent(gameplayParent, false);
         statue.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(bodyU) + Vector3.up * ground, LevelBuildKit.Frame(bodyU));
@@ -737,10 +739,10 @@ public static class Level5Builder
         PrimitiveKit.SetReferences(battle, "thrusters", thrusters.ToArray());
         battle.FindProperty("landingDust").objectReferenceValue = landingDust;
         battle.FindProperty("fallDust").objectReferenceValue = fallDust;
-        // Feueratem, sobald der Spieler in den Park abbiegt (bis zum alten Ende des Rasen-Stücks), Roboter, sobald er den Park
-        // nach Norden verlässt, Finale an der Oregano Street
+        // Feueratem, sobald der Spieler an der Statue vorbei ist (bis zum alten Ende des Rasen-Stücks), Roboter, sobald er den
+        // Park nach Norden verlässt, Finale an der Oregano Street
         battle.FindProperty("breathFromU").floatValue = LegU(BreathLegTopZ);
-        battle.FindProperty("breathToU").floatValue = pieceStartU[8] - 1f;
+        battle.FindProperty("breathToU").floatValue = statueEndU;
         battle.FindProperty("vendor").objectReferenceValue = breathVendor;
         battle.FindProperty("breathCamera").objectReferenceValue = breathCameraZone;
         battle.FindProperty("chargeTime").floatValue = BreathChargeTime;
@@ -1336,6 +1338,8 @@ public static class Level5Builder
         ruin.FindProperty("triggerU").floatValue = L(ToppleTriggerZ);
         ruin.FindProperty("pivot").objectReferenceValue = pivot;
         ruin.FindProperty("standingTilt").floatValue = standingTilt;
+        ruin.FindProperty("creakTime").floatValue = ToppleCreakTime;
+        ruin.FindProperty("toppleTime").floatValue = ToppleFallTime;
         PrimitiveKit.SetReferences(ruin, "solids", towerSolid);
         // Staub nicht am Drehpunkt aufhängen, er drehte sich sonst mit
         ParticleSystem baseDust = RubbleKit.Dust(rubble, "Base Dust", Vector3.zero, 5f);
@@ -1345,6 +1349,17 @@ public static class Level5Builder
         ruin.ApplyModifiedPropertiesWithoutUndo();
         var impactAt = (ParticleSystem)ruin.FindProperty("impactDust").objectReferenceValue;
         impactAt.transform.position = LevelBuildKit.Lane.PointAt(F(-96f)) + Vector3.up * 3f;
+        // Damit man den Sturz sieht: Auf dem Rasen-Stück stünde die Kamera westlich und schaute nach Osten, der Turm stünde
+        // hinter ihr. Am Ende des Rasen-Stücks rückt sie hinter den Spieler und schaut wie er nach Norden (der Turm vorne
+        // links); auf der Four Cheese Avenue schaut sie ohnehin nach Norden, so entfällt auch der 90°-Schwenk in der Kurve
+        var corner = new SerializedObject(new GameObject("Corner Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
+        corner.FindProperty("fromU").floatValue = pieceStartU[4];
+        corner.FindProperty("toU").floatValue = L(CornerCameraFromZ);
+        corner.FindProperty("blend").floatValue = 5f;
+        corner.FindProperty("offset").vector3Value = CornerCameraOffset;
+        corner.FindProperty("lookHeight").floatValue = CornerCameraLookHeight;
+        corner.ApplyModifiedPropertiesWithoutUndo();
+        ((CameraZone)corner.targetObject).transform.SetParent(rubble, false);
         RubbleKit.Step(rubble, F(-100f), F(-102.5f), walk, 4.3f, seed++);
         RubbleKit.Step(rubble, F(-102.5f), F(-105f), walk, 2.6f, seed++);
         // Brocken aus dem Kampf: einer landet auf der oberen Stufe, einer auf der Kreuzung der Oregano Street (vor dem Finale)
@@ -1356,18 +1371,37 @@ public static class Level5Builder
         LevelBuildKit.Place("Balcony", Mathf.Round(F(-121f)), 2, rubble);
         LevelBuildKit.Place("Balcony", Mathf.Round(F(-125.5f)), 4, rubble);
         RubbleKit.Beam(rubble, F(-130f), F(-135f), 5f, F(-132f), walk, seed++);
-        // ... über den brennenden Krater auf zwei Bruchplatten (halten nach dem Landen nur kurz, wer zögert, fällt ins Feuer)
-        RubbleKit.Crater(rubble, F(-135.5f), F(-145f), walk, seed++);
-        RubbleKit.CrumblingSlab(rubble, F(-136.5f), F(-139.5f), 4.6f, seed++);
-        RubbleKit.CrumblingSlab(rubble, F(-140.5f), F(-143.5f), 4.2f, seed++);
-        RubbleKit.Step(rubble, F(-145f), F(-149f), walk, 3.5f, seed++);
-        RubbleKit.Slab(rubble, F(-149f), 3.5f, F(-155f), walk, seed++);
+        // ... über den brennenden Krater auf zwei Bruchplatten (halten nach dem Landen nur kurz, wer zögert, fällt ins Feuer).
+        // 4 m lang, 1.5 m Lücken: Ein voller Sprung von einer Kante landet auf der nächsten Platte (im Test flog er mit 3-m-
+        // Platten und 1-m-Lücken über die zweite hinweg in den Krater)
+        RubbleKit.Crater(rubble, F(-135.5f), F(-147f), walk, seed++);
+        RubbleKit.CrumblingSlab(rubble, F(-136.5f), F(-140.5f), 4.6f, seed++);
+        RubbleKit.CrumblingSlab(rubble, F(-142f), F(-146f), 4.2f, seed++);
+        RubbleKit.Step(rubble, F(-147.5f), F(-151f), walk, 3.5f, seed++);
+        RubbleKit.Slab(rubble, F(-151f), 3.5f, F(-157f), walk, seed++);
+        // Kamera dort weiter weg und tiefer blickend: Sonst steigt sie mit dem Spieler auf die Platten (4–5 m) und das Feuer im
+        // Krater darunter liegt unter dem Bildrand
+        var crater = new SerializedObject(new GameObject("Crater Camera Zone", typeof(CameraZone)).GetComponent<CameraZone>());
+        crater.FindProperty("fromU").floatValue = F(-152f);
+        crater.FindProperty("toU").floatValue = F(-128f);
+        crater.FindProperty("blend").floatValue = 6f;
+        crater.FindProperty("offset").vector3Value = new Vector3(0f, 6.5f, -11f);
+        crater.FindProperty("lookHeight").floatValue = 1.2f;
+        crater.ApplyModifiedPropertiesWithoutUndo();
+        ((CameraZone)crater.targetObject).transform.SetParent(rubble, false);
     }
 
     // Lebendiger Schutt auf der Four Cheese Avenue (2026-10-29, nach dem Wunsch, dass Schutt "live" passiert):
-    //   Hochhaus-Stück kippt um, sobald der Spieler auf dem Rasen-Stück hier ist (nach der Landung des Roboters bei z 205,
-    //   gut 2 s bevor er an seinem Fuß ankommt)
-    private const float ToppleTriggerZ = 208f;
+    //   Hochhaus-Stück kippt um, sobald der Spieler auf dem Rasen-Stück hier ist (nach der Landung des Roboters bei z 205).
+    //   Zügig (1.5 s): Er liegt, bevor der Spieler (1.8 s später) an seinem Fuß ist. Normalerweise schaut die Kamera auf dem
+    //   Rasen-Stück nach Osten, der Turm stünde hinter ihr, darum die Kurven-Kamera (Corner Camera Zone, BuildRubble)
+    private const float ToppleTriggerZ = 211f;
+    private const float ToppleCreakTime = 0.35f, ToppleFallTime = 1.15f;
+    //   Kamera dabei: ab hier auf dem Rasen-Stück direkt hinter dem Spieler (lokal +X = Süden), Blick nach Norden, etwas
+    //   höher, damit der ganze Turm ins Bild kommt (getestet: er fällt links ins Bild)
+    private const float CornerCameraFromZ = 207f;
+    private static readonly Vector3 CornerCameraOffset = new Vector3(8f, 6f, -0.5f);
+    private const float CornerCameraLookHeight = 4f;
     //   Brocken aus dem Kampf: Landestelle x, Boden dort, ausgelöst sobald der Spieler an x vorbei ist. Auf der oberen Stufe
     //   (Oberkante 4.3), ausgelöst oben auf der Rampe; auf der Oregano-Kreuzung, ausgelöst auf der Stufe davor (wer
     //   durchläuft, ist knapp darunter weg, wer stehen bleibt, wird getroffen; ab x -110 läuft das Finale)
@@ -1382,7 +1416,8 @@ public static class Level5Builder
     // drauf entlang laufen, über die Krone springen.
     // 2026-10-29: Vorher brannte der ganze Stamm (4.5 m, 1.2 m hoch), das war nicht zu schaffen (über 1.2 m bleibt man im
     // Sprung nur etwa 4 m weit, die Kapsel bräuchte 5.5)
-    private const float TrunkTop = 0.9f, CrownHazard = 1.5f;
+    // Gefahr 1.2 m über dem Boden = 0.3 über dem Stamm: Vom Stamm aus ist man sofort darüber
+    private const float TrunkTop = 0.9f, CrownHazard = 1.2f, CrownFireInset = 0.7f;
 
     private static void BurningTree(Transform parent, float uRoot, float uCrown, float crownLength, float ground)
     {
@@ -1420,9 +1455,11 @@ public static class Level5Builder
             Renderer branch = PrimitiveKit.Part("Branch", PrimitiveType.Cylinder, tree, new Vector3(crownX + x, 0.9f, 0.4f), new Vector3(0.22f, 0.7f, 0.22f), bark);
             branch.transform.localRotation = Quaternion.Euler(angle, 0f, angle * 0.5f);
         }
-        GameObject fire = FireSetup.BurningGround("Crown Fire", crownLength, CrownHazard);
+        // Das Feuer beginnt erst CrownFireInset in der Krone: Wer an der Stammkante abspringt, ragt mit seiner Kapsel (Radius
+        // 0.5) sonst schon in den Trigger, solange er noch steigt (im Test genau so verbrannt)
+        GameObject fire = FireSetup.BurningGround("Crown Fire", crownLength - CrownFireInset, CrownHazard);
         fire.transform.SetParent(tree, false);
-        fire.transform.localPosition = new Vector3(crownX, -0.5f, 0f);
+        fire.transform.localPosition = new Vector3(crownX + toCrown * CrownFireInset / 2f, -0.5f, 0f);
     }
 
     // Leute in Panik: fliehen auf einem Streifen 2.4 m hinter der Bahn (zwischen Bahn und Häusern) weg von der Echse: in der
