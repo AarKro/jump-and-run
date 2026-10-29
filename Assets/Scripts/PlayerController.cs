@@ -46,6 +46,10 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Transform groundCheck;
     [SerializeField] private float groundCheckRadius = 0.25f;
     [SerializeField] private LayerMask groundLayer;
+    [Tooltip("Bis zu dieser Neigung läuft er Schrägen hinauf und hinunter, ohne zu hängen oder abzuheben")]
+    [SerializeField] private float maxSlopeAngle = 35f;
+    [Tooltip("So weit unter dem Drehpunkt sucht er nach dem Boden für die Neigung (Füße bei -0.5)")]
+    [SerializeField] private float slopeProbeDistance = 1.1f;
 
     private Rigidbody body;
     private Vector2 moveInput;
@@ -264,6 +268,33 @@ public class PlayerController : MonoBehaviour
         body.linearVelocity = new Vector3(newHorizontalVelocity.x, body.linearVelocity.y, newHorizontalVelocity.z);
 
         UpdateJump(platformVelocity.y);
+        FollowSlope();
+    }
+
+    // Schrägen (Deckenplatten im Schutt, das umgestürzte Hochhaus in Level 5): Die Laufgeschwindigkeit ist rein waagerecht.
+    // Auf einer Schräge drückt sie den Spieler in die Fläche, die Physik schiebt ihn nur zum Teil hinauf, und die starke
+    // eigene Schwerkraft zieht ihn gleich wieder herunter: Er bleibt stecken. Darum am Boden die Geschwindigkeit auf die
+    // Fläche projizieren (Steigung · waagerechte Geschwindigkeit = senkrechter Anteil). Bergab hält ihn das am Boden, statt
+    // dass er über die Kante hüpft. Auf ebenem Boden ändert sich nichts. Nicht direkt nach dem Absprung (groundLockTimer)
+    private void FollowSlope()
+    {
+        if (!isGrounded || groundLockTimer > 0f)
+        {
+            return;
+        }
+        if (!Physics.Raycast(body.position + Vector3.up * 0.2f, Vector3.down, out RaycastHit hit, slopeProbeDistance, groundLayer, QueryTriggerInteraction.Ignore))
+        {
+            return;
+        }
+        Vector3 normal = hit.normal;
+        // Fast eben: wie bisher. Zu steil: keine Hilfe (Wände bleiben Wände)
+        if (normal.y > 0.995f || normal.y < Mathf.Cos(maxSlopeAngle * Mathf.Deg2Rad))
+        {
+            return;
+        }
+        Vector3 velocity = body.linearVelocity;
+        velocity.y = -(normal.x * velocity.x + normal.z * velocity.z) / normal.y;
+        body.linearVelocity = velocity;
     }
 
     // Quer zur Bahn auf den Pfad zurücksetzen (kleine Korrektur pro Schritt) und in Laufrichtung drehen.

@@ -156,6 +156,7 @@ public static class Level5Builder
         BuildKaiju();
         BuildGameplay();
         BuildFirefighters();
+        BuildRubble();
         BuildPanic();
 
         LevelBuildKit.SetupEssentials(Mathf.Round(BasilU(GoalZ)), "13", KeepWarmTime,
@@ -1043,39 +1044,25 @@ public static class Level5Builder
         float wallU = pieceStartU[0] - 1f;
         wall.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(wallU) + Vector3.up * 5f, LevelBuildKit.Frame(wallU));
         PrimitiveKit.AddBoxCollider(wall, Vector3.zero, new Vector3(0.5f, 10f, 6f));
-
-        // Schutt auf dem Gehweg zum Drüberspringen (Layer Ground): an den Ruinen auf der Four Cheese Avenue, einer ist bis
-        // hinter die Oregano Street geflogen
-        Material rubble = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Rubble.mat");
-        foreach (float x in new[] { -88f, -99f, -130f })
-        {
-            float u = FourCheeseU(x);
-            Quaternion frame = LevelBuildKit.Frame(u);
-            var chunk = new GameObject($"Rubble Obstacle x{x:F0}") { layer = 3 };
-            chunk.transform.SetParent(gameplayParent, false);
-            chunk.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + Vector3.up * (CityLayout.Surface + 0.6f), frame);
-            PrimitiveKit.Box("Block", chunk.transform, Vector3.zero, new Vector3(1.6f, 1.2f, 2.2f), rubble);
-            PrimitiveKit.Box("Top", chunk.transform, new Vector3(0.3f, 0.7f, 0.2f), new Vector3(1f, 0.5f, 1.4f), rubble).transform.localRotation = Quaternion.Euler(0f, 0f, 12f);
-            PrimitiveKit.AddBoxCollider(chunk, Vector3.zero, new Vector3(1.6f, 1.2f, 2.2f));
-        }
     }
 
     // ---------- Feuerwehr (unterer Mozzarella Blvd) ----------
     //   Brennende Stellen auf dem Gehweg (7 m, zu lang zum Drüberspringen), je ein Feuerwehrmann löscht sie im Takt (FirePatch):
-    //   erst eine allein (Takt lernen), dann zwei hintereinander mit versetztem Takt (auf der Insel dazwischen warten), dann ein
-    //   breites Dauerfeuer, über das der Korb einer Drehleiter fährt (Chili 1 darüber). Die Fahrzeuge stehen auf der Fahrbahn
-    //   vor der Bahn, darum steht die Kamera hier höher und weiter weg (sie stünde sonst neben bzw. in den Fahrzeugen)
-    // Mitte der Stelle (z), Takt-Versatz (s). Stelle 3 wird 3 s nach Stelle 2 sicher: Wer Stelle 2 gleich am Anfang ihrer
-    // sicheren Zeit überquert, wartet auf der Insel gut eine Sekunde
-    private static readonly (float z, float offset)[] FirePatches = { (29f, 0f), (44f, 1.5f), (56f, -1.5f) };
+    //   erst eine allein (Takt lernen), dann ein Schuttberg (BuildRubble), dann die zweite Stelle, über die von oben zwei
+    //   Stahlträger führen (wer gut klettert, wartet nicht), dann ein breites Dauerfeuer, über das der Korb einer Drehleiter
+    //   fährt (Chili 1 darüber). Die Fahrzeuge stehen auf der Fahrbahn vor der Bahn, darum steht die Kamera hier höher und
+    //   weiter weg (sie stünde sonst neben bzw. in den Fahrzeugen).
+    //   2026-10-29 nach dem Playtest: vorher drei Stellen direkt hintereinander, das war zu viel Warten und zu flach
+    // Mitte der Stelle (z), Takt-Versatz (s)
+    private static readonly (float z, float offset)[] FirePatches = { (22f, 0f), (52f, 1.5f) };
     private const float FireBedZ = 72f;
     private const float BasketFromZ = 64f, BasketToZ = 80f;
     private const float BasketY = 1f;     // Oberkante 1.5, ein Meter über dem Gehweg
     // Die Fahrzeuge stehen in den Lücken neben den Stellen, nicht davor (sonst verdecken sie die Feuerwehrleute): Löschfahrzeuge
-    // vor Stelle 1 und zwischen 1 und 2, die Drehleiter hinter dem breiten Feuer (die Leiter reicht schräg zurück zum Korb)
-    private static readonly float[] FireTruckZ = { 18f, 36f };
+    // vor Stelle 1 und vor dem Schuttberg, die Drehleiter hinter dem breiten Feuer (die Leiter reicht schräg zurück zum Korb)
+    private static readonly float[] FireTruckZ = { 12f, 31f };
     // Zu welchem Löschfahrzeug der Schlauch jeder Stelle läuft
-    private static readonly int[] HoseTruck = { 0, 1, 1 };
+    private static readonly int[] HoseTruck = { 0, 1 };
     private const float LadderTruckZ = 83f;   // Drehkranz 3 m weiter südlich, gleich hinter dem Ende des Feuers
     private const float FireZoneFromZ = 14f, FireZoneToZ = 90f;
     private static readonly Vector3 FireCameraOffset = new Vector3(0f, 8f, -12f);
@@ -1173,12 +1160,96 @@ public static class Level5Builder
         smoke.transform.localPosition = Vector3.up * 1.5f;
     }
 
-    // Leute in Panik: fliehen auf einem Streifen 2.4 m hinter der Bahn (zwischen Bahn und Häusern/Ruinen) weg von der Echse:
-    // auf der Four Cheese Avenue nach Westen (der Spieler überholt sie), am unteren Mozzarella Blvd nach Süden, ihm entgegen
+    // ---------- Schutt zum Klettern ----------
+    //   Margherita Avenue: kleiner Aufwärm-Hügel gleich hinter der Pizzeria (zwei Stufen hoch, Platte runter)
+    //   Unterer Mozzarella Blvd: Schuttberg bis 5 m zwischen den beiden Feuerwehr-Stellen. Vom Gipfel geht es entweder Stufe für
+    //     Stufe hinunter zur zweiten Stelle (auf das Löschen warten) oder über zwei Stahlträger hoch darüber hinweg (fällt man
+    //     vom zweiten, landet man im Feuer, wenn es gerade brennt), Landehaufen dahinter
+    //   Rasen-Stück im Park: brennender umgestürzter Baum (drüberspringen), zwei Hochhaus-Brocken, ein brennender Krater
+    //     (hineinfallen = Respawn), Platte hinunter. Danach landet der Roboter
+    //   Four Cheese Avenue: das umgestürzte Hochhaus-Stück aus den Ruinen schräg hinauf bis 6.2 m, Stufen hinunter auf die
+    //     Oregano Street (Finale), danach Balkone, ein Stahlträger, Schuttberg mit brennendem Krater und Platte hinunter
+    // Fällt man irgendwo daneben, landet man auf dem Gehweg (kostet nur Zeit); tödlich sind nur Feuer und Krater
+    private static void BuildRubble()
+    {
+        Transform rubble = new GameObject("Rubble Course").transform;
+        rubble.SetParent(gameplayParent, false);
+        const float walk = CityLayout.Surface;
+        const float park = CityLayout.ParkPathTop;
+        float M(float z) => LowerMozzarellaU(z);
+        float L(float z) => LegU(z);
+        float F(float x) => FourCheeseU(x);
+        int seed = 500;
+
+        // Margherita (u = x)
+        RubbleKit.Step(rubble, -13f, -15f, walk, 1.7f, seed++);
+        RubbleKit.Step(rubble, -15f, -18f, walk, 2.9f, seed++);
+        RubbleKit.Slab(rubble, -18f, 2.9f, -23f, walk, seed++);
+
+        // Unterer Mozzarella Blvd: hinauf
+        RubbleKit.Step(rubble, M(29f), M(31f), walk, 1.9f, seed++);
+        RubbleKit.Step(rubble, M(31f), M(33.5f), walk, 3.2f, seed++);
+        RubbleKit.Slab(rubble, M(33.5f), 3.2f, M(38f), 5f, seed++);
+        RubbleKit.Step(rubble, M(38f), M(43f), walk, 5f, seed++);
+        // ... unten herum zur zweiten Stelle (z 48.5 bis 55.5) ...
+        RubbleKit.Step(rubble, M(43f), M(45.5f), walk, 3.5f, seed++);
+        RubbleKit.Step(rubble, M(45.5f), M(48f), walk, 2f, seed++);
+        // ... oder oben drüber
+        RubbleKit.Beam(rubble, M(45.5f), M(48.5f), 5f, M(47f), walk, seed++);
+        RubbleKit.Beam(rubble, M(51f), M(54.5f), 5.2f, M(53f), walk, seed++);
+        RubbleKit.Step(rubble, M(57f), M(60f), walk, 2f, seed++);
+
+        // Rasen-Stück im Park
+        BurningTree(rubble, L(164f), L(168.5f), park);
+        RubbleKit.Step(rubble, L(172f), L(177f), park, 2.2f, seed++, towerChunk: true);
+        RubbleKit.Step(rubble, L(179f), L(184f), park, 3.8f, seed++, towerChunk: true);
+        RubbleKit.Crater(rubble, L(184f), L(189f), park, seed++);
+        RubbleKit.Step(rubble, L(189f), L(193f), park, 3.2f, seed++, towerChunk: true);
+        RubbleKit.Slab(rubble, L(193f), 3.2f, L(199f), park, seed++);
+
+        // Four Cheese Avenue: umgestürztes Hochhaus vor der Oregano Street
+        // Das untere Ende beginnt bündig mit dem Gehweg: Schon eine 30 cm hohe Kante hält den Spieler auf (er steigt nicht
+        // von selbst über Stufen, nur Schrägen hinauf)
+        RubbleKit.TowerPiece(rubble, F(-84f), walk, F(-99f), 6.2f, seed++);
+        RubbleKit.Step(rubble, F(-100f), F(-102.5f), walk, 4.3f, seed++);
+        RubbleKit.Step(rubble, F(-102.5f), F(-105f), walk, 2.6f, seed++);
+        // ... hinter der Oregano Street: Balkone der stehen gebliebenen Häuser (Oberkante = Wurzel + 0.5), Träger, Schuttberg
+        LevelBuildKit.Place("Balcony", Mathf.Round(F(-121f)), 2, rubble);
+        LevelBuildKit.Place("Balcony", Mathf.Round(F(-125.5f)), 4, rubble);
+        RubbleKit.Beam(rubble, F(-130f), F(-135f), 5f, F(-132f), walk, seed++);
+        RubbleKit.Step(rubble, F(-137f), F(-141f), walk, 4f, seed++);
+        RubbleKit.Crater(rubble, F(-141f), F(-145.5f), walk, seed++);
+        RubbleKit.Step(rubble, F(-145.5f), F(-149f), walk, 3.5f, seed++);
+        RubbleKit.Slab(rubble, F(-149f), 3.5f, F(-155f), walk, seed++);
+    }
+
+    // Umgestürzter Baum, der brennt: Stamm entlang der Bahn mit ein paar Aststummeln, darauf ein Dauerfeuer (Berührung =
+    // Respawn). 4.5 m lang, mit Anlauf überspringt man ihn
+    private static void BurningTree(Transform parent, float uA, float uB, float ground)
+    {
+        Material bark = PrimitiveKit.Material("Assets/Materials/City/Charred Bark.mat", PrimitiveKit.LitShader, new Color(0.16f, 0.11f, 0.08f), 0.05f);
+        float u = (uA + uB) / 2f, length = Mathf.Abs(uB - uA);
+        Transform tree = PrimitiveKit.Pivot("Burning Tree", parent, Vector3.zero);
+        tree.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + Vector3.up * ground, LevelBuildKit.Frame(u));
+        Renderer trunk = PrimitiveKit.Part("Trunk", PrimitiveType.Cylinder, tree, new Vector3(0f, 0.4f, 0.2f), new Vector3(0.8f, length / 2f, 0.8f), bark);
+        trunk.transform.localRotation = Quaternion.Euler(0f, 8f, 90f);
+        foreach (var (x, angle) in new[] { (-1.2f, 40f), (0.4f, -35f), (1.5f, 55f) })
+        {
+            Renderer branch = PrimitiveKit.Part("Branch", PrimitiveType.Cylinder, tree, new Vector3(x, 0.9f, 0.5f), new Vector3(0.22f, 0.6f, 0.22f), bark);
+            branch.transform.localRotation = Quaternion.Euler(angle, 0f, angle * 0.5f);
+        }
+        GameObject fire = FireSetup.BurningGround("Tree Fire", length, 1.2f);
+        fire.transform.SetParent(tree, false);
+        fire.transform.localPosition = Vector3.down * 0.5f;
+    }
+
+    // Leute in Panik: fliehen auf einem Streifen 2.4 m hinter der Bahn (zwischen Bahn und Häusern) weg von der Echse: in der
+    // Basil Street nach Norden (der Spieler überholt sie), am unteren Mozzarella Blvd nach Süden, ihm entgegen. Auf der Four
+    // Cheese Avenue liefen sie früher an den Ruinen entlang, dort liegt jetzt der Schutt zum Klettern
     private const float PanicBehind = 2.4f;
     private static (Vector3 from, Vector3 to, int count)[] PanicStrips => new[]
     {
-        (new Vector3(-84f, CityLayout.Surface, FourCheeseLaneZ + PanicBehind), new Vector3(-112f, CityLayout.Surface, FourCheeseLaneZ + PanicBehind), 4),
+        (new Vector3(BasilX + PanicBehind, CityLayout.Surface, 234f), new Vector3(BasilX + PanicBehind, CityLayout.Surface, 262f), 4),
         (new Vector3(MozzarellaX + PanicBehind, CityLayout.Surface, 126f), new Vector3(MozzarellaX + PanicBehind, CityLayout.Surface, 100f), 4),
     };
 

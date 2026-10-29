@@ -271,6 +271,16 @@ public static class FireSetup
         return system;
     }
 
+    // Brennender Boden direkt in der Szene (z.B. Krater im Schutt): wie das Dauerfeuer, aber beliebig lang, kein Prefab
+    public static GameObject BurningGround(string name, float length, float hazardHeight)
+    {
+        CreateMaterials();
+        GameObject root = FireBase(name, length, hazardHeight, out _, out SerializedObject data);
+        data.FindProperty("alwaysBurning").boolValue = true;
+        data.ApplyModifiedPropertiesWithoutUndo();
+        return root;
+    }
+
     // Breites Feuer unter der Drehleiter: brennt immer, kein Feuerwehrmann. Der Trigger reicht nur bis 1.3 (0.8 über dem
     // Gehweg): Der Boden des Rettungskorbs liegt bei 1.5, wer darin steht, darf nicht hineinragen
     private static void BuildFireBed()
