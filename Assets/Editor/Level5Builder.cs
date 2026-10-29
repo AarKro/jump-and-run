@@ -1101,13 +1101,14 @@ public static class Level5Builder
             + frame * Vector3.forward * TruckBackOffset, frame);
         Transform t = truck.transform;
         // Aufrecht: Y = hoch, Z = Rückseite. Um -90° um X gekippt wird aus Y (Dach) -Z (zur Kamera), aus Z (Rückseite) Y (oben)
-        Transform model = IceCreamTruckKit.BuildModel(t);
+        Transform model = IceCreamTruckKit.BuildModel(t, roofCone: false);
         model.localRotation = Quaternion.Euler(-90f, 0f, 0f);
         model.localPosition = new Vector3(0f, 0f, TruckDepth / 2f);
         PrimitiveKit.AddBoxCollider(truck, Vector3.zero, new Vector3(TruckLength, TruckHeight, TruckDepth));
         Vector3 c = truck.transform.position;
-        LevelBuildKit.Cutout(GameObject.Find("City Link").transform, "Ice Cream Truck", c.x - 4.5f, c.x + 4.5f, c.z - 4.5f, c.z + 4.5f, keepGround: true);
+        LevelBuildKit.Cutout(GameObject.Find("City Link").transform, "Ice Cream Truck", c.x - 6.5f, c.x + 6.5f, c.z - 6.5f, c.z + 6.5f, keepGround: true);
         Material pink = IceCreamTruckKit.Pink, mint = IceCreamTruckKit.Mint;
+        BrokenCone(t, pink, mint);
 
         // Verschüttetes Eis vor dem Wagen (flache Kugeln)
         var random = new System.Random(42);
@@ -1137,6 +1138,24 @@ public static class Level5Builder
         vendorData.FindProperty("bubble").objectReferenceValue = bubble;
         vendorData.ApplyModifiedPropertiesWithoutUndo();
         return vendor;
+    }
+
+    // Die große Dach-Waffel ist beim Umkippen abgebrochen (2026-10-29: am liegenden Wagen ragte sie 0.9 m über die Bahn,
+    // der Spieler lief hindurch). Sie liegt am +u-Ende (dort kommt der Spieler an) im Gras, so weit hinter der Bahn wie die
+    // Wagenmitte, die rosa Kugel klebt noch zerdrückt in der Öffnung, die Minzkugel ist weggerollt, dazwischen eine Pfütze.
+    // Nur Optik, keine Collider. Koordinaten im Wagen-Rahmen (lokal X entlang der Bahn, Y hoch, -Z zur Bahn)
+    private static void BrokenCone(Transform truck, Material pink, Material mint)
+    {
+        float ground = -TruckHeight / 2f;
+        Transform cone = PrimitiveKit.Pivot("Broken Roof Cone", truck, new Vector3(TruckLength / 2f + 1.4f, ground, 0.2f));
+        cone.localRotation = Quaternion.Euler(0f, -25f, 0f);
+        // Waffel liegt (Achse entlang X, Öffnung nach +X), ein Stück eingesunken
+        Renderer waffle = PrimitiveKit.Part("Waffle", PrimitiveType.Cylinder, cone, new Vector3(0f, 0.27f, 0f), new Vector3(0.6f, 0.5f, 0.6f), IceCreamTruckKit.Waffle);
+        waffle.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+        PrimitiveKit.Part("Scoop Pink", PrimitiveType.Sphere, cone, new Vector3(0.75f, 0.33f, 0f), new Vector3(0.75f, 0.62f, 0.85f), pink);
+        PrimitiveKit.Part("Puddle Pink", PrimitiveType.Sphere, cone, new Vector3(1.3f, 0.02f, 0.1f), new Vector3(1.5f, 0.05f, 1.1f), pink);
+        PrimitiveKit.Part("Scoop Mint", PrimitiveType.Sphere, cone, new Vector3(2.1f, 0.25f, 0.6f), new Vector3(0.7f, 0.5f, 0.7f), mint);
+        PrimitiveKit.Part("Puddle Mint", PrimitiveType.Sphere, cone, new Vector3(1.75f, 0.015f, 0.4f), new Vector3(0.9f, 0.04f, 0.7f), mint);
     }
 
     // Flammenteppich (Rechteck X/Z in Welt-Größe), brennt nur, solange FireBreath ihn abspielt

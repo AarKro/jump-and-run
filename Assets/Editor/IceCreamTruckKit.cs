@@ -33,8 +33,9 @@ public static class IceCreamTruckKit
     public static Material Waffle => Lit("Waffle", new Color(0.85f, 0.62f, 0.32f));
 
     // Aufrechter Wagen: unten Karosserie, auf der Wegseite eine offene Verkaufsklappe (man sieht hinein, dort steht der
-    // Verkäufer), darüber ein Vordach, auf dem Dach eine große Waffel mit zwei Kugeln, Fahrerkabine am -X-Ende, Räder
-    public static Transform BuildModel(Transform parent)
+    // Verkäufer), darüber ein Vordach, auf dem Dach eine große Waffel mit zwei Kugeln, Fahrerkabine am -X-Ende, Räder.
+    // Ohne roofCone fehlt die Waffel (Level 5: beim Umkippen abgebrochen, sie läge sonst quer über der Bahn)
+    public static Transform BuildModel(Transform parent, bool roofCone = true)
     {
         Material white = Lit("Truck White", new Color(0.95f, 0.94f, 0.9f));
         Material inside = Lit("Truck Inside", new Color(0.35f, 0.3f, 0.32f));
@@ -74,10 +75,13 @@ public static class IceCreamTruckKit
         PrimitiveKit.Box("Cab Window", model, new Vector3(cabX + 0.1f, 1.75f, z0 + 0.04f), new Vector3(0.8f, 0.6f, 0.02f), windows);
 
         // Große Waffel auf dem Dach
-        Transform cone = PrimitiveKit.Pivot("Roof Cone", model, new Vector3(bodyCenter + 0.6f, top, 0f));
-        PrimitiveKit.Part("Waffle", PrimitiveType.Cylinder, cone, new Vector3(0f, 0.5f, 0f), new Vector3(0.6f, 0.5f, 0.6f), Waffle);
-        PrimitiveKit.Part("Scoop Pink", PrimitiveType.Sphere, cone, new Vector3(0f, 1.15f, 0f), Vector3.one * 0.9f, pink);
-        PrimitiveKit.Part("Scoop Mint", PrimitiveType.Sphere, cone, new Vector3(0f, 1.75f, 0f), Vector3.one * 0.75f, Mint);
+        if (roofCone)
+        {
+            Transform cone = PrimitiveKit.Pivot("Roof Cone", model, new Vector3(bodyCenter + 0.6f, top, 0f));
+            PrimitiveKit.Part("Waffle", PrimitiveType.Cylinder, cone, new Vector3(0f, 0.5f, 0f), new Vector3(0.6f, 0.5f, 0.6f), Waffle);
+            PrimitiveKit.Part("Scoop Pink", PrimitiveType.Sphere, cone, new Vector3(0f, 1.15f, 0f), Vector3.one * 0.9f, pink);
+            PrimitiveKit.Part("Scoop Mint", PrimitiveType.Sphere, cone, new Vector3(0f, 1.75f, 0f), Vector3.one * 0.75f, Mint);
+        }
 
         foreach (float x in new[] { -1.9f, 1.9f })
         {
