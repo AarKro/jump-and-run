@@ -60,6 +60,9 @@ public class IntroFlyover : MonoBehaviour
     private ScreenIris iris;
     private PizzaHud hud;
 
+    // Steht auch auf dem Endbildschirm nach dem letzten Level, in der Zeile für dieses Level
+    public string DeliveryAddress => deliveryAddress;
+
     // Sofort schwarz und HUD aus. Läuft im Start des GameManagers, also bevor das erste Bild gezeichnet wird:
     // So sieht man auch das Laden der Stadt nicht
     public void Prepare()

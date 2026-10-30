@@ -6,7 +6,8 @@ using UnityEngine.TextCore.LowLevel;
 using UnityEngine.UI;
 
 // Baut alles für die Pizza-Wärme auf:
-// - HUD-Prefab (Wärmebalken, Lieferschein im Intro, "Delivered!"-Panel mit Trinkgeld-Münzen, "Pizza's cold!"-Panel)
+// - HUD-Prefab (Wärmebalken, Lieferschein im Intro, "Delivered!"-Panel mit Trinkgeld-Münzen, "Pizza's cold!"-Panel,
+//   Endbildschirm nach dem letzten Level)
 // - HUD in die geöffnete Szene setzen
 // - Dampf-Partikel am Pizzakarton im Player-Prefab
 // Menü: Tools > Jump and Run > Pizza Heat. Alles mehrfach ausführbar, vorhandenes wird ersetzt.
@@ -147,6 +148,7 @@ public static class PizzaHeatSetup
         BuildHeatBar(gameplay, serializedHud);
         BuildDeliveredPanel(root.transform, serializedHud);
         BuildColdPanel(root.transform, serializedHud);
+        BuildEndPanel(root.transform, serializedHud);
         BuildIntroTitle(root.transform, serializedHud);
         // Zuletzt erzeugt = zuletzt gezeichnet: Die Iris liegt über allem anderen im HUD
         BuildIris(root.transform);
@@ -393,6 +395,101 @@ public static class PizzaHeatSetup
 
         hud.FindProperty("coldPanel").objectReferenceValue = panel.gameObject;
         panel.gameObject.SetActive(false);
+    }
+
+    // Endbildschirm nach dem letzten Level: großer Lieferschein mittig, eine Zeile pro Level (Nummer, Adresse, 3 Münzen),
+    // darunter die Summe. Die Zeilen legt PizzaHud zur Laufzeit aus der ausgeschalteten Vorlage an, denn wie viele Levels
+    // es gibt, steht erst in den Build Settings fest. Leicht abgedunkelt, damit der Zettel vor dem Tanz lesbar bleibt
+    private static void BuildEndPanel(Transform parent, SerializedObject hud)
+    {
+        RectTransform panel = CreateImage("End Panel", parent, new Color(0f, 0f, 0f, 0.35f));
+        Stretch(panel, 0f);
+        RectTransform paper = Ticket("Ticket", panel, new Vector2(0.5f, 0.5f), -1f);
+        RectTransform band = Band("Band", paper, PizzeriaRed, 50f, 12f);
+        AddLayoutSize(PizzaIcon(band, 60f), 60f, 60f);
+        TicketText("Title", band, "All pizzas delivered!", 68f, Color.white, boldFont);
+
+        RectTransform body = Body("Body", paper, 60f, 22f, 24f, 10f);
+        Sprite circle = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
+
+        // Zeilen in einer eigenen Spalte: Dort hängt die Vorlage, die Kopien landen daneben (gleicher Elternteil)
+        RectTransform rows = CreateRect("Rows", body);
+        var rowsLayout = rows.gameObject.AddComponent<VerticalLayoutGroup>();
+        rowsLayout.spacing = 10f;
+        rowsLayout.childControlWidth = rowsLayout.childControlHeight = true;
+        rowsLayout.childForceExpandWidth = true;
+        rowsLayout.childForceExpandHeight = false;
+
+        // Nummer | Adresse (nimmt den Rest der Breite, linksbündig) | Münzen: So stehen alle Münzreihen bündig untereinander
+        RectTransform row = CreateRect("Row Template", rows);
+        var rowLayout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+        rowLayout.spacing = 18f;
+        rowLayout.childAlignment = TextAnchor.MiddleLeft;
+        rowLayout.childControlWidth = rowLayout.childControlHeight = true;
+        rowLayout.childForceExpandWidth = rowLayout.childForceExpandHeight = false;
+        var rowGroup = row.gameObject.AddComponent<CanvasGroup>();
+        rowGroup.interactable = false;
+        rowGroup.blocksRaycasts = false;
+
+        TextMeshProUGUI number = TicketText("Number", row, "1.", 40f, FadedInkColor, boldFont);
+        number.alignment = TextAlignmentOptions.Right;
+        number.gameObject.AddComponent<LayoutElement>().preferredWidth = 48f;
+        TextMeshProUGUI address = TicketText("Address", row, "No. 42, Pepperoni Parkway", 40f, InkColor, semiBoldFont);
+        address.alignment = TextAlignmentOptions.Left;
+        address.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+
+        RectTransform rowCoins = CreateRect("Coins", row);
+        var coinsLayout = rowCoins.gameObject.AddComponent<HorizontalLayoutGroup>();
+        coinsLayout.spacing = 12f;
+        coinsLayout.childAlignment = TextAnchor.MiddleRight;
+        coinsLayout.childControlWidth = coinsLayout.childControlHeight = true;
+        coinsLayout.childForceExpandWidth = coinsLayout.childForceExpandHeight = false;
+        coinsLayout.padding = new RectOffset(30, 0, 4, 4);
+        for (int i = 0; i < 3; i++)
+        {
+            EndCoin("Coin " + (i + 1), rowCoins, circle, 46f);
+        }
+        row.gameObject.SetActive(false);
+
+        // Trennlinie über der Summe
+        RectTransform line = CreateImage("Divider", body, new Color(FadedInkColor.r, FadedInkColor.g, FadedInkColor.b, 0.5f));
+        AddLayoutSize(line, 0f, 3f);
+        line.GetComponent<LayoutElement>().flexibleWidth = 1f;
+
+        RectTransform totalRow = CreateRect("Total", body);
+        var totalLayout = totalRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+        totalLayout.spacing = 18f;
+        totalLayout.childAlignment = TextAnchor.MiddleCenter;
+        totalLayout.childControlWidth = totalLayout.childControlHeight = true;
+        totalLayout.childForceExpandWidth = totalLayout.childForceExpandHeight = false;
+        totalLayout.padding = new RectOffset(0, 0, 6, 6);
+        TicketText("Label", totalRow, "TOTAL TIP", 32f, FadedInkColor, semiBoldFont, 12f);
+        EndCoin("Coin", totalRow, circle, 60f).color = new Color(1f, 0.8f, 0.15f);
+        TextMeshProUGUI total = TicketText("Amount", totalRow, "0 / 15", 64f, InkColor, boldFont);
+
+        TicketText("Thanks", body, "Thanks for playing!", 44f, InkColor, boldFont);
+        TextMeshProUGUI hint = TicketText("Replay Hint", body, "Press Jump to play again", 30f, FadedInkColor, semiBoldFont);
+        var hintGroup = hint.gameObject.AddComponent<CanvasGroup>();
+        hintGroup.alpha = 0f;
+
+        hud.FindProperty("endPanel").objectReferenceValue = panel.gameObject;
+        hud.FindProperty("endRowTemplate").objectReferenceValue = row;
+        hud.FindProperty("endTotal").objectReferenceValue = total;
+        hud.FindProperty("endHint").objectReferenceValue = hintGroup;
+        panel.gameObject.SetActive(false);
+    }
+
+    // Münze wie auf der "Delivered!"-Karte: Kreis-Sprite mit dunkelgoldenem Rand
+    private static Image EndCoin(string name, Transform parent, Sprite circle, float size)
+    {
+        RectTransform coin = CreateImage(name, parent, Color.white);
+        var image = coin.GetComponent<Image>();
+        image.sprite = circle;
+        AddLayoutSize(coin, size, size);
+        var rim = coin.gameObject.AddComponent<Outline>();
+        rim.effectColor = new Color(0.6f, 0.38f, 0.05f);
+        rim.effectDistance = new Vector2(3f, -3f);
+        return image;
     }
 
     // Lieferschein unten mittig, während die Kamera zum Kunden fliegt: rotes Band "DELIVERY ORDER", darunter die Adresse

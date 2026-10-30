@@ -44,12 +44,55 @@ public class LevelFlow : MonoBehaviour
     {
         for (int i = SceneManager.GetActiveScene().buildIndex + 1; i < SceneManager.sceneCountInBuildSettings; i++)
         {
-            if (Path.GetFileNameWithoutExtension(SceneUtility.GetScenePathByBuildIndex(i)) != CitySceneName)
+            if (!IsCity(i))
             {
                 return i;
             }
         }
         return -1;
+    }
+
+    // Erstes Level in den Build Settings (für "nochmal spielen" nach dem letzten Level)
+    public static int FirstLevelIndex()
+    {
+        for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+        {
+            if (!IsCity(i))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // Nummer des Levels, wie der Spieler sie zählt (1, 2, ...): Build-Index ohne die Stadt-Szene davor
+    public static int LevelNumber(int buildIndex)
+    {
+        int number = 0;
+        for (int i = 0; i <= buildIndex && i < SceneManager.sceneCountInBuildSettings; i++)
+        {
+            if (!IsCity(i))
+            {
+                number++;
+            }
+        }
+        return number;
+    }
+
+    public static int CurrentLevelNumber()
+    {
+        return LevelNumber(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    // Wie viele Levels es insgesamt gibt (alle Szenen in den Build Settings außer der Stadt)
+    public static int LevelCount()
+    {
+        return LevelNumber(SceneManager.sceneCountInBuildSettings - 1);
+    }
+
+    private static bool IsCity(int buildIndex)
+    {
+        return Path.GetFileNameWithoutExtension(SceneUtility.GetScenePathByBuildIndex(buildIndex)) == CitySceneName;
     }
 
     public static void Load(int buildIndex)

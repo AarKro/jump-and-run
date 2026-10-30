@@ -63,6 +63,23 @@ public class PizzaHud : MonoBehaviour
     [Header("Kalt")]
     [SerializeField] private GameObject coldPanel;
 
+    [Header("Endbildschirm (nach dem letzten Level)")]
+    [SerializeField] private GameObject endPanel;
+    [Tooltip("Ausgeschaltete Vorlage für eine Zeile pro Level, Kinder \"Number\", \"Address\", \"Coins\"")]
+    [SerializeField] private RectTransform endRowTemplate;
+    [SerializeField] private TextMeshProUGUI endTotal;
+    [Tooltip("\"Press Jump to play again\", erscheint erst, wenn alle Zeilen da sind")]
+    [SerializeField] private CanvasGroup endHint;
+    [Tooltip("Pause zwischen den Zeilen")]
+    [SerializeField] private float endRowInterval = 0.35f;
+    [Tooltip("Pause zwischen den Münzen einer Zeile")]
+    [SerializeField] private float endCoinInterval = 0.12f;
+    [Tooltip("Zeile eines Levels, das in diesem Durchgang nicht geliefert wurde (z.B. im Editor mitten im Spiel gestartet)")]
+    [SerializeField] private Color endMissingTextColor = new Color(0.55f, 0.4f, 0.3f, 0.6f);
+
+    // Alle Zeilen sind aufgeploppt: LevelGoal wartet darauf, bevor Springen das Spiel neu startet
+    public bool EndScreenReady { get; private set; }
+
     private float overheatBaseAlpha;
     private Coroutine gameplayFade;
     private Coroutine titleFade;
@@ -87,6 +104,10 @@ public class PizzaHud : MonoBehaviour
         }
         deliveredPanel.SetActive(false);
         coldPanel.SetActive(false);
+        if (endPanel != null)
+        {
+            endPanel.SetActive(false);
+        }
         if (introTitle != null)
         {
             introTitle.alpha = 0f;
@@ -375,5 +396,91 @@ public class PizzaHud : MonoBehaviour
             }
             coin.rectTransform.localScale = Vector3.one;
         }
+    }
+
+    // ---------- Endbildschirm ----------
+
+    // Nach dem letzten Level: ein großer Lieferschein mit einer Zeile pro Level (Adresse + Münzen) und der Summe.
+    // Die "Delivered!"-Karte verschwindet, der Kunde tanzt dahinter weiter
+    public void ShowEndScreen()
+    {
+        if (endPanel == null)
+        {
+            EndScreenReady = true;
+            return;
+        }
+        deliveredPanel.SetActive(false);
+        endPanel.SetActive(true);
+        StartCoroutine(PlayEndScreen());
+    }
+
+    private IEnumerator PlayEndScreen()
+    {
+        EndScreenReady = false;
+        endHint.alpha = 0f;
+        int levelCount = LevelFlow.LevelCount();
+        int maxCoins = levelCount * 3;
+        int total = 0;
+        endTotal.text = $"0 / {maxCoins}";
+
+        // Erst alle Zeilen anlegen (unsichtbar über ihre CanvasGroup), dann nacheinander zeigen. Eine unsichtbare
+        // Zeile zählt für die Layout Group trotzdem mit: Der Zettel hat so von Anfang an seine volle Größe und wächst
+        // nicht ruckweise mit jeder neuen Zeile
+        var rows = new RectTransform[levelCount];
+        var rowCoins = new Image[levelCount][];
+        var earned = new int[levelCount];
+        for (int i = 0; i < levelCount; i++)
+        {
+            int level = i + 1;
+            RectTransform row = Instantiate(endRowTemplate, endRowTemplate.parent);
+            row.name = "Row " + level;
+            row.gameObject.SetActive(true);
+            row.GetComponent<CanvasGroup>().alpha = 0f;
+
+            // Die Teile über ihre Namen suchen: Die Vorlage baut PizzaHeatSetup, eine eigene Komponente nur für drei
+            // Verweise wäre mehr Aufwand als nötig
+            var number = row.Find("Number").GetComponent<TextMeshProUGUI>();
+            var address = row.Find("Address").GetComponent<TextMeshProUGUI>();
+            number.text = level + ".";
+            if (DeliveryLog.TryGet(level, out DeliveryLog.Entry entry))
+            {
+                address.text = string.IsNullOrEmpty(entry.address) ? "Level " + level : entry.address;
+                earned[i] = entry.coins;
+            }
+            else
+            {
+                address.text = "Level " + level;
+                address.color = number.color = endMissingTextColor;
+            }
+
+            rowCoins[i] = row.Find("Coins").GetComponentsInChildren<Image>(true);
+            foreach (Image coin in rowCoins[i])
+            {
+                coin.color = coinMissingColor;
+            }
+            rows[i] = row;
+        }
+
+        for (int i = 0; i < levelCount; i++)
+        {
+            yield return new WaitForSeconds(endRowInterval);
+            rows[i].GetComponent<CanvasGroup>().alpha = 1f;
+            yield return Pop(rows[i], 1.12f, 0.15f);
+
+            for (int c = 0; c < earned[i] && c < rowCoins[i].Length; c++)
+            {
+                yield return new WaitForSeconds(endCoinInterval);
+                Image coin = rowCoins[i][c];
+                coin.color = coinEarnedColor;
+                total++;
+                endTotal.text = $"{total} / {maxCoins}";
+                StartCoroutine(Pop(endTotal.rectTransform, 1.15f, 0.12f));
+                yield return Pop(coin.rectTransform, coinPopScale, 0.12f);
+            }
+        }
+
+        yield return new WaitForSeconds(endRowInterval);
+        yield return Fade(endHint, 1f, 0.4f);
+        EndScreenReady = true;
     }
 }

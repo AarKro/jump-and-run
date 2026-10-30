@@ -44,6 +44,8 @@ public class GameManager : MonoBehaviour
 
     private PlayerController playerController;
     private PlayerLife playerLife;
+    // Kennt die Lieferadresse des Levels (steht im Intro auf dem Lieferschein), für den Endbildschirm
+    private IntroFlyover intro;
 
     private Transform currentRespawnPoint;
     // Tür des letzten Checkpoints (bzw. die Start-Tür). Ohne Tür wird am currentRespawnPoint aufgeploppt
@@ -78,7 +80,7 @@ public class GameManager : MonoBehaviour
         bool restarted = LevelFlow.ConsumeRestart();
 
         // Intro: sofort schwarz (Iris zu) und HUD aus, noch bevor das erste Bild gezeichnet wird
-        IntroFlyover intro = FindAnyObjectByType<IntroFlyover>();
+        intro = FindAnyObjectByType<IntroFlyover>();
         if (intro != null)
         {
             intro.Prepare();
@@ -248,7 +250,9 @@ public class GameManager : MonoBehaviour
 
         LevelFinished = true;
         FreezePlayer();
-        PizzaDelivered?.Invoke(CoinsForHeat(HeatPercent));
+        int coins = CoinsForHeat(HeatPercent);
+        DeliveryLog.Record(LevelFlow.CurrentLevelNumber(), intro != null ? intro.DeliveryAddress : null, coins);
+        PizzaDelivered?.Invoke(coins);
         return true;
     }
 

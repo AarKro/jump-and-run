@@ -44,14 +44,37 @@ public class LevelGoal : MonoBehaviour
     // so kann man auf einen Tastendruck warten, ohne Update mit Zustandsvariablen vollzustopfen
     private IEnumerator WaitForContinue()
     {
-        yield return new WaitForSeconds(continueInputDelay);
+        yield return WaitForJump(continueInputDelay);
 
+        // Letztes Level: erst der Endbildschirm mit dem Trinkgeld aller Levels, dann geht es mit Level 1 von vorne los
+        if (loadNextSceneByBuildIndex && LevelFlow.NextLevelIndex() < 0)
+        {
+            PizzaHud hud = FindAnyObjectByType<PizzaHud>();
+            if (hud != null)
+            {
+                hud.ShowEndScreen();
+                // Springen zählt erst, wenn alle Zeilen aufgeploppt sind und "Press Jump to play again" dasteht
+                while (!hud.EndScreenReady)
+                {
+                    yield return null;
+                }
+                yield return WaitForJump(0f);
+            }
+        }
+
+        LoadNextLevel();
+    }
+
+    private static IEnumerator WaitForJump(float delay)
+    {
+        if (delay > 0f)
+        {
+            yield return new WaitForSeconds(delay);
+        }
         while (!ContinuePressed())
         {
             yield return null;
         }
-
-        LoadNextLevel();
     }
 
     private static bool ContinuePressed()
@@ -76,10 +99,11 @@ public class LevelGoal : MonoBehaviour
         if (nextIndex >= 0)
         {
             LevelFlow.Load(nextIndex);
+            return;
         }
-        else
-        {
-            Debug.Log("Letztes Level erreicht. Keine weitere Szene in den Build Settings.");
-        }
+
+        // Nach dem letzten Level: neues Spiel ab Level 1, mit Kamerafahrt und Trinkgeld wieder bei 0
+        DeliveryLog.Clear();
+        LevelFlow.Load(LevelFlow.FirstLevelIndex());
     }
 }
