@@ -308,11 +308,12 @@ public static class RubbleKit
         return t;
     }
 
-    // Brocken aus dem Kampf (FallingDebris), landet bei u auf dem Boden (ground). Liegt danach als Stufe da (size.y hoch)
-    public static Transform FallingChunk(Transform parent, float u, float ground, float triggerU, int seed)
+    // Brocken aus dem Kampf (FallingDebris), landet bei u auf dem Boden (ground). Liegt danach als Stufe da (size.y hoch).
+    // big: ein größeres Wandstück (2 m hoch), als Trittstein zu etwas, das man vom Boden aus nicht erreicht
+    public static Transform FallingChunk(Transform parent, float u, float ground, float triggerU, int seed, bool big = false)
     {
         LoadMaterials();
-        var size = new Vector3(2.2f, 1.2f, 2.2f);
+        Vector3 size = big ? new Vector3(2.6f, 2f, 2.4f) : new Vector3(2.2f, 1.2f, 2.2f);
         Transform t = Piece(parent, "Falling Debris", u, u, ground, 0);
         // Brocken: ein Stück Fassade (eine Farbe, er bewegt sich) mit Beton und Eisen daran
         var chunk = new GameObject("Chunk") { layer = GroundLayer };

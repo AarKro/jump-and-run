@@ -167,6 +167,7 @@ public static class Level5Builder
         BuildGround(link);
         BuildFallenStatue(link);
         BuildBlockade();
+        BuildParkBlockade(link);
         BuildStartBlockade(link);
         BuildRuins(link);
         BuildKaiju();
@@ -418,6 +419,100 @@ public static class Level5Builder
         Smoke(blockade, new Vector3(-34f, CityLayout.Surface, BlockadeTowerZ - 5f));
     }
 
+    // ---------- Park: Weg zum Brunnen versperrt ----------
+
+    // Warum die Bahn hinter dem Eiswagen vom Südost-Weg auf den Rasen abbiegt (2026-10-30, vorher lief der Weg frei weiter
+    // zum Brunnen und die Abbiegung wirkte willkürlich): Gleich hinter der Abzweigung liegt brennender Schutt auf dem Weg,
+    // weiter zum Brunnen hin steckt ein Hochhaus-Stück, das die Echse aus dem Viertel geschleudert hat, schräg im Rasen quer
+    // über dem Weg (das untere Ende im Krater, das obere mit der Bruchkante hoch in der Luft, brennende Fenster, Rauch).
+    // Kamera: Auf dem Rasen-Stück steht sie ~8 m westlich der Bahn (x ~-87). Hohes darf dort nicht stehen, darum ist der
+    // Schutt an der Abzweigung niedrig und das Turmstück steht weiter zum Brunnen hin, sein vergrabenes Ende zeigt nach
+    // Nordosten (zur Kamera), das hohe nach Südwesten. Dazu etwas Verwüstung im Park (Brandflecken, Schutt, kleine Feuer).
+    // Kulisse ohne Collider, die Bahn biegt ohnehin ab
+    private const float ParkTowerS = 18f;          // Abstand vom Brunnen, wo das Turmstück den Weg kreuzt
+    private const float ParkTowerTilt = 22f;       // so steil steckt es im Boden (Grad)
+    private const float ParkTowerLength = 16f, ParkTowerBuried = 5f, ParkTowerWidth = 7f, ParkTowerThickness = 6f;
+    //   Schutt auf dem Weg hinter der Abzweigung: s vom Brunnen, seitlich (+ = Nordost), Radius. Nicht näher als s 30, dort
+    //   beginnt der Bogen der Bahn
+    private static readonly (float s, float side, float radius)[] PathRubble =
+        { (30f, 0.5f, 1.4f), (27.5f, -1.5f, 2f), (25f, 1.2f, 2.2f), (22.5f, -2.5f, 1.8f) };
+    private static readonly (float s, float side)[] PathFires = { (27f, 0.3f), (24.5f, -1f) };
+    //   Verwüstung im Park: Welt x, z, Brandfleck-Radius, Feuer. Östlich vom Rasen-Stück (hinter der Bahn, dorthin schaut die
+    //   Kamera) und nordöstlich des Südost-Wegs vor dem Eiswagen (nicht an ihm, dort liegt die Deckung)
+    private static readonly (float x, float z, float radius, bool fire)[] ParkDamage =
+    {
+        (-73f, 167f, 3f, true), (-69f, 181f, 2.5f, false), (-74f, 195f, 3f, true), (-63f, 174f, 2f, false),
+        (-65f, 155f, 2.5f, true), (-59f, 153f, 2f, false),
+    };
+
+    private static void BuildParkBlockade(Transform link)
+    {
+        Transform root = new GameObject("Park Blockade").transform;
+        root.SetParent(propParent, false);
+        Material facade = CityBuilder.FacadeMaterialAsset;
+        Material rubble = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Rubble.mat");
+        Material scorched = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Scorched.mat");
+        var random = new System.Random(330);
+        Vector2 center = CityLayout.ParkCenter;
+        const float lawn = CityLayout.ParkLawnTop;
+        var along = new Vector3(DirSE.x, 0f, DirSE.y);
+        var toNE = new Vector3(-DirSE.y, 0f, DirSE.x);
+        Vector3 OnPath(float s, float side) => new Vector3(center.x, lawn, center.y) + along * s + toNE * side;
+
+        // Turmstück: Hochachse (lokal Y, dort liegen die Stockwerke) zeigt schräg nach Südwesten hinauf, lokal X entlang des
+        // Wegs. Das Nordost-Ende steckt ParkTowerBuried tief (entlang der Achse) im Rasen
+        Vector3 axis = (-toNE * Mathf.Cos(ParkTowerTilt * Mathf.Deg2Rad) + Vector3.up * Mathf.Sin(ParkTowerTilt * Mathf.Deg2Rad)).normalized;
+        Quaternion rotation = Quaternion.LookRotation(Vector3.Cross(along, axis), axis);
+        Vector3 hit = OnPath(ParkTowerS, 0f);
+        Renderer tower = PrimitiveKit.Box("Flung High-Rise", root, Vector3.zero, new Vector3(ParkTowerWidth, ParkTowerLength, ParkTowerThickness), facade);
+        tower.transform.SetPositionAndRotation(hit + axis * (ParkTowerLength / 2f - ParkTowerBuried), rotation);
+        BreakEdge(root, tower.transform, 14, random);
+        // Krater, wo es eingeschlagen ist (am vergrabenen Ende), aufgeworfene Erde und Schutt ringsum
+        Vector3 crater = hit - axis * ParkTowerBuried * Mathf.Cos(ParkTowerTilt * Mathf.Deg2Rad) * 0.6f;
+        crater.y = lawn;
+        Cylinder("Crater", root, crater + Vector3.up * 0.02f, 6f, 0.1f, scorched);
+        Cylinder("Crater Rim", root, crater + Vector3.up * 0.05f, 7.2f, 0.2f, rubble);
+        RubblePile(root, crater + toNE * 4f + along * 3f, 2.5f, rubble, facade, random);
+        RubblePile(root, crater + toNE * 3f - along * 4f, 2.5f, rubble, facade, random);
+        RubblePile(root, hit - toNE * 6f + along * 4f, 2f, rubble, facade, random);
+        // Es brennt in Fenstern auf der Seite zur Abzweigung (+X, Südost), Rauch steigt von der Bruchkante
+        foreach (float k in new[] { -0.15f, 0.2f })
+        {
+            HouseFire(root, tower.transform.TransformPoint(new Vector3(0.5f, k, 0.2f)) + along * 0.3f);
+        }
+        Smoke(root, tower.transform.TransformPoint(new Vector3(0f, 0.5f, 0f)));
+
+        // Brennender Schutt auf dem Weg hinter der Abzweigung, mit Brandfleck
+        Cylinder("Path Scorch", root, OnPath(26.5f, 0f) + Vector3.up * 0.03f, 4f, 0.05f, scorched);
+        foreach (var (s, side, radius) in PathRubble)
+        {
+            RubblePile(root, OnPath(s, side), radius, rubble, facade, random);
+        }
+        foreach (var (s, side) in PathFires)
+        {
+            HouseFire(root, OnPath(s, side) + Vector3.up * 0.3f);
+        }
+
+        // Verwüstung im Park
+        int index = 0;
+        foreach (var (x, z, radius, fire) in ParkDamage)
+        {
+            var at = new Vector3(x, lawn, z);
+            Cylinder("Scorch", root, at + Vector3.up * 0.03f, radius, 0.05f, scorched);
+            RubblePile(root, at, radius * 0.6f, rubble, facade, random);
+            if (fire)
+            {
+                HouseFire(root, at + Vector3.up * 0.3f);
+            }
+            // Bäume, die mitten darin stünden (nur sie, der Boden bleibt)
+            LevelBuildKit.Cutout(link, $"Trees Park Damage {++index}", x - radius, x + radius, z - radius, z + radius, treesOnly: true);
+        }
+        // Bäume im Turmstück und im Krater
+        Vector3 high = hit + axis * (ParkTowerLength - ParkTowerBuried);
+        LevelBuildKit.Cutout(link, "Trees Flung High-Rise", Mathf.Min(high.x, crater.x) - 6f, Mathf.Max(high.x, crater.x) + 6f,
+            Mathf.Min(high.z, crater.z) - 6f, Mathf.Max(high.z, crater.z) + 6f, treesOnly: true);
+    }
+
     // ---------- Blockade östlich der Pizzeria ----------
 
     // Warum es nach links (Westen) geht: Rechts der Pizzeria ist ein Wohnhochhaus quer über Gehweg und Straße gestürzt (oben
@@ -456,16 +551,7 @@ public static class Level5Builder
         // Bruchkante oben (Norden): Eisen und Brocken; Dachkante unten (Süden) mit abgeknickter Antenne
         Material concrete = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Broken Concrete.mat");
         Material rebar = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Rebar.mat");
-        for (int i = 0; i < 12; i++)
-        {
-            // Lokale Maße sind wegen der Skalierung Anteile: X und Z -0.5…0.5, Y = 0.5 ist die Bruchkante
-            Vector3 local = new Vector3(((float)random.NextDouble() - 0.5f) * 0.9f, 0.5f + (float)random.NextDouble() * 0.03f, ((float)random.NextDouble() - 0.5f) * 0.9f);
-            Vector3 world = t.TransformPoint(local);
-            Renderer piece = i % 3 == 0
-                ? PrimitiveKit.Part("Rebar", PrimitiveType.Cylinder, blockade, Vector3.zero, new Vector3(0.08f, 0.8f, 0.08f), rebar)
-                : PrimitiveKit.Box("Shard", blockade, Vector3.zero, Vector3.one * (0.8f + (float)random.NextDouble()), concrete);
-            piece.transform.SetPositionAndRotation(world, rotation * Quaternion.Euler(random.Next(-40, 40), random.Next(360), random.Next(-40, 40)));
-        }
+        BreakEdge(blockade, t, 12, random);
         Vector3 roof = t.TransformPoint(new Vector3(0f, -0.5f, 0f));
         Renderer roofEdge = PrimitiveKit.Box("Roof Edge", blockade, Vector3.zero, new Vector3(StartTowerWidth + 0.3f, 0.4f, StartTowerThickness + 0.3f), concrete);
         roofEdge.transform.SetPositionAndRotation(roof, rotation);
@@ -484,6 +570,23 @@ public static class Level5Builder
             HouseFire(blockade, window + Vector3.left * 0.3f);
         }
         Smoke(blockade, t.TransformPoint(new Vector3(0f, 0.45f, -0.4f)));
+    }
+
+    // Abgebrochenes Ende eines liegenden Turmstücks (lokal Y = 0.5 ist die Bruchkante): Betonbrocken und Eisen
+    private static void BreakEdge(Transform parent, Transform tower, int count, System.Random random)
+    {
+        Material concrete = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Broken Concrete.mat");
+        Material rebar = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Rebar.mat");
+        for (int i = 0; i < count; i++)
+        {
+            // Lokale Maße sind wegen der Skalierung Anteile: X und Z -0.5…0.5
+            Vector3 local = new Vector3(((float)random.NextDouble() - 0.5f) * 0.9f, 0.5f + (float)random.NextDouble() * 0.03f, ((float)random.NextDouble() - 0.5f) * 0.9f);
+            Vector3 world = tower.TransformPoint(local);
+            Renderer piece = i % 3 == 0
+                ? PrimitiveKit.Part("Rebar", PrimitiveType.Cylinder, parent, Vector3.zero, new Vector3(0.08f, 0.8f, 0.08f), rebar)
+                : PrimitiveKit.Box("Shard", parent, Vector3.zero, Vector3.one * (0.8f + (float)random.NextDouble()), concrete);
+            piece.transform.SetPositionAndRotation(world, tower.rotation * Quaternion.Euler(random.Next(-40, 40), random.Next(360), random.Next(-40, 40)));
+        }
     }
 
     // ---------- Zerstörtes Hochhausviertel ----------
@@ -1641,7 +1744,8 @@ public static class Level5Builder
     //     (hineinfallen = Respawn), Platte hinunter. Danach landet der Roboter
     //   Four Cheese Avenue: das Hochhaus-Stück, das vor dem Spieler umkippt, schräg hinauf bis 6.2 m, Stufen hinunter auf die
     //     Oregano Street (Finale), dabei fallen Brocken aus dem Kampf. Danach Balkone, ein Stahlträger, zwei Bruchplatten über
-    //     einem brennenden Krater, Schuttberg und Platte hinunter
+    //     einem brennenden Krater, Schuttberg und Platte hinunter, dort ein Doppelschlag fallender Brocken
+    //   Basil Street: fallende Brocken (ein großer als Trittstein zu einer Chili, einer vor der Salami-Kreuzung)
     // Fällt man irgendwo daneben, landet man auf dem Gehweg (kostet nur Zeit); tödlich sind nur Feuer und Krater
     private static void BuildRubble()
     {
@@ -1710,10 +1814,18 @@ public static class Level5Builder
         ((CameraZone)corner.targetObject).transform.SetParent(rubble, false);
         RubbleKit.Step(rubble, F(-100f), F(-102.5f), walk, 4.3f, seed++);
         RubbleKit.Step(rubble, F(-102.5f), F(-105f), walk, 2.6f, seed++);
-        // Brocken aus dem Kampf: einer landet auf der oberen Stufe, einer auf der Kreuzung der Oregano Street (vor dem Finale)
-        foreach (var (spotX, ground, triggerX) in DebrisDrops)
+        // Brocken aus dem Kampf (DebrisDrops): vor dem Finale auf der oberen Stufe und der Oregano-Kreuzung, danach auf der
+        // Four Cheese Avenue hinter dem Krater und in der Basil Street
+        foreach (var (street, spot, ground, trigger, big) in DebrisDrops)
         {
-            RubbleKit.FallingChunk(rubble, F(spotX), ground, F(triggerX), seed++);
+            float DropU(float at) => street == DebrisStreet.FourCheese ? F(at) : BasilU(at);
+            // Ganze u: Die Chili über dem Trittstein sitzt auf ganzen Metern (PrefabGridEnforcer), der Brocken genau darunter
+            float spotU = big ? Mathf.Round(DropU(spot)) : DropU(spot);
+            RubbleKit.FallingChunk(rubble, spotU, ground, DropU(trigger), seed++, big);
+            if (big)
+            {
+                LevelBuildKit.HeatPickup(spotU, StepChiliY, gameplayParent);
+            }
         }
         // ... hinter der Oregano Street: Balkone der stehen gebliebenen Häuser (Oberkante = Wurzel + 0.5), Träger, Schuttberg
         LevelBuildKit.Place("Balcony", Mathf.Round(F(-121f)), 2, rubble);
@@ -1750,16 +1862,31 @@ public static class Level5Builder
     private const float CornerCameraFromZ = 207f;
     private static readonly Vector3 CornerCameraOffset = new Vector3(8f, 6f, -0.5f);
     private const float CornerCameraLookHeight = 4f;
-    //   Brocken aus dem Kampf: Landestelle x, Boden dort, ausgelöst sobald der Spieler an x vorbei ist. Auf der oberen Stufe
-    //   (Oberkante 4.3) und auf der Oregano-Kreuzung (ab x -110 läuft das Finale). Vom Auslöser bis zum Aufprall vergehen
-    //   1.9 s (1 s Warnung + 0.9 s Fall), so weit (~13 m bei 7 m/s) liegt der Auslöser vor der Stelle: Wer ohne zu schauen
-    //   durchläuft, kommt genau beim Aufprall an; wer die Warnung sieht, bleibt davor stehen (2026-10-29, vorher 1.3 s und
-    //   6–8 m ohne Warnung)
-    private static readonly (float spotX, float ground, float triggerX)[] DebrisDrops =
+    //   Brocken aus dem Kampf: Straße, Landestelle (Four Cheese: x, Basil: z), Boden dort, Auslöser (Spieler vorbei),
+    //   großer Brocken. Vom Auslöser bis zum Aufprall vergehen 1.9 s (1 s Warnung + 0.9 s Fall), so weit (~13 m bei 7 m/s)
+    //   liegt der Auslöser vor der Stelle: Wer ohne zu schauen durchläuft, kommt genau beim Aufprall an; wer die Warnung
+    //   sieht, bleibt davor stehen (2026-10-29, vorher 1.3 s und 6–8 m ohne Warnung).
+    //   2026-10-30 (der Nutzer mochte die Brocken, zwei wirkten aber wie eine Wegwerf-Mechanik): mehr davon nach dem Finale,
+    //   in verschiedenen Mustern. Nach dem Sturz der Echse bröckeln die Fassaden weiter
+    //   - Vor dem Finale: obere Stufe (Oberkante 4.3), Oregano-Kreuzung (ab x -110 läuft das Finale)
+    //   - Doppelschlag hinter dem Krater: Der erste löst aus, sobald man auf der Stufe nach den Bruchplatten steht (dort kann
+    //     man sicher warten), der zweite erst unten an der Platte. Wer nach dem ersten wieder losrennt und über ihn springt,
+    //     läuft genau in den zweiten: zwischen beiden stehen bleiben (2.3 m Platz)
+    //   - Basil Street: ein großer Brocken (2 m hoch) als Trittstein, darüber schwebt eine Chili, die man nur von ihm aus
+    //     erreicht. Der Brocken, der einen fast erschlagen hätte, ist der Weg zu ihr. Dann einer kurz vor der Salami-Kreuzung
+    private enum DebrisStreet { FourCheese, Basil }
+    private static readonly (DebrisStreet street, float spot, float ground, float trigger, bool big)[] DebrisDrops =
     {
-        (-101.25f, 4.3f, -88f),
-        (-107.5f, CityLayout.Surface, -94.5f),
+        (DebrisStreet.FourCheese, -101.25f, 4.3f, -88f, false),
+        (DebrisStreet.FourCheese, -107.5f, CityLayout.Surface, -94.5f, false),
+        (DebrisStreet.FourCheese, -159.5f, CityLayout.Surface, -147.5f, false),
+        (DebrisStreet.FourCheese, -165f, CityLayout.Surface, -152f, false),
+        (DebrisStreet.Basil, 238f, CityLayout.Surface, 225f, true),
+        (DebrisStreet.Basil, 253.5f, CityLayout.Surface, 240.5f, false),
     };
+    //   Chili über dem großen Brocken (Wurzel = Mitte des Triggers, Radius 0.7). Vom Gehweg (0.5) reicht der Kopf im Sprung
+    //   bis 5.3, vom Brocken (Oberkante 2.5) bis 7.3: bei 7 nur von ihm aus erreichbar
+    private const float StepChiliY = 7f;
 
     // Umgestürzter Baum entlang der Bahn: Wurzelteller am Ende, wo der Spieler ankommt (uRoot), der Stamm ist begehbar (nicht
     // heiß), nur die Krone am anderen Ende (uCrown, crownLength lang) brennt (Berührung = Respawn). Auf den Stamm springen,
