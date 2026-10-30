@@ -86,15 +86,7 @@ public static class DogSetup
                 body.constraints = RigidbodyConstraints.None;
             }
 
-            // Alte Wegpunkt-Patrouille entfernen. Über den Namen (bzw. fehlendes Skript), damit dieses Tool
-            // auch noch kompiliert, wenn EnemyPlatformPatrol.cs gelöscht ist
-            foreach (MonoBehaviour behaviour in root.GetComponents<MonoBehaviour>())
-            {
-                if (behaviour != null && behaviour.GetType().Name == "EnemyPlatformPatrol")
-                {
-                    Object.DestroyImmediate(behaviour);
-                }
-            }
+            // Komponenten gelöschter Skripte entfernen (z.B. die alte Wegpunkt-Patrouille)
             GameObjectUtility.RemoveMonoBehavioursWithMissingScript(root);
             if (!root.TryGetComponent(out GroundPatrol patrol))
             {
