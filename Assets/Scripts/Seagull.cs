@@ -49,6 +49,9 @@ public class Seagull : MonoBehaviour
     [SerializeField] private float flapAngle = 35f;
     [SerializeField] private LayerMask groundLayer = 1 << 3;
 
+    // So schnell dreht sich der Schnabel in Flugrichtung. 21 entspricht dem früheren Faktor 0.3 pro Frame bei 60 fps
+    private const float ModelTurnSharpness = 21f;
+
     private State state;
     private float stateTime;
     private float waitTime;
@@ -168,7 +171,10 @@ public class Seagull : MonoBehaviour
                 // Quadratisch beschleunigt: langsam los, schnell unten
                 float k = Mathf.Clamp01(stateTime / diveDuration);
                 transform.position = Vector3.Lerp(flightStart, target, k * k);
-                if (stateTime >= diveDuration)
+                // Unten noch einen Physik-Schritt lang stehen bleiben: Update setzt die Position nach der Physik. Würde der
+                // Collider im selben Frame ausgeschaltet, in dem sie unten ankommt, sähe die Physik die tiefste Stelle nie
+                // (bei niedriger Framerate verfehlte sie den Spieler dann)
+                if (stateTime >= diveDuration + Time.fixedDeltaTime)
                 {
                     hitCollider.enabled = false;
                     if (shadow != null)
@@ -246,7 +252,9 @@ public class Seagull : MonoBehaviour
         lastPosition = transform.position;
         if (velocity.sqrMagnitude > 0.0001f)
         {
-            model.rotation = Quaternion.Slerp(model.rotation, Quaternion.LookRotation(velocity.normalized, Vector3.up), 0.3f);
+            // Exponentiell geglättet mit Time.deltaTime (statt fest 0.3 pro Frame): gleich schnell bei jeder Framerate
+            float blend = 1f - Mathf.Exp(-ModelTurnSharpness * Time.deltaTime);
+            model.rotation = Quaternion.Slerp(model.rotation, Quaternion.LookRotation(velocity.normalized, Vector3.up), blend);
         }
         float speed = state == State.Warn ? flapSpeed * 1.8f : flapSpeed;
         float angle = Mathf.Sin(Time.time * speed) * flapAngle;

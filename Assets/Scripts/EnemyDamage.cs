@@ -164,7 +164,7 @@ public class EnemyDamage : MonoBehaviour
                 collidersDisabledOnSquash.Add(enemyCollider);
             }
         }
-        // Alle anderen Skripte (Patrouille, Flugbewegung, ...) anhalten
+        // Alle anderen Skripte (Patrouille, ...) anhalten
         foreach (MonoBehaviour behaviour in GetComponents<MonoBehaviour>())
         {
             if (behaviour != this && behaviour != keepEnabled && behaviour.enabled)
