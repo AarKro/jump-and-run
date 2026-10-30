@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // Animiert das Modell des Pizzaboten (gebaut von PlayerModelSetup), ganz ohne Animator: nur Drehpunkte, die per Code
-// gedreht werden ("prozedurale Animation"). Die Physik (Kugel-Collider, Rigidbody) weiß davon nichts, das Modell ist reine Optik.
+// gedreht werden ("prozedurale Animation"). Die Physik (Kapsel-Collider, Rigidbody) weiß davon nichts, das Modell ist reine Optik.
 //
 // - Dreht sich ganz in Laufrichtung (±90°, reines Profil). Läuft er in die Tiefe (aus der Tür, zur Mikrowelle), schaut er in diese Richtung.
 // - Laufzyklus: Beine schwingen gegengleich, der Körper wippt. Die Phase wächst mit der gelaufenen Strecke,

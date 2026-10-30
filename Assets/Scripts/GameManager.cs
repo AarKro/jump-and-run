@@ -20,9 +20,7 @@ public class GameManager : MonoBehaviour
 
     [Header("Player und Start")]
     [SerializeField] private GameObject player;
-    [Tooltip("Fallback ohne Tür: Hier taucht der Spieler auf")]
-    [SerializeField] private Transform startPoint;
-    [Tooltip("Tür, aus der der Spieler beim Levelstart läuft (Pizzeria). Leer = einfach am Startpunkt")]
+    [Tooltip("Tür, aus der der Spieler beim Levelstart läuft (Pizzeria). Setzt LevelCity zur Laufzeit (liegt in der Stadt-Szene)")]
     [SerializeField] private SpawnDoor startDoor;
 
     [Header("Wärme (Pizza wird kalt)")]
@@ -47,8 +45,7 @@ public class GameManager : MonoBehaviour
     // Kennt die Lieferadresse des Levels (steht im Intro auf dem Lieferschein), für den Endbildschirm
     private IntroFlyover intro;
 
-    private Transform currentRespawnPoint;
-    // Tür des letzten Checkpoints (bzw. die Start-Tür). Ohne Tür wird am currentRespawnPoint aufgeploppt
+    // Tür des letzten Checkpoints (bzw. die Start-Tür): Beim Respawn läuft der Spieler aus ihr heraus
     private SpawnDoor currentDoor;
     // Kommt er nach einem Respawn auf dem Skateboard aus der Tür? Setzt der Checkpoint (Board-Shop an, Kiosk aus)
     private bool respawnSkating;
@@ -93,7 +90,6 @@ public class GameManager : MonoBehaviour
                 yield return null;
             }
         }
-        currentRespawnPoint = startPoint;
         currentDoor = startDoor;
 
         if (player != null && currentDoor != null && playerLife != null)
@@ -111,13 +107,11 @@ public class GameManager : MonoBehaviour
         }
         else
         {
+            // Jedes Level startet aus der Pizzeria der Stadt. Fehlt sie (oder der Spieler), lieber laut melden
+            Debug.LogWarning("GameManager: Player, PlayerLife oder Start-Tür fehlt.");
             if (intro != null)
             {
                 intro.Release();
-            }
-            if (player != null && currentRespawnPoint != null)
-            {
-                PlacePlayerAt(currentRespawnPoint);
             }
         }
         started = true;
@@ -152,17 +146,10 @@ public class GameManager : MonoBehaviour
         startDoor = door;
     }
 
-    public void SetCheckpoint(Transform checkpoint)
-    {
-        currentRespawnPoint = checkpoint;
-        currentDoor = null;
-    }
-
     // Checkpoint mit Gebäude (Café): Beim Respawn läuft der Spieler aus dessen Tür
     public void SetCheckpoint(SpawnDoor door)
     {
         currentDoor = door;
-        currentRespawnPoint = door.OutsidePoint;
     }
 
     // Ab dem letzten Checkpoint mit oder ohne Skateboard (Level 4: Board-Shop gibt es, am Kiosk wird es abgestellt)
@@ -180,9 +167,9 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        if (player == null || (currentRespawnPoint == null && currentDoor == null))
+        if (playerLife == null || currentDoor == null)
         {
-            Debug.LogWarning("GameManager: Player oder Respawn Point fehlt.");
+            Debug.LogWarning("GameManager: PlayerLife oder Respawn-Tür fehlt.");
             return;
         }
 
@@ -195,10 +182,7 @@ public class GameManager : MonoBehaviour
     {
         IsRespawning = true;
 
-        if (playerLife != null)
-        {
-            yield return playerLife.PlayDeath();
-        }
+        yield return playerLife.PlayDeath();
 
         LevelReset?.Invoke();
         if (playerController != null)
@@ -206,18 +190,7 @@ public class GameManager : MonoBehaviour
             playerController.SetSkating(respawnSkating);
         }
 
-        if (playerLife == null)
-        {
-            PlacePlayerAt(currentRespawnPoint);
-        }
-        else if (currentDoor != null)
-        {
-            yield return playerLife.PlayExit(currentDoor);
-        }
-        else
-        {
-            yield return playerLife.PlayPopIn(currentRespawnPoint.position);
-        }
+        yield return playerLife.PlayExit(currentDoor);
 
         IsRespawning = false;
     }
@@ -240,10 +213,12 @@ public class GameManager : MonoBehaviour
         AddTime(fraction * levelTime);
     }
 
-    // Vom Ziel aufgerufen. Gibt false zurück, wenn das Level schon vorbei ist (z.B. Pizza gerade kalt geworden)
+    // Vom Ziel aufgerufen. Gibt false zurück, wenn das Level schon vorbei ist (z.B. Pizza gerade kalt geworden) oder der
+    // Spieler gerade stirbt: Trifft ihn im selben Physik-Schritt ein Hund und er berührt das Ziel, liegt die Pizza schon auf
+    // der Straße. Nach dem Respawn läuft er neu in den Trigger und liefert dann richtig
     public bool DeliverPizza()
     {
-        if (LevelFinished)
+        if (LevelFinished || IsRespawning)
         {
             return false;
         }
@@ -273,23 +248,6 @@ public class GameManager : MonoBehaviour
     {
         // Mit Stadt: nur die Level-Szene neu laden, die Stadt bleibt
         LevelFlow.Restart();
-    }
-
-    private void PlacePlayerAt(Transform point)
-    {
-        Rigidbody playerRigidbody = player.GetComponent<Rigidbody>();
-
-        if (playerRigidbody != null)
-        {
-            playerRigidbody.linearVelocity = Vector3.zero;
-            playerRigidbody.angularVelocity = Vector3.zero;
-            playerRigidbody.position = point.position;
-            playerRigidbody.rotation = point.rotation;
-        }
-        else
-        {
-            player.transform.SetPositionAndRotation(point.position, point.rotation);
-        }
     }
 
     private void FreezePlayer()

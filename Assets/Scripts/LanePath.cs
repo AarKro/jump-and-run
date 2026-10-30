@@ -258,8 +258,8 @@ public class LanePath : MonoBehaviour
     }
 }
 
-// Zugriff auf die Laufbahn von überall. Ohne LanePath in der Szene (z.B. Level 2) ist die Bahn einfach die X-Achse
-// bei Z = 0, also genau das alte Verhalten.
+// Zugriff auf die Laufbahn von überall. Ohne LanePath in der Szene (z.B. nur die Stadt-Szene offen) ist die Bahn einfach
+// die X-Achse bei Z = 0.
 public static class Lane
 {
     private static LanePath Path => LanePath.Instance;

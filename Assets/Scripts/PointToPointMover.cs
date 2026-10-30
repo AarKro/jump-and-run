@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // Bewegt einen kinematischen Rigidbody mit Easing zwischen zwei Punkten hin und her und wartet an den Enden.
-// Startet von der Position im Editor aus. Basis für MovingPlatform, wird direkt vom Flying Enemy benutzt.
+// Startet von der Position im Editor aus. Basis für MovingPlatform.
 [RequireComponent(typeof(Rigidbody))]
 public class PointToPointMover : MonoBehaviour
 {

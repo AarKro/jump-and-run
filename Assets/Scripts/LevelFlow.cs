@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 // Levelwechsel und Neustart. Ist die Stadt geladen, bleibt sie es: Nur die Level-Szene wird entladen und die nächste
-// additiv dazugeladen. Ohne Stadt (Level 2) wie gehabt mit SceneManager.LoadScene.
+// additiv dazugeladen. Ist sie (noch) nicht geladen, normal mit SceneManager.LoadScene, das Level lädt sie dann selbst (LevelCity).
 // Die Coroutine braucht ein Objekt, das den Szenenwechsel überlebt (DontDestroyOnLoad), denn das Level, das den
 // Wechsel auslöst, wird dabei selbst entladen.
 public class LevelFlow : MonoBehaviour
@@ -122,11 +122,5 @@ public class LevelFlow : MonoBehaviour
         }
         yield return SceneManager.LoadSceneAsync(buildIndex, LoadSceneMode.Additive);
         SceneManager.SetActiveScene(SceneManager.GetSceneByBuildIndex(buildIndex));
-
-        // Level ohne Stadt (z.B. Level 2 aus Plattformen): Stadt wieder entladen
-        if (LevelCity.Instance == null)
-        {
-            yield return SceneManager.UnloadSceneAsync(CitySceneName);
-        }
     }
 }

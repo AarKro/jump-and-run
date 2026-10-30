@@ -5,18 +5,10 @@ public class Checkpoint : MonoBehaviour
     // Dieser Checkpoint wurde gerade erreicht (z.B. für Effekte am Café)
     public event System.Action Activated;
 
-    [Tooltip("Gebäude-Tür (z.B. Café): Beim Respawn läuft der Spieler aus dieser Tür. Hat Vorrang vor respawnPoint")]
+    [Tooltip("Gebäude-Tür (z.B. Café): Beim Respawn läuft der Spieler aus dieser Tür")]
     [SerializeField] private SpawnDoor door;
-    [SerializeField] private Transform respawnPoint;
-    [SerializeField] private GameObject inactiveVisual;
-    [SerializeField] private GameObject activeVisual;
 
     private bool activated;
-
-    private void Start()
-    {
-        UpdateVisuals(false);
-    }
 
     private void OnTriggerEnter(Collider other)
     {
@@ -35,11 +27,10 @@ public class Checkpoint : MonoBehaviour
             }
             else
             {
-                GameManager.Instance.SetCheckpoint(respawnPoint != null ? respawnPoint : transform);
+                Debug.LogWarning($"Checkpoint {name}: keine Tür gesetzt, der Respawn bleibt an der alten Tür.");
             }
         }
 
-        UpdateVisuals(true);
         Activated?.Invoke();
     }
 
@@ -47,19 +38,5 @@ public class Checkpoint : MonoBehaviour
     public void ResetCheckpoint()
     {
         activated = false;
-        UpdateVisuals(false);
-    }
-
-    private void UpdateVisuals(bool isActive)
-    {
-        if (inactiveVisual != null)
-        {
-            inactiveVisual.SetActive(!isActive);
-        }
-
-        if (activeVisual != null)
-        {
-            activeVisual.SetActive(isActive);
-        }
     }
 }

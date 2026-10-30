@@ -1,14 +1,9 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement;
 
 public class LevelGoal : MonoBehaviour
 {
-    [Header("Levelwechsel")]
-    [SerializeField] private string nextSceneName;
-    [SerializeField] private bool loadNextSceneByBuildIndex = true;
-
     [Header("Weiter nach dem Abliefern")]
     [Tooltip("Erst nach dieser Zeit zählt Springen als \"Weiter\", damit ein Sprung beim Ankommen nicht sofort weiterschaltet")]
     [SerializeField] private float continueInputDelay = 0.5f;
@@ -47,7 +42,7 @@ public class LevelGoal : MonoBehaviour
         yield return WaitForJump(continueInputDelay);
 
         // Letztes Level: erst der Endbildschirm mit dem Trinkgeld aller Levels, dann geht es mit Level 1 von vorne los
-        if (loadNextSceneByBuildIndex && LevelFlow.NextLevelIndex() < 0)
+        if (LevelFlow.NextLevelIndex() < 0)
         {
             PizzaHud hud = FindAnyObjectByType<PizzaHud>();
             if (hud != null)
@@ -87,12 +82,6 @@ public class LevelGoal : MonoBehaviour
 
     private void LoadNextLevel()
     {
-        if (!loadNextSceneByBuildIndex && !string.IsNullOrWhiteSpace(nextSceneName))
-        {
-            SceneManager.LoadScene(nextSceneName);
-            return;
-        }
-
         // Überspringt die Stadt-Szene in den Build Settings; mit Stadt wird nur die Level-Szene getauscht
         int nextIndex = LevelFlow.NextLevelIndex();
 

@@ -57,7 +57,8 @@ public class BoardDropOff : MonoBehaviour
         }
         if (controller.IsSkating)
         {
-            StartCoroutine(DropBoard(life, controller, guy, player.GetComponent<Rigidbody>()));
+            // Auf dem Spieler starten (wie SkateShop): Der Kiosk gehört der Stadt und überlebt einen Neustart, der Spieler nicht
+            life.StartCoroutine(DropBoard(life, controller, guy, player.GetComponent<Rigidbody>()));
         }
     }
 

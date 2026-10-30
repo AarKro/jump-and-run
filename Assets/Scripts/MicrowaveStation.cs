@@ -106,7 +106,10 @@ public class MicrowaveStation : MonoBehaviour
         {
             return;
         }
-        StartCoroutine(Reheat(life, carton));
+        // Die Szene läuft auf dem Spieler, nicht auf dem Kiosk: Der Kiosk gehört der Stadt und überlebt einen Neustart
+        // (Pizza kalt mitten im Aufwärmen), der Spieler nicht. Eine Coroutine stirbt mit ihrem MonoBehaviour, so läuft sie
+        // nicht mit dem zerstörten Spieler weiter (MissingReferenceException). Den Rest räumt ResetForNewLevel auf
+        life.StartCoroutine(Reheat(life, carton));
     }
 
     private IEnumerator Reheat(PlayerLife life, PizzaCarton carton)

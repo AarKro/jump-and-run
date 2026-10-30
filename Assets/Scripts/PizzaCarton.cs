@@ -1,7 +1,7 @@
 using UnityEngine;
 
-// Der Pizzakarton, den der Spieler trägt. Sitzt als Kind am Player. Mit holdPoint folgt er den Händen des Modells
-// (das sich selbst in Laufrichtung dreht), sonst wechselt er die Seite, je nachdem wohin der Spieler schaut.
+// Der Pizzakarton, den der Spieler trägt. Sitzt als Kind am Player und folgt dem holdPoint zwischen den Händen des Modells
+// (das sich selbst in Laufrichtung dreht).
 // Der Dampf zeigt, wie warm die Pizza noch ist.
 public class PizzaCarton : MonoBehaviour
 {
@@ -10,20 +10,14 @@ public class PizzaCarton : MonoBehaviour
     [SerializeField] private ParticleSystem steam;
 
     [Header("Tragen")]
-    [Tooltip("Punkt zwischen den Händen des Spieler-Modells. Leer = alter Platzhalter: Karton neben der Kugel, Seite nach Blickrichtung")]
+    [Tooltip("Punkt zwischen den Händen des Spieler-Modells (setzt PlayerModelSetup)")]
     [SerializeField] private Transform holdPoint;
 
-    private PlayerController player;
-    // Abstand zur Körpermitte in X, aus der Position im Prefab gelesen (Vorzeichen egal)
-    private float carryOffsetX;
     private float fullSteamRate;
     private float fullSteamAlpha;
 
     private void Awake()
     {
-        player = GetComponentInParent<PlayerController>();
-        carryOffsetX = Mathf.Abs(transform.localPosition.x);
-
         if (steam != null)
         {
             fullSteamRate = steam.emission.rateOverTime.constant;
@@ -61,24 +55,12 @@ public class PizzaCarton : MonoBehaviour
         }
     }
 
-    // LateUpdate: läuft nach allen Updates, also nachdem der Spieler seine Blickrichtung gesetzt hat
+    // LateUpdate: läuft nach allen Updates, also nach DeliveryGuy.Update, die Hände sind schon in der Pose dieses Frames
     private void LateUpdate()
     {
         if (holdPoint != null)
         {
-            // Läuft nach DeliveryGuy.Update, die Hände sind also schon in der Pose dieses Frames
             transform.SetPositionAndRotation(holdPoint.position, holdPoint.rotation);
-            return;
         }
-        if (player == null)
-        {
-            return;
-        }
-
-        // localPosition ist relativ zum Spieler, darum wandert der Karton automatisch mit.
-        // Nur X wird gespiegelt, Höhe und Tiefe bleiben wie im Prefab eingestellt.
-        Vector3 local = transform.localPosition;
-        local.x = carryOffsetX * player.FacingDirection;
-        transform.localPosition = local;
     }
 }

@@ -13,7 +13,6 @@ public static class CityPropsSetup
 {
     public const string PrefabFolder = "Assets/Prefabs/City";
     private const string MaterialFolder = "Assets/Materials/City";
-    private const string ParticleMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat";
     private const int GroundLayer = 3;
 
     // Oberkante des Gehwegs (relativ zur Wurzel) und Vorderkante der Hausfassaden
@@ -501,7 +500,7 @@ public static class CityPropsSetup
         ParticleSystem.ShapeModule shape = sparkles.shape;
         shape.shapeType = ParticleSystemShapeType.Sphere;
         shape.radius = 0.2f;
-        sparkleObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(ParticleMaterialPath);
+        sparkleObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(PrimitiveKit.ParticleMaterialPath);
         return sparkles;
     }
 
@@ -882,7 +881,8 @@ public static class CityPropsSetup
 
     // ---------- Spieler ----------
 
-    // Hängt PlayerLife (Tod + Respawn aus der Tür) und die Rauchwolke für die Todesanimation an den Player
+    // Hängt PlayerLife (Tod + Respawn aus der Tür) an den Player. Die alte Rauchwolke (Poof) für Level ohne Iris gibt es
+    // nicht mehr, ein noch vorhandenes "Poof"-Kind wird entfernt
     [MenuItem("Tools/Jump and Run/City/Add Death Animation to Player Prefab")]
     public static void AddPlayerLife()
     {
@@ -895,53 +895,13 @@ public static class CityPropsSetup
             {
                 Object.DestroyImmediate(old.gameObject);
             }
-
-            var poofObject = new GameObject("Poof");
-            poofObject.transform.SetParent(root.transform, false);
-            var poof = poofObject.AddComponent<ParticleSystem>();
-            // Nur auf Abruf (Emit), nicht automatisch
-            poof.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            ParticleSystem.MainModule main = poof.main;
-            main.playOnAwake = false;
-            main.loop = false;
-            main.duration = 1f;
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.4f, 0.8f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(1.5f, 4f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.25f, 0.5f);
-            main.startColor = new Color(1f, 1f, 1f, 0.85f);
-            main.gravityModifier = -0.1f;
-            main.maxParticles = 40;
-            // World: Die Wolke bleibt, wo der Spieler gestorben ist, auch wenn er schon an der Tür wieder auftaucht
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
-
-            ParticleSystem.EmissionModule emission = poof.emission;
-            emission.rateOverTime = 0f;
-            ParticleSystem.ShapeModule shape = poof.shape;
-            shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = 0.3f;
-
-            ParticleSystem.SizeOverLifetimeModule size = poof.sizeOverLifetime;
-            size.enabled = true;
-            size.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(new Keyframe(0f, 0.6f), new Keyframe(1f, 1.4f)));
-            var fade = new Gradient();
-            fade.SetKeys(
-                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
-                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
-            ParticleSystem.ColorOverLifetimeModule color = poof.colorOverLifetime;
-            color.enabled = true;
-            color.color = fade;
-            poofObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(ParticleMaterialPath);
-
-            if (!root.TryGetComponent(out PlayerLife life))
+            if (!root.TryGetComponent(out PlayerLife _))
             {
-                life = root.AddComponent<PlayerLife>();
+                root.AddComponent<PlayerLife>();
             }
-            var serialized = new SerializedObject(life);
-            serialized.FindProperty("poof").objectReferenceValue = poof;
-            serialized.ApplyModifiedPropertiesWithoutUndo();
 
             PrefabUtility.SaveAsPrefabAsset(root, playerPath);
-            Debug.Log("CityPropsSetup: PlayerLife + Rauchwolke am Player-Prefab.");
+            Debug.Log("CityPropsSetup: PlayerLife am Player-Prefab.");
         }
         finally
         {

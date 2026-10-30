@@ -93,6 +93,8 @@ public class PlayerController : MonoBehaviour
     // (wie bei Mario 64): Kreist die Kamera mitten im Lauf um den Spieler, läuft er einfach weiter
     private float inputSign = 1f;
     private float heldDirection;
+    // Zur Laufzeit erzeugtes Material: gehört diesem Spieler und wird mit ihm wieder zerstört (siehe OnDestroy)
+    private PhysicsMaterial noFriction;
 
     private void Awake()
     {
@@ -103,7 +105,7 @@ public class PlayerController : MonoBehaviour
 
         // Reibungsfrei: Die Geschwindigkeit wird im Code gesetzt, Reibung würde nur dagegen bremsen
         // (und mit der stärkeren Sprung-Schwerkraft entsprechend stärker). Verhindert auch Hängenbleiben an Wänden.
-        PhysicsMaterial noFriction = new PhysicsMaterial("PlayerNoFriction")
+        noFriction = new PhysicsMaterial("PlayerNoFriction")
         {
             dynamicFriction = 0f,
             staticFriction = 0f,
@@ -115,6 +117,12 @@ public class PlayerController : MonoBehaviour
     private void OnDestroy()
     {
         GameManager.LevelReset -= ResetState;
+        // Mit "new" erzeugte Assets (Material, PhysicsMaterial, Mesh) räumt Unity nicht mit der Szene weg. Ohne das bliebe
+        // bei jedem Levelwechsel und Neustart ein weiteres im Speicher liegen
+        if (noFriction != null)
+        {
+            Destroy(noFriction);
+        }
     }
 
     // Beim Respawn: Plattform-Schwung und gepufferte Eingaben vergessen
@@ -402,6 +410,11 @@ public class PlayerController : MonoBehaviour
     // Sprungtaste über die Höhe (ohne Taste greift die Jump-Cut-Schwerkraft und es wird ein kleiner Hüpfer)
     public void StompBounce()
     {
+        // Kinematisch (Tod, Tür, Mikrowelle) bewegt ihn ein Skript: Geschwindigkeit setzen ist dort nicht erlaubt
+        if (body.isKinematic)
+        {
+            return;
+        }
         Vector3 velocity = body.linearVelocity;
         velocity.y = JumpVelocity * stompBounceFraction;
         body.linearVelocity = velocity;
@@ -414,6 +427,10 @@ public class PlayerController : MonoBehaviour
     // Höhe = v² / (2 * Schwerkraft), bei 40 m/s² und 20 m/s also etwa 5 m
     public void Bounce(float upwardVelocity)
     {
+        if (body.isKinematic)
+        {
+            return;
+        }
         Vector3 velocity = body.linearVelocity;
         velocity.y = upwardVelocity;
         body.linearVelocity = velocity;

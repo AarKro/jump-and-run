@@ -38,7 +38,9 @@ public class SkateShop : MonoBehaviour
         {
             return;
         }
-        StartCoroutine(PickUpBoard(life, controller));
+        // Auf dem Spieler starten, nicht auf dem Laden (Stadt): Wird das Level mittendrin neu geladen (Pizza kalt), endet die
+        // Coroutine mit dem Spieler, statt mit zerstörten Verweisen weiterzulaufen
+        life.StartCoroutine(PickUpBoard(life, controller));
     }
 
     private IEnumerator PickUpBoard(PlayerLife life, PlayerController controller)

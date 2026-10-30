@@ -4,7 +4,7 @@ using UnityEngine;
 // Tod und Wiederauftauchen des Spielers. GameManager ruft das beim Respawn und beim Levelstart auf:
 // Tod = einfrieren, aufs Gesicht fallen, der Karton fliegt im Bogen nach vorn und klappt auf, die Pizza dreht sich heraus
 // und landet mit dem Käse nach unten ("Splat"). Er bleibt kurz liegen, dann schließt sich die Iris über ihm.
-// Danach läuft er aus einer Tür (SpawnDoor) heraus, oder ploppt ohne Tür am Respawn-Punkt auf.
+// Danach läuft er aus einer Tür (SpawnDoor) heraus: der Pizzeria oder dem letzten Checkpoint.
 // Während beides läuft, ist der Rigidbody kinematisch: Die Physik hält sich raus, der Code bewegt ihn.
 [RequireComponent(typeof(PlayerController))]
 public class PlayerLife : MonoBehaviour
@@ -24,9 +24,6 @@ public class PlayerLife : MonoBehaviour
     [SerializeField] private float pizzaExtraDistance = 0.9f;
     [SerializeField] private ParticleSystem splat;
     [SerializeField] private int splatParticles = 24;
-    [Tooltip("Ohne Iris im Level (Fallback): Rauchwolke und verschwinden wie früher")]
-    [SerializeField] private ParticleSystem poof;
-    [SerializeField] private int poofParticles = 24;
 
     [Header("Aus der Tür laufen")]
     [SerializeField] private float walkOutDuration = 0.6f;
@@ -48,7 +45,6 @@ public class PlayerLife : MonoBehaviour
 
     private PlayerController controller;
     private Rigidbody body;
-    private Vector3 normalScale;
     private DeliveryGuy guy;
     // Karton, Deckel-Scharnier und Pizza: werden beim Tod weggeworfen und beim Respawn zurückgeholt
     private PizzaCarton carton;
@@ -58,7 +54,7 @@ public class PlayerLife : MonoBehaviour
     private Transform lidHinge;
     private Transform pizza;
     private Vector3 pizzaLocalPosition;
-    // Die Iris hat sich beim Tod geschlossen: beim Wiederauftauchen (Tür oder Aufploppen) wieder öffnen
+    // Die Iris hat sich beim Tod geschlossen: beim Wiederauftauchen an der Tür wieder öffnen
     private bool irisClosed;
     private Coroutine throwRoutine;
     // Gerade vom Board gefallen (bis er wieder draufsteht)
@@ -69,7 +65,6 @@ public class PlayerLife : MonoBehaviour
         controller = GetComponent<PlayerController>();
         body = GetComponent<Rigidbody>();
         guy = GetComponent<DeliveryGuy>();
-        normalScale = transform.localScale;
         carton = GetComponentInChildren<PizzaCarton>(true);
         if (carton != null)
         {
@@ -203,30 +198,31 @@ public class PlayerLife : MonoBehaviour
         body.isKinematic = true;
         float facing = controller.FacingDirection;
 
-        ScreenIris iris = FindAnyObjectByType<ScreenIris>();
-        Camera view = Camera.main;
-        if (iris == null || guy == null || view == null)
-        {
-            yield return PoofAway();
-            yield break;
-        }
-
         // Karton fliegt aus den Händen (parallel zum Hinfallen)
         throwRoutine = StartCoroutine(ThrowPizza(facing));
 
         // Aufs Gesicht kippen: beschleunigt (wie ein fallendes Brett), am Ende kurz nachfedern
-        for (float t = 0f; t < fallDuration; t += Time.deltaTime)
+        if (guy != null)
         {
-            float k = t / fallDuration;
-            float fall = k < 0.8f ? Mathf.Pow(k / 0.8f, 2f) : 1f + Mathf.Sin((k - 0.8f) / 0.2f * Mathf.PI) * 0.06f;
-            guy.FallAmount = Mathf.Max(0.001f, fall);
-            yield return null;
+            for (float t = 0f; t < fallDuration; t += Time.deltaTime)
+            {
+                float k = t / fallDuration;
+                float fall = k < 0.8f ? Mathf.Pow(k / 0.8f, 2f) : 1f + Mathf.Sin((k - 0.8f) / 0.2f * Mathf.PI) * 0.06f;
+                guy.FallAmount = Mathf.Max(0.001f, fall);
+                yield return null;
+            }
+            guy.FallAmount = 1f;
         }
-        guy.FallAmount = 1f;
 
         yield return new WaitForSeconds(lieTime);
-        yield return iris.Close(view, transform.position + Vector3.up * 0.2f, irisCloseDuration);
-        irisClosed = true;
+        // Die Iris sitzt im HUD jedes Levels. Fehlt sie (Testszene), springt er eben ohne Abblende zur Tür
+        ScreenIris iris = FindAnyObjectByType<ScreenIris>();
+        Camera view = Camera.main;
+        if (iris != null && view != null)
+        {
+            yield return iris.Close(view, transform.position + Vector3.up * 0.2f, irisCloseDuration);
+            irisClosed = true;
+        }
     }
 
     // Karton im Bogen nach vorn (in Blickrichtung), überschlägt sich, der Deckel klappt auf. Kurz nach dem Abwurf dreht sich
@@ -379,24 +375,6 @@ public class PlayerLife : MonoBehaviour
         }
     }
 
-    // Alter Tod ohne Iris: plattdrücken, Rauchwolke, verschwinden
-    private IEnumerator PoofAway()
-    {
-        Vector3 squashed = new Vector3(normalScale.x * 1.35f, normalScale.y * 0.55f, normalScale.z * 1.35f);
-        for (float t = 0f; t < 0.35f; t += Time.deltaTime)
-        {
-            transform.localScale = Vector3.Lerp(normalScale, squashed, Mathf.Sin(t / 0.35f * Mathf.PI * 0.5f));
-            yield return null;
-        }
-        if (poof != null)
-        {
-            poof.transform.SetParent(null, true);
-            poof.Emit(poofParticles);
-        }
-        transform.localScale = Vector3.zero;
-        yield return new WaitForSeconds(0.4f);
-    }
-
     // Läuft aus der Tür heraus auf die Laufbahn, danach hat der Spieler wieder die Kontrolle
     public IEnumerator PlayExit(SpawnDoor door)
     {
@@ -438,25 +416,6 @@ public class PlayerLife : MonoBehaviour
         Teleport(door.InsidePosition);
     }
 
-    // Ohne Tür (z.B. Level 2): am Punkt kurz aufploppen
-    public IEnumerator PlayPopIn(Vector3 position)
-    {
-        controller.Freeze();
-        body.isKinematic = true;
-        ResetLook(position);
-        Teleport(position);
-        OpenIrisAt(position);
-
-        const float popDuration = 0.25f;
-        for (float t = 0f; t < popDuration; t += Time.deltaTime)
-        {
-            transform.localScale = normalScale * Mathf.Lerp(0f, 1f, t / popDuration);
-            yield return null;
-        }
-        transform.localScale = normalScale;
-        Revive();
-    }
-
     // ---------- Für kurze Szenen (z.B. Mikrowelle): Spieler übernehmen, hinlaufen lassen, freigeben ----------
 
     public void BeginScripted()
@@ -493,14 +452,7 @@ public class PlayerLife : MonoBehaviour
         Quaternion frame = Lane.Frame(Lane.Project(at));
         body.rotation = frame;
         transform.rotation = frame;
-        transform.localScale = normalScale;
         RestoreAfterDeath();
-        if (poof != null && poof.transform.parent != transform)
-        {
-            // Die Rauchwolke wurde zum Abspielen abgekoppelt (sonst würde sie mit dem Spieler schrumpfen), zurückholen
-            poof.transform.SetParent(transform, false);
-            poof.transform.localPosition = Vector3.zero;
-        }
     }
 
     private void Teleport(Vector3 position)
@@ -513,6 +465,12 @@ public class PlayerLife : MonoBehaviour
     {
         body.isKinematic = false;
         body.linearVelocity = Vector3.zero;
-        controller.Unfreeze();
+        // Ist das Level inzwischen vorbei (Pizza beim Herauslaufen oder an der Mikrowelle kalt geworden), bleibt er
+        // eingefroren. Sonst gäbe Unfreeze ihm die Steuerung zurück, obwohl "Pizza's cold!" dasteht
+        GameManager game = GameManager.Instance;
+        if (game == null || !game.LevelFinished)
+        {
+            controller.Unfreeze();
+        }
     }
 }
