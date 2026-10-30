@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
 using UnityEditor;
 using UnityEngine;
 
@@ -121,9 +120,10 @@ public static class Level3Builder
     // Ohne Dialog, für den Aufruf über Skripte (MCP)
     public static void Build()
     {
-        EnsureScene();
+        LevelBuildKit.EnsureScene(ScenePath, TemplateScenePath, TemplateScenePath, "Level3Builder");
         var scene = LevelBuildKit.OpenAndClear(ScenePath);
-        UsePicnicGoal();
+        // Ziel ohne Haus: das Picknick statt des Goal-Prefabs mit Kundenhaus
+        LevelBuildKit.UseGoal(ParkSetup.PrefabFolder + "/Picnic Goal.prefab");
         BuildLane();
         groundParent = LevelBuildKit.Group("Level Ground");
         gameplayParent = LevelBuildKit.Group("Level Gameplay");
@@ -172,24 +172,6 @@ public static class Level3Builder
         LevelBuildKit.Cutout(link, "Ice Cream Truck", c.x - 5f, c.x + 5f, c.z - 5f, c.z + 5f, keepGround: true);
     }
 
-    // Ziel ohne Haus: Das Goal-Prefab mit Kundenhaus (aus der kopierten Szene) gegen das Picknick tauschen. Es heißt weiter
-    // "Goal", damit OpenAndClear und SetupEssentials es finden
-    private static void UsePicnicGoal()
-    {
-        const string picnicPath = ParkSetup.PrefabFolder + "/Picnic Goal.prefab";
-        GameObject old = GameObject.Find("Goal");
-        if (old != null && PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(old) == picnicPath)
-        {
-            return;
-        }
-        if (old != null)
-        {
-            Object.DestroyImmediate(old);
-        }
-        var goal = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(picnicPath));
-        goal.name = "Goal";
-    }
-
     // Die Kamera steht am Teich hinter der Bahn (Fountain Camera Zone reicht bis zum Ende): Das Picknick wird darum um seine
     // Wurzel umgedreht, Decke zum Wasser (lokal -Z), Kunde und Freundin schauen zur Kamera. Die Wurzel selbst muss im
     // Lane-Rahmen bleiben (PrefabGridEnforcer), also werden ihre Kinder gedreht, ausgehend von den Werten im Prefab
@@ -208,26 +190,6 @@ public static class Level3Builder
             child.localPosition = turn * original.localPosition;
             child.localRotation = turn * original.localRotation;
         }
-    }
-
-    // Neue Szene als Kopie von Level 2 (bringt die festen Objekte mit), hinter Level 2 in die Build Settings
-    private static void EnsureScene()
-    {
-        if (!File.Exists(ScenePath))
-        {
-            if (!AssetDatabase.CopyAsset(TemplateScenePath, ScenePath))
-            {
-                throw new System.Exception($"Level3Builder: Konnte {TemplateScenePath} nicht nach {ScenePath} kopieren");
-            }
-        }
-        var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
-        if (scenes.Exists(entry => entry.path == ScenePath))
-        {
-            return;
-        }
-        int after = scenes.FindIndex(entry => entry.path == TemplateScenePath);
-        scenes.Insert(after + 1, new EditorBuildSettingsScene(ScenePath, true));
-        EditorBuildSettings.scenes = scenes.ToArray();
     }
 
     // ---------- Bahn ----------
@@ -470,17 +432,9 @@ public static class Level3Builder
         Material foundation = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Foundation.mat");
         foreach (float edge in new[] { from + 0.1f, to - 0.1f })
         {
-            LaneBox("Pit Wall Walk", edge, AvenueCurbLocalZ, FacadeLocalZ, CityLayout.Surface - 0.01f, foundation);
-            LaneBox("Pit Wall Road", edge, AvenueRoadEndLocalZ, AvenueCurbLocalZ, CityLayout.RoadTop - 0.01f, foundation);
+            LevelBuildKit.LaneBox("Pit Wall Walk", edge, AvenueCurbLocalZ, FacadeLocalZ, CityLayout.Surface - 0.01f, foundation, groundParent);
+            LevelBuildKit.LaneBox("Pit Wall Road", edge, AvenueRoadEndLocalZ, AvenueCurbLocalZ, CityLayout.RoadTop - 0.01f, foundation, groundParent);
         }
-    }
-
-    // 0.2 m dicke Wand quer zur Bahn an der Stelle u, von lokal z0 bis z1, von der Grubensohle (-4) bis top
-    private static void LaneBox(string name, float u, float z0, float z1, float top, Material material)
-    {
-        Renderer box = PrimitiveKit.Box(name, groundParent, Vector3.zero, new Vector3(0.2f, top + 4f, z1 - z0), material);
-        Quaternion frame = LevelBuildKit.Frame(u);
-        box.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + frame * new Vector3(0f, (top - 4f) / 2f, (z0 + z1) / 2f), frame);
     }
 
     // Unsichtbare Boden-Collider (Layer Ground) entlang der Bahn von u0 bis u1: auf Geraden ein Stück, in Bögen etwa 1 m
@@ -662,42 +616,9 @@ public static class Level3Builder
         lift.GetComponent<ScissorLift>().Arrange();
     }
 
-    // Straßensperre quer über den Mozzarella Blvd (nur Optik, vor der Laufbahn): rot-weiße Baken und ein Schild
-    private static void RoadClosure(float z)
-    {
-        float u = Mathf.Round(MozzarellaU(z));
-        Quaternion frame = LevelBuildKit.Frame(u);
-        Vector3 at = LevelBuildKit.Lane.PointAt(u);
-        Transform closure = new GameObject($"Road Closure z{z:F0}").transform;
-        closure.SetParent(propParent, false);
-        closure.SetPositionAndRotation(at, frame);
-
-        Material orange = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Barrier Orange.mat");
-        Material white = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Awning White.mat");
-        Material iron = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Iron.mat");
-        const float road = CityLayout.RoadTop;
-        // Absperrgitter in einer Reihe quer über die Fahrbahn, schräg gestellt: Gerade quer zur Straße sähe die Kamera
-        // von der Seite nur ihre Kanten. Dazwischen Pylonen
-        for (float localZ = AvenueCurbLocalZ - 1.5f; localZ > AvenueRoadEndLocalZ; localZ -= 2.5f)
-        {
-            Transform panel = PrimitiveKit.Pivot("Barrier Panel", closure, new Vector3(0f, road, localZ));
-            panel.localRotation = Quaternion.Euler(0f, 40f, 0f);
-            foreach (float x in new[] { -0.6f, 0.6f })
-            {
-                PrimitiveKit.Box("Post", panel, new Vector3(x, 0.5f, 0f), new Vector3(0.08f, 1f, 0.08f), iron);
-            }
-            for (int i = 0; i < 4; i++)
-            {
-                PrimitiveKit.Box("Stripe", panel, new Vector3(-0.45f + i * 0.3f, 0.85f, 0f), new Vector3(0.3f, 0.25f, 0.04f), i % 2 == 0 ? orange : white);
-            }
-            PrimitiveKit.Part("Cone", PrimitiveType.Cylinder, closure, new Vector3(0f, road + 0.25f, localZ - 1.25f), new Vector3(0.3f, 0.25f, 0.3f), orange);
-        }
-        // Schild an der Bordsteinkante, Schrift zur Kamera
-        PrimitiveKit.Box("Sign Post", closure, new Vector3(0f, road + 0.9f, AvenueCurbLocalZ - 0.4f), new Vector3(0.08f, 1.8f, 0.08f), iron);
-        PrimitiveKit.Box("Sign", closure, new Vector3(0f, road + 1.9f, AvenueCurbLocalZ - 0.45f), new Vector3(1.6f, 0.6f, 0.04f), white);
-        var text = PrimitiveKit.Text("Sign Text", closure, new Vector3(0f, road + 1.9f, AvenueCurbLocalZ - 0.48f), new Vector2(1.5f, 0.5f), "ROAD CLOSED", new Color(0.8f, 0.13f, 0.1f));
-        text.fontSizeMax = 4f;
-    }
+    // Straßensperre quer über den Mozzarella Blvd (nur Optik, vor der Laufbahn)
+    private static void RoadClosure(float z) =>
+        LevelBuildKit.RoadClosure($"Road Closure z{z:F0}", Mathf.Round(MozzarellaU(z)), AvenueCurbLocalZ, AvenueRoadEndLocalZ, propParent);
 
     // ---------- Deko ----------
 

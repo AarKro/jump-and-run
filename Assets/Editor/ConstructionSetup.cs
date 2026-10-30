@@ -57,31 +57,8 @@ public static class ConstructionSetup
         windowLit = PrimitiveKit.Material($"{MaterialFolder}/Window Lit.mat", PrimitiveKit.UnlitShader, new Color(1f, 0.86f, 0.55f));
         interior = PrimitiveKit.Material($"{MaterialFolder}/Interior Dark.mat", PrimitiveKit.UnlitShader, new Color(0.07f, 0.05f, 0.04f));
         signWhite = Lit("Sign White", new Color(0.97f, 0.96f, 0.92f));
-        fenceMesh = TransparentMaterial("Fence Mesh", new Color(0.75f, 0.77f, 0.78f, 0.35f));
-    }
-
-    // Halbdurchsichtiges Material für das Gitter des Bauzauns (URP Lit im Transparent-Modus): Man sieht den Container dahinter.
-    // Im Code muss man alles setzen, was der Inspector beim Umschalten auf "Transparent" sonst selbst erledigt
-    private static Material TransparentMaterial(string name, Color color)
-    {
-        string path = $"{MaterialFolder}/{name}.mat";
-        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (material != null)
-        {
-            return material;
-        }
-        material = new Material(Shader.Find(PrimitiveKit.LitShader));
-        material.SetColor("_BaseColor", color);
-        material.SetFloat("_Surface", 1f);   // Transparent
-        material.SetFloat("_Blend", 0f);     // Alpha
-        material.SetFloat("_ZWrite", 0f);
-        material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        material.SetOverrideTag("RenderType", "Transparent");
-        material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-        AssetDatabase.CreateAsset(material, path);
-        return material;
+        // Halbdurchsichtig: Man sieht den Container hinter dem Gitter des Bauzauns
+        fenceMesh = PrimitiveKit.TransparentMaterial($"{MaterialFolder}/Fence Mesh.mat", new Color(0.75f, 0.77f, 0.78f, 0.35f));
     }
 
     private static void BuildScissorLift()

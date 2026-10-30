@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
 using UnityEditor;
 using UnityEngine;
 
@@ -113,9 +112,10 @@ public static class Level4Builder
     // Ohne Dialog, für den Aufruf über Skripte (MCP)
     public static void Build()
     {
-        EnsureScene();
+        LevelBuildKit.EnsureScene(ScenePath, TemplateScenePath, PreviousScenePath, "Level4Builder");
         var scene = LevelBuildKit.OpenAndClear(ScenePath);
-        UseCrewGoal();
+        // Ziel ohne Haus: die Bauarbeiter auf dem Stahlträger statt des Goal-Prefabs mit Kundenhaus
+        LevelBuildKit.UseGoal(PortSetup.PrefabFolder + "/Crew Goal.prefab");
         BuildLane();
         groundParent = LevelBuildKit.Group("Level Ground");
         gameplayParent = LevelBuildKit.Group("Level Gameplay");
@@ -134,44 +134,6 @@ public static class Level4Builder
         Debug.Log($"Level4Builder: Level 4 (Port) gebaut. Bahn u {LevelBuildKit.Lane.StartU:F2} bis {LevelBuildKit.Lane.EndU:F2}. " +
                   $"Oregano u(z) = {OreganoU(0f):F2} - z, Crust u(x) = x + {CrustU(0f):F2}, Markt u(z) = {MarinaraU(0f):F2} - z, " +
                   $"Marinara Nord u(z) = {MarinaraNorthU(0f):F2} - z, Hafen u(x) = x + {PortU(0f):F2}, S-Kurve z {SBendSouthZ:F2}–{SBendNorthZ:F2}");
-    }
-
-    // Ziel ohne Haus: die Bauarbeiter auf dem Stahlträger statt des Goal-Prefabs mit Kundenhaus (aus der kopierten Szene).
-    // Heißt weiter "Goal", damit OpenAndClear und SetupEssentials es finden
-    private static void UseCrewGoal()
-    {
-        const string crewPath = PortSetup.PrefabFolder + "/Crew Goal.prefab";
-        GameObject old = GameObject.Find("Goal");
-        if (old != null && PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(old) == crewPath)
-        {
-            return;
-        }
-        if (old != null)
-        {
-            Object.DestroyImmediate(old);
-        }
-        var goal = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(crewPath));
-        goal.name = "Goal";
-    }
-
-    // Neue Szene als Kopie von Level 2 (bringt die festen Objekte mit, Ziel mit Kundenhaus), hinter Level 3 in die Build Settings
-    private static void EnsureScene()
-    {
-        if (!File.Exists(ScenePath))
-        {
-            if (!AssetDatabase.CopyAsset(TemplateScenePath, ScenePath))
-            {
-                throw new System.Exception($"Level4Builder: Konnte {TemplateScenePath} nicht nach {ScenePath} kopieren");
-            }
-        }
-        var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
-        if (scenes.Exists(entry => entry.path == ScenePath))
-        {
-            return;
-        }
-        int after = scenes.FindIndex(entry => entry.path == PreviousScenePath);
-        scenes.Insert(after + 1, new EditorBuildSettingsScene(ScenePath, true));
-        EditorBuildSettings.scenes = scenes.ToArray();
     }
 
     // ---------- Bahn ----------
@@ -216,12 +178,12 @@ public static class Level4Builder
     private static void BuildGround()
     {
         // Überwege mit Autos. Mozzarella Blvd wie in Level 2 (Autos von hinter der Crust-Kreuzung)
-        Crossing(-40f, 118f, -15f);
+        LevelBuildKit.AvenueCrossing(-40f, 118f, groundParent, despawnZ: -15f);
         // Crust Street am Ende der Oregano Street: Die Autos kommen von Osten (vom Founder's Circle, lokal +Z) und
         // verschwinden westlich der Kreuzung hinter der Kamera
-        Crossing(Mathf.Round(OreganoU(CrustZ)), 57f, -15f);
+        LevelBuildKit.AvenueCrossing(Mathf.Round(OreganoU(CrustZ)), 57f, groundParent, despawnZ: -15f);
         // Basil Street: Die Autos kommen von Norden (ab der Four Cheese Avenue) und verschwinden in der Crust-Kreuzung hinter der Kamera
-        Crossing(Mathf.Round(CrustU(BasilX)), FourCheeseZ - CrustLaneZ, -15f);
+        LevelBuildKit.AvenueCrossing(Mathf.Round(CrustU(BasilX)), FourCheeseZ - CrustLaneZ, groundParent, despawnZ: -15f);
 
         // Die Stadt hat nur auf den Gehweg-Platten Collider. Über die Fahrbahnen ohne Überweg (vorläufig, der Markt bekommt
         // an der Four Cheese Avenue Poller, siehe Arbeitsschritt 2) und im Hafen liegt unsichtbarer Laufboden.
@@ -232,20 +194,6 @@ public static class Level4Builder
         // Bogen über die Ringstraße auf Gehweghöhe, dann das Stück Ringstraße bis zum Hafen-Beton (der hat eigene Collider)
         LevelBuildKit.WalkGround("Walk Port Corner", pieceStartU[1], pieceStartU[2] + 0.5f, CityLayout.Surface, groundParent);
         LevelBuildKit.WalkGround("Walk Port Road", PortU(CityLayout.West - 13f), pieceStartU[1], CityLayout.PortTop, groundParent);
-    }
-
-    // Erhöhter Überweg über eine 12 m breite Avenue mit zwei Spuren. spawnZ/despawnZ: wo die Autos auftauchen und
-    // verschwinden, lokal Z im Lane-Rahmen (+ = hinter der Bahn, - = Kameraseite)
-    private static void Crossing(float u, float spawnZ, float despawnZ)
-    {
-        GameObject crossing = LevelBuildKit.PlaceAsset("Assets/Prefabs/Avenue Crossing.prefab", u, 0, groundParent);
-        foreach (TrafficLane trafficLane in crossing.GetComponentsInChildren<TrafficLane>(true))
-        {
-            var serialized = new SerializedObject(trafficLane);
-            serialized.FindProperty("spawnZ").floatValue = spawnZ;
-            serialized.FindProperty("despawnZ").floatValue = despawnZ;
-            serialized.ApplyModifiedPropertiesWithoutUndo();
-        }
     }
 
     // ---------- Markt (Marinara Promenade, auf dem Board) ----------
@@ -547,50 +495,15 @@ public static class Level4Builder
         Material foundation = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Foundation.mat");
         foreach (float edge in new[] { CrustU(fromX) + 0.1f, CrustU(toX) - 0.1f })
         {
-            LaneBox("Pit Wall Walk", edge, AvenueCurbLocalZ, ParkEdgeLocalZ, CityLayout.Surface - 0.01f, foundation);
-            LaneBox("Pit Wall Road", edge, AvenueRoadEndLocalZ, AvenueCurbLocalZ, CityLayout.RoadTop - 0.01f, foundation);
+            LevelBuildKit.LaneBox("Pit Wall Walk", edge, AvenueCurbLocalZ, ParkEdgeLocalZ, CityLayout.Surface - 0.01f, foundation, groundParent);
+            LevelBuildKit.LaneBox("Pit Wall Road", edge, AvenueRoadEndLocalZ, AvenueCurbLocalZ, CityLayout.RoadTop - 0.01f, foundation, groundParent);
         }
         PitKill(CrustU(fromX), CrustU(toX), AvenueRoadEndLocalZ, ParkEdgeLocalZ);
     }
 
-    // 0.2 m dicke Wand quer zur Bahn an der Stelle u, von lokal z0 bis z1, von der Grubensohle (-4) bis top
-    private static void LaneBox(string name, float u, float z0, float z1, float top, Material material)
-    {
-        Renderer box = PrimitiveKit.Box(name, groundParent, Vector3.zero, new Vector3(0.2f, top + 4f, z1 - z0), material);
-        Quaternion frame = LevelBuildKit.Frame(u);
-        box.transform.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u) + frame * new Vector3(0f, (top - 4f) / 2f, (z0 + z1) / 2f), frame);
-    }
-
-    // Straßensperre quer über die Fahrbahn (nur Optik, vor der Laufbahn): rot-weiße Gitter, Pylonen, Schild (wie Level 3)
-    private static void RoadClosure(float u)
-    {
-        Quaternion frame = LevelBuildKit.Frame(u);
-        Transform closure = new GameObject($"Road Closure u{u:F0}").transform;
-        closure.SetParent(propParent, false);
-        closure.SetPositionAndRotation(LevelBuildKit.Lane.PointAt(u), frame);
-        Material orange = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Barrier Orange.mat");
-        Material white = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Awning White.mat");
-        Material iron = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Iron.mat");
-        const float road = CityLayout.RoadTop;
-        for (float localZ = AvenueCurbLocalZ - 1.5f; localZ > AvenueRoadEndLocalZ; localZ -= 2.5f)
-        {
-            Transform panel = PrimitiveKit.Pivot("Barrier Panel", closure, new Vector3(0f, road, localZ));
-            panel.localRotation = Quaternion.Euler(0f, 40f, 0f);
-            foreach (float x in new[] { -0.6f, 0.6f })
-            {
-                PrimitiveKit.Box("Post", panel, new Vector3(x, 0.5f, 0f), new Vector3(0.08f, 1f, 0.08f), iron);
-            }
-            for (int i = 0; i < 4; i++)
-            {
-                PrimitiveKit.Box("Stripe", panel, new Vector3(-0.45f + i * 0.3f, 0.85f, 0f), new Vector3(0.3f, 0.25f, 0.04f), i % 2 == 0 ? orange : white);
-            }
-            PrimitiveKit.Part("Cone", PrimitiveType.Cylinder, closure, new Vector3(0f, road + 0.25f, localZ - 1.25f), new Vector3(0.3f, 0.25f, 0.3f), orange);
-        }
-        PrimitiveKit.Box("Sign Post", closure, new Vector3(0f, road + 0.9f, AvenueCurbLocalZ - 0.4f), new Vector3(0.08f, 1.8f, 0.08f), iron);
-        PrimitiveKit.Box("Sign", closure, new Vector3(0f, road + 1.9f, AvenueCurbLocalZ - 0.45f), new Vector3(1.6f, 0.6f, 0.04f), white);
-        var text = PrimitiveKit.Text("Sign Text", closure, new Vector3(0f, road + 1.9f, AvenueCurbLocalZ - 0.48f), new Vector2(1.5f, 0.5f), "ROAD CLOSED", new Color(0.8f, 0.13f, 0.1f));
-        text.fontSizeMax = 4f;
-    }
+    // Straßensperre quer über die Fahrbahn (nur Optik, vor der Laufbahn, wie Level 3)
+    private static void RoadClosure(float u) =>
+        LevelBuildKit.RoadClosure($"Road Closure u{u:F0}", u, AvenueCurbLocalZ, AvenueRoadEndLocalZ, propParent);
 
     // ---------- Hafen (zu Fuß) ----------
     //   Hof: Container-Treppe (1, 2 hoch), 4 m Lücke, 2 hoch, 3 hoch als Absprung (Oberkante 8.3)

@@ -19,7 +19,7 @@ public static class CustomerSetup
     public static void BuildCustomer()
     {
         // Weiß, damit die Farbe aus dem MaterialPropertyBlock (Customer-Skript) unverfälscht ankommt
-        Material customerMaterial = GetOrCreateMaterial(CustomerMaterialPath, Color.white, 0.3f);
+        Material customerMaterial = PrimitiveKit.Material(CustomerMaterialPath, PrimitiveKit.LitShader, Color.white, 0.3f);
 
         GameObject root = PrefabUtility.LoadPrefabContents(GoalPrefabPath);
         try
@@ -64,14 +64,14 @@ public static class CustomerSetup
         rig.SetParent(customerObject.transform, false);
 
         // Unity-Kapsel ist 2 hoch und 1 breit: Skalierung 0.6/0.55 ergibt 1.1 m Körper mit 0.3 m Radius
-        Renderer body = CreatePart("Body", PrimitiveType.Capsule, rig, new Vector3(0f, 0.55f, 0f), new Vector3(0.6f, 0.55f, 0.6f), material);
-        Renderer head = CreatePart("Head", PrimitiveType.Sphere, rig, new Vector3(0f, 1.35f, 0f), Vector3.one * 0.45f, material);
+        Renderer body = PrimitiveKit.Part("Body", PrimitiveType.Capsule, rig, new Vector3(0f, 0.55f, 0f), new Vector3(0.6f, 0.55f, 0.6f), material);
+        Renderer head = PrimitiveKit.Part("Head", PrimitiveType.Sphere, rig, new Vector3(0f, 1.35f, 0f), Vector3.one * 0.45f, material);
 
         // Drehpunkt an der Schulter, der Arm hängt darunter: Dreht man den Pivot, schwingt der Arm um die Schulter
-        Transform leftArm = CreatePivot("Arm Pivot L", rig, new Vector3(-0.33f, 0.95f, 0f));
-        Renderer leftArmMesh = CreatePart("Arm", PrimitiveType.Capsule, leftArm, new Vector3(0f, -0.28f, 0f), new Vector3(0.14f, 0.28f, 0.14f), material);
-        Transform rightArm = CreatePivot("Arm Pivot R", rig, new Vector3(0.33f, 0.95f, 0f));
-        Renderer rightArmMesh = CreatePart("Arm", PrimitiveType.Capsule, rightArm, new Vector3(0f, -0.28f, 0f), new Vector3(0.14f, 0.28f, 0.14f), material);
+        Transform leftArm = PrimitiveKit.Pivot("Arm Pivot L", rig, new Vector3(-0.33f, 0.95f, 0f));
+        Renderer leftArmMesh = PrimitiveKit.Part("Arm", PrimitiveType.Capsule, leftArm, new Vector3(0f, -0.28f, 0f), new Vector3(0.14f, 0.28f, 0.14f), material);
+        Transform rightArm = PrimitiveKit.Pivot("Arm Pivot R", rig, new Vector3(0.33f, 0.95f, 0f));
+        Renderer rightArmMesh = PrimitiveKit.Part("Arm", PrimitiveType.Capsule, rightArm, new Vector3(0f, -0.28f, 0f), new Vector3(0.14f, 0.28f, 0.14f), material);
 
 
         var customer = customerObject.AddComponent<Customer>();
@@ -80,55 +80,8 @@ public static class CustomerSetup
         serialized.FindProperty("leftArm").objectReferenceValue = leftArm;
         serialized.FindProperty("rightArm").objectReferenceValue = rightArm;
         serialized.FindProperty("homeDoor").objectReferenceValue = homeDoor;
-        SetRenderers(serialized.FindProperty("shirtRenderers"), body);
-        SetRenderers(serialized.FindProperty("skinRenderers"), head, leftArmMesh, rightArmMesh);
+        PrimitiveKit.SetReferences(serialized, "shirtRenderers", body);
+        PrimitiveKit.SetReferences(serialized, "skinRenderers", head, leftArmMesh, rightArmMesh);
         serialized.ApplyModifiedPropertiesWithoutUndo();
-    }
-
-    private static void SetRenderers(SerializedProperty array, params Renderer[] renderers)
-    {
-        array.arraySize = renderers.Length;
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            array.GetArrayElementAtIndex(i).objectReferenceValue = renderers[i];
-        }
-    }
-
-    private static Transform CreatePivot(string name, Transform parent, Vector3 localPosition)
-    {
-        Transform pivot = new GameObject(name).transform;
-        pivot.SetParent(parent, false);
-        pivot.localPosition = localPosition;
-        return pivot;
-    }
-
-    private static Renderer CreatePart(string name, PrimitiveType type, Transform parent, Vector3 localPosition, Vector3 localScale, Material material)
-    {
-        GameObject part = GameObject.CreatePrimitive(type);
-        part.name = name;
-        // CreatePrimitive bringt immer einen Collider mit, den brauchen wir nicht
-        Object.DestroyImmediate(part.GetComponent<Collider>());
-        part.transform.SetParent(parent, false);
-        part.transform.localPosition = localPosition;
-        part.transform.localScale = localScale;
-
-        var renderer = part.GetComponent<Renderer>();
-        renderer.sharedMaterial = material;
-        return renderer;
-    }
-
-    private static Material GetOrCreateMaterial(string path, Color color, float smoothness)
-    {
-        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (material != null)
-        {
-            return material;
-        }
-
-        material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-        material.SetColor("_BaseColor", color);
-        material.SetFloat("_Smoothness", smoothness);
-        AssetDatabase.CreateAsset(material, path);
-        return material;
     }
 }

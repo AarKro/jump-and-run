@@ -356,7 +356,7 @@ public static partial class CityBuilder
             if (random.NextDouble() < 0.35)
             {
                 // Steht auf dem höchsten Dach (Mitte 6 m darüber, 12 m lang)
-                Cylinder("Antenna", parent, new Vector3(lot.center.x, Surface + roof + 6f, lot.center.y), 0.3f, 12f, antenna);
+                PrimitiveKit.Cylinder("Antenna", parent, new Vector3(lot.center.x, Surface + roof + 6f, lot.center.y), 0.3f, 12f, antenna);
             }
         }
     }

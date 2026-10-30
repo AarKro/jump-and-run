@@ -8,7 +8,6 @@ using UnityEngine;
 public static class HeatPickupSetup
 {
     private const string PrefabPath = "Assets/Prefabs/Heat Pickup.prefab";
-    private const string ParticleMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat";
 
     // Mittellinie der Schote (lokal im Modell, X = lang, Y = hoch) und Radius an jedem Punkt: vom Stiel zur Spitze
     private static readonly Vector2[] Spine =
@@ -127,7 +126,7 @@ public static class HeatPickupSetup
         main.maxParticles = 60;
         // Welt-Raum: Partikel bleiben, wo sie entstanden sind, und drehen sich nicht mit der Schote mit
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        particleObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(ParticleMaterialPath);
+        particleObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(PrimitiveKit.ParticleMaterialPath);
         return particles;
     }
 }

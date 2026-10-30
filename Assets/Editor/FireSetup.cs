@@ -227,7 +227,7 @@ public static class FireSetup
         lightRed = Unlit("Flash Red", new Color(1f, 0.1f, 0.08f));
         lightBlue = Unlit("Flash White", new Color(1f, 0.97f, 0.9f));
         lightOff = Lit("Flash Housing", new Color(0.35f, 0.05f, 0.05f), 0.6f);
-        wet = TransparentMaterial("Wet Ground", new Color(0.04f, 0.05f, 0.08f, 0.55f));
+        wet = PrimitiveKit.TransparentMaterial($"{MaterialFolder}/Wet Ground.mat", new Color(0.04f, 0.05f, 0.08f, 0.55f), 0.85f);   // nass glänzt
         figure = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Customer.mat");
 
         smokeMaterial = AssetDatabase.LoadAssetAtPath<Material>("Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat");
@@ -236,31 +236,6 @@ public static class FireSetup
         {
             fireMaterial = smokeMaterial;
         }
-    }
-
-    // Halbdurchsichtig wie das Gitter des Bauzauns (ConstructionSetup): Im Code muss man alles setzen, was der Inspector beim
-    // Umschalten auf "Transparent" selbst erledigt
-    private static Material TransparentMaterial(string name, Color color)
-    {
-        string path = $"{MaterialFolder}/{name}.mat";
-        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (material != null)
-        {
-            return material;
-        }
-        material = new Material(Shader.Find(PrimitiveKit.LitShader));
-        material.SetColor("_BaseColor", color);
-        material.SetFloat("_Smoothness", 0.85f);   // nass glänzt
-        material.SetFloat("_Surface", 1f);
-        material.SetFloat("_Blend", 0f);
-        material.SetFloat("_ZWrite", 0f);
-        material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        material.SetOverrideTag("RenderType", "Transparent");
-        material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-        AssetDatabase.CreateAsset(material, path);
-        return material;
     }
 
     // ---------- Brennende Stellen ----------

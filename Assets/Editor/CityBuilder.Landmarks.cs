@@ -4,7 +4,6 @@ using UnityEngine;
 // Sehenswürdigkeiten der Stadt: Piazza Pisa mit dem Leaning Tower of Pizza, Park mit Brunnen, Founder's Circle mit Statue
 public static partial class CityBuilder
 {
-    private const string ParticleMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat";
 
     private static Material Marble => Mat("Marble", new Color(0.93f, 0.91f, 0.86f), 0.3f);
     private static Material Paving => Mat("Piazza Paving", new Color(0.8f, 0.72f, 0.58f));
@@ -43,7 +42,7 @@ public static partial class CityBuilder
         Transform tower = new GameObject("Leaning Tower of Pizza").transform;
         tower.SetParent(parent, false);
         tower.position = new Vector3(at.x, Surface, at.y);
-        Cylinder("Plinth", tower, new Vector3(0f, 0.3f, 0f), 10f, 0.6f, Marble);
+        PrimitiveKit.Cylinder("Plinth", tower, new Vector3(0f, 0.3f, 0f), 10f, 0.6f, Marble);
 
         // Kippt Richtung Basil Street (+X): Drehung um die Z-Achse, negativ = Spitze nach +X
         Transform lean = PrimitiveKit.Pivot("Lean", tower, new Vector3(0f, 0.6f, 0f));
@@ -62,23 +61,23 @@ public static partial class CityBuilder
             float wall = tierHeight - discHeight;
             Transform tier = PrimitiveKit.Pivot($"Tier {i + 1}", lean, new Vector3(0f, y, 0f));
 
-            Cylinder("Core", tier, new Vector3(0f, wall / 2f, 0f), core, wall, dough);
+            PrimitiveKit.Cylinder("Core", tier, new Vector3(0f, wall / 2f, 0f), core, wall, dough);
             int columns = top ? 8 : 12;
             for (int c = 0; c < columns; c++)
             {
                 float angle = c * Mathf.PI * 2f / columns;
-                Cylinder($"Column {c + 1}", tier, new Vector3(Mathf.Sin(angle) * columnRing, wall / 2f, Mathf.Cos(angle) * columnRing), 0.3f, wall, Marble);
+                PrimitiveKit.Cylinder($"Column {c + 1}", tier, new Vector3(Mathf.Sin(angle) * columnRing, wall / 2f, Mathf.Cos(angle) * columnRing), 0.3f, wall, Marble);
             }
 
             // Pizza obendrauf: Rand, darauf etwas kleinere Soße und Käse, jeweils ein Stück höher
-            Cylinder("Crust", tier, new Vector3(0f, wall + discHeight / 2f, 0f), disc, discHeight, dough);
-            Cylinder("Sauce", tier, new Vector3(0f, wall + discHeight / 2f + 0.03f, 0f), disc - 0.5f, discHeight, sauce);
-            Cylinder("Cheese", tier, new Vector3(0f, wall + discHeight / 2f + 0.06f, 0f), disc - 0.9f, discHeight, cheese);
+            PrimitiveKit.Cylinder("Crust", tier, new Vector3(0f, wall + discHeight / 2f, 0f), disc, discHeight, dough);
+            PrimitiveKit.Cylinder("Sauce", tier, new Vector3(0f, wall + discHeight / 2f + 0.03f, 0f), disc - 0.5f, discHeight, sauce);
+            PrimitiveKit.Cylinder("Cheese", tier, new Vector3(0f, wall + discHeight / 2f + 0.06f, 0f), disc - 0.9f, discHeight, cheese);
             for (int p = 0; p < (top ? 3 : 6); p++)
             {
                 float angle = (float)random.NextDouble() * Mathf.PI * 2f;
                 float radius = 1.2f + (float)random.NextDouble() * (disc - 2.6f);
-                Cylinder($"Pepperoni {p + 1}", tier, new Vector3(Mathf.Sin(angle) * radius, wall + discHeight + 0.08f, Mathf.Cos(angle) * radius), 0.8f, 0.1f, pepperoni);
+                PrimitiveKit.Cylinder($"Pepperoni {p + 1}", tier, new Vector3(Mathf.Sin(angle) * radius, wall + discHeight + 0.08f, Mathf.Cos(angle) * radius), 0.8f, 0.1f, pepperoni);
             }
             for (int d = 0; d < 4; d++)
             {
@@ -93,7 +92,7 @@ public static partial class CityBuilder
 
         // Fahne auf der Spitze
         float tip = tiers * tierHeight;
-        Cylinder("Flag Pole", lean, new Vector3(0f, tip + 2.5f, 0f), 0.12f, 5f, Marble);
+        PrimitiveKit.Cylinder("Flag Pole", lean, new Vector3(0f, tip + 2.5f, 0f), 0.12f, 5f, Marble);
         PrimitiveKit.Box("Flag", lean, new Vector3(1f, tip + 4.4f, 0f), new Vector3(2f, 1.2f, 0.05f), sauce);
     }
 
@@ -452,7 +451,7 @@ public static partial class CityBuilder
         Transform bed = new GameObject("Flower Bed").transform;
         bed.SetParent(parent, false);
         bed.position = new Vector3(at.x, CityLayout.ParkLawnTop, at.y);
-        Cylinder("Soil", bed, new Vector3(0f, 0.04f, 0f), radius, 0.08f, soil);
+        PrimitiveKit.Cylinder("Soil", bed, new Vector3(0f, 0.04f, 0f), radius, 0.08f, soil);
         int count = Mathf.RoundToInt(radius * radius * 28f);
         for (int i = 0; i < count; i++)
         {
@@ -470,8 +469,8 @@ public static partial class CityBuilder
         Transform lamp = new GameObject("Park Lamp").transform;
         lamp.SetParent(parent, false);
         lamp.position = new Vector3(at.x, CityLayout.ParkLawnTop, at.y);
-        Cylinder("Base", lamp, new Vector3(0f, 0.15f, 0f), 0.18f, 0.3f, green);
-        Cylinder("Post", lamp, new Vector3(0f, 1.6f, 0f), 0.06f, 3.2f, green);
+        PrimitiveKit.Cylinder("Base", lamp, new Vector3(0f, 0.15f, 0f), 0.18f, 0.3f, green);
+        PrimitiveKit.Cylinder("Post", lamp, new Vector3(0f, 1.6f, 0f), 0.06f, 3.2f, green);
         PrimitiveKit.Box("Glass", lamp, new Vector3(0f, 3.45f, 0f), new Vector3(0.32f, 0.45f, 0.32f), Mat("Lamp Glow", new Color(1f, 0.92f, 0.65f)));
         PrimitiveKit.Box("Cap", lamp, new Vector3(0f, 3.75f, 0f), new Vector3(0.45f, 0.12f, 0.45f), green);
     }
@@ -606,11 +605,11 @@ public static partial class CityBuilder
         fountain.SetParent(parent, false);
         fountain.position = at;
 
-        Cylinder("Basin", fountain, new Vector3(0f, 0.4f, 0f), radius, 0.8f, Marble);
-        Cylinder("Water", fountain, new Vector3(0f, 0.42f, 0f), radius - 0.5f, 0.8f, water);
-        Cylinder("Column", fountain, new Vector3(0f, 2f, 0f), 0.6f, 2.4f, Marble);
-        Cylinder("Bowl", fountain, new Vector3(0f, 3.3f, 0f), 2.2f, 0.4f, Marble);
-        Cylinder("Bowl Water", fountain, new Vector3(0f, 3.32f, 0f), 1.9f, 0.4f, water);
+        PrimitiveKit.Cylinder("Basin", fountain, new Vector3(0f, 0.4f, 0f), radius, 0.8f, Marble);
+        PrimitiveKit.Cylinder("Water", fountain, new Vector3(0f, 0.42f, 0f), radius - 0.5f, 0.8f, water);
+        PrimitiveKit.Cylinder("Column", fountain, new Vector3(0f, 2f, 0f), 0.6f, 2.4f, Marble);
+        PrimitiveKit.Cylinder("Bowl", fountain, new Vector3(0f, 3.3f, 0f), 2.2f, 0.4f, Marble);
+        PrimitiveKit.Cylinder("Bowl Water", fountain, new Vector3(0f, 3.32f, 0f), 1.9f, 0.4f, water);
 
         var sprayObject = new GameObject("Spray");
         sprayObject.transform.SetParent(fountain, false);
@@ -632,7 +631,7 @@ public static partial class CityBuilder
         shape.shapeType = ParticleSystemShapeType.Cone;
         shape.angle = 14f;
         shape.radius = 0.15f;
-        sprayObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(ParticleMaterialPath);
+        sprayObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(PrimitiveKit.ParticleMaterialPath);
     }
 
     // ---------- Founder's Circle ----------
@@ -647,8 +646,8 @@ public static partial class CityBuilder
         circle.SetParent(parent, false);
         circle.position = new Vector3(at.x, 0f, at.y);
 
-        Cylinder("Paving", circle, new Vector3(0f, (RoadTop - 0.1f + Surface + 0.01f) / 2f, 0f), 15f, Surface + 0.01f - (RoadTop - 0.1f), Paving);
-        Cylinder("Lawn", circle, new Vector3(0f, 0.6f, 0f), 7.5f, 0.3f, Grass);
+        PrimitiveKit.Cylinder("Paving", circle, new Vector3(0f, (RoadTop - 0.1f + Surface + 0.01f) / 2f, 0f), 15f, Surface + 0.01f - (RoadTop - 0.1f), Paving);
+        PrimitiveKit.Cylinder("Lawn", circle, new Vector3(0f, 0.6f, 0f), 7.5f, 0.3f, Grass);
         // Sockel 0.75 m hoch auf dem Rasen (Oberkante 0.75)
         const float pedestalHeight = 0.75f;
         PrimitiveKit.Box("Pedestal", circle, new Vector3(0f, 0.75f + pedestalHeight / 2f, 0f), new Vector3(3.2f, pedestalHeight, 3.2f), Marble);
@@ -660,22 +659,16 @@ public static partial class CityBuilder
         PrimitiveKit.Part("Leg R", PrimitiveType.Capsule, statue, new Vector3(0.4f, 1.3f, 0f), new Vector3(0.7f, 1.3f, 0.7f), bronze);
         PrimitiveKit.Part("Body", PrimitiveType.Capsule, statue, new Vector3(0f, 3.4f, 0f), new Vector3(1.7f, 1.4f, 1.2f), bronze);
         PrimitiveKit.Part("Head", PrimitiveType.Sphere, statue, new Vector3(0f, 5.1f, 0f), Vector3.one * 1.1f, bronze);
-        Cylinder("Chef Hat", statue, new Vector3(0f, 5.8f, 0f), 0.45f, 0.7f, bronze);
+        PrimitiveKit.Cylinder("Chef Hat", statue, new Vector3(0f, 5.8f, 0f), 0.45f, 0.7f, bronze);
         PrimitiveKit.Part("Chef Hat Top", PrimitiveType.Sphere, statue, new Vector3(0f, 6.25f, 0f), new Vector3(1.2f, 0.6f, 1.2f), bronze);
         Renderer armUp = PrimitiveKit.Part("Arm Raised", PrimitiveType.Capsule, statue, new Vector3(1.05f, 5f, 0f), new Vector3(0.45f, 0.9f, 0.45f), bronze);
         armUp.transform.localRotation = Quaternion.Euler(0f, 0f, -20f);
         PrimitiveKit.Part("Arm Down", PrimitiveType.Capsule, statue, new Vector3(-1.1f, 3.3f, 0f), new Vector3(0.45f, 0.9f, 0.45f), bronze);
-        Renderer pizza = Cylinder("Pizza", statue, new Vector3(1.45f, 6.15f, 0f), 1.3f, 0.15f, bronze);
+        Renderer pizza = PrimitiveKit.Cylinder("Pizza", statue, new Vector3(1.45f, 6.15f, 0f), 1.3f, 0.15f, bronze);
         pizza.transform.localRotation = Quaternion.Euler(0f, 0f, -12f);
     }
 
     // ---------- Hilfen ----------
-
-    private static Renderer Cylinder(string name, Transform parent, Vector3 localPosition, float radius, float height, Material material)
-    {
-        // Der Unity-Zylinder ist 2 m hoch und 1 m breit
-        return PrimitiveKit.Part(name, PrimitiveType.Cylinder, parent, localPosition, new Vector3(radius * 2f, height / 2f, radius * 2f), material);
-    }
 
     // Flaches Wegstück zwischen zwei Punkten (X/Z), knapp über dem Rasen
     private static void Walkway(string name, Transform parent, Vector2 from, Vector2 to, float width, Material material)
@@ -694,7 +687,7 @@ public static partial class CityBuilder
         tree.SetParent(parent, false);
         tree.position = at;
         tree.localScale = Vector3.one * scale;
-        Cylinder("Trunk", tree, new Vector3(0f, 1.3f, 0f), 0.25f, 2.6f, trunk);
+        PrimitiveKit.Cylinder("Trunk", tree, new Vector3(0f, 1.3f, 0f), 0.25f, 2.6f, trunk);
         PrimitiveKit.Part("Crown", PrimitiveType.Sphere, tree, new Vector3(0f, 3.6f, 0f), Vector3.one * 3.4f, leaves);
         PrimitiveKit.Part("Crown Top", PrimitiveType.Sphere, tree, new Vector3(0.5f, 4.8f, 0.3f), Vector3.one * 2.4f, leaves);
     }

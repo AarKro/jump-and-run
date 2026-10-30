@@ -105,7 +105,7 @@ public static class Level2Builder
 
         // Überweg mit Verkehr: Die Autos kommen den Mozzarella Blvd herunter, von hinter der Kreuzung mit der Crust Street.
         // Die Oregano Street endet an der Promenade, dort fahren keine Autos mehr
-        Crossing(-40, 118f);
+        LevelBuildKit.AvenueCrossing(-40, 118f, groundParent);
 
         // Über die Basil Street auf die Piazza: begehbare Platte auf Gehweghöhe über der Fahrbahn (dort fahren keine Autos)
         Material asphalt = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/Asphalt.mat");
@@ -124,17 +124,6 @@ public static class Level2Builder
     // Baugrube und Bachmündung: gemeinsam mit Level 4 (dessen Anfang ist genau wie hier), siehe LevelBuildKit
     private static void Pit(Transform link, float fromX, float toX) => LevelBuildKit.RingPit(link, fromX, toX, groundParent);
     private static void Creek(Transform link, float fromX, float toX) => LevelBuildKit.BeachCreek(link, fromX, toX, groundParent);
-
-    private static void Crossing(float u, float spawnZ)
-    {
-        GameObject crossing = LevelBuildKit.PlaceAsset("Assets/Prefabs/Avenue Crossing.prefab", u, 0, groundParent);
-        foreach (TrafficLane trafficLane in crossing.GetComponentsInChildren<TrafficLane>(true))
-        {
-            var serialized = new SerializedObject(trafficLane);
-            serialized.FindProperty("spawnZ").floatValue = spawnZ;
-            serialized.ApplyModifiedPropertiesWithoutUndo();
-        }
-    }
 
     // ---------- Spiel-Elemente ----------
 

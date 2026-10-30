@@ -26,20 +26,6 @@ public static class BeachPropsSetup
     private static Material Mat(string name, Color color, float smoothness = 0.2f) =>
         PrimitiveKit.Material($"{MaterialFolder}/{name}.mat", PrimitiveKit.LitShader, color, smoothness);
 
-    private static Renderer Cylinder(string name, Transform parent, Vector3 localPosition, float radius, float height, Material material)
-    {
-        // Der Unity-Zylinder ist 2 m hoch und 1 m breit
-        return PrimitiveKit.Part(name, PrimitiveType.Cylinder, parent, localPosition, new Vector3(radius * 2f, height / 2f, radius * 2f), material);
-    }
-
-    // Stange von a nach b (lokal): Zylinder in die Mitte, Länge = Abstand, gedreht von "oben" auf die Richtung a→b
-    private static Renderer Rod(string name, Transform parent, Vector3 a, Vector3 b, float radius, Material material)
-    {
-        Renderer rod = Cylinder(name, parent, (a + b) / 2f, radius, Vector3.Distance(a, b), material);
-        rod.transform.localRotation = Quaternion.FromToRotation(Vector3.up, b - a);
-        return rod;
-    }
-
     // ---------- Rettungsturm ----------
 
     private static void BuildLifeguardTower()
@@ -65,13 +51,13 @@ public static class BeachPropsSetup
         // Pfosten: hinten auf dem Weg, vorne im Sand. Weit genug neben der Laufbahn (z 0), dass der Spieler nicht hindurchläuft
         foreach (float x in new[] { -1.4f, 1.4f })
         {
-            Rod("Post Back", t, new Vector3(x, path, 1.6f), new Vector3(x, 0.2f, 1.6f), 0.09f, white);
-            Rod("Post Front", t, new Vector3(x, sand, -2.4f), new Vector3(x, 0.2f, -2.4f), 0.09f, white);
-            Rod("Brace", t, new Vector3(x, path + 0.2f, 1.6f), new Vector3(x, -0.1f, -2.4f), 0.04f, white);
-            Rod("Brace", t, new Vector3(x, sand + 0.2f, -2.4f), new Vector3(x, -0.1f, 1.6f), 0.04f, white);
+            PrimitiveKit.Rod("Post Back", t, new Vector3(x, path, 1.6f), new Vector3(x, 0.2f, 1.6f), 0.09f, white);
+            PrimitiveKit.Rod("Post Front", t, new Vector3(x, sand, -2.4f), new Vector3(x, 0.2f, -2.4f), 0.09f, white);
+            PrimitiveKit.Rod("Brace", t, new Vector3(x, path + 0.2f, 1.6f), new Vector3(x, -0.1f, -2.4f), 0.04f, white);
+            PrimitiveKit.Rod("Brace", t, new Vector3(x, sand + 0.2f, -2.4f), new Vector3(x, -0.1f, 1.6f), 0.04f, white);
         }
-        Rod("Brace Front", t, new Vector3(-1.4f, sand + 0.2f, -2.4f), new Vector3(1.4f, -0.1f, -2.4f), 0.04f, white);
-        Rod("Brace Front", t, new Vector3(1.4f, sand + 0.2f, -2.4f), new Vector3(-1.4f, -0.1f, -2.4f), 0.04f, white);
+        PrimitiveKit.Rod("Brace Front", t, new Vector3(-1.4f, sand + 0.2f, -2.4f), new Vector3(1.4f, -0.1f, -2.4f), 0.04f, white);
+        PrimitiveKit.Rod("Brace Front", t, new Vector3(1.4f, sand + 0.2f, -2.4f), new Vector3(-1.4f, -0.1f, -2.4f), 0.04f, white);
 
         // Rote Blende vorne mit Schriftzug, zur Kamera hin
         PrimitiveKit.Box("Skirt", t, new Vector3(0f, 0.12f, front - 0.03f), new Vector3(3.2f, 0.42f, 0.05f), red);
@@ -84,21 +70,21 @@ public static class BeachPropsSetup
         PrimitiveKit.Box("Hut Roof", t, new Vector3(0f, 2.5f, (hutFront + back) / 2f), new Vector3(2.9f, 0.15f, back - hutFront + 0.5f), white);
         PrimitiveKit.Quad("Hut Window", t, new Vector3(-0.35f, 1.75f, hutFront - 0.01f), new Vector2(1.2f, 0.55f), glass);
         // Rettungsring: weiße Scheibe, darauf eine kleinere in Hüttenfarbe als "Loch"
-        Renderer ring = Cylinder("Lifebuoy", t, new Vector3(0.8f, 1.2f, hutFront - 0.04f), 0.28f, 0.06f, white);
+        Renderer ring = PrimitiveKit.Cylinder("Lifebuoy", t, new Vector3(0.8f, 1.2f, hutFront - 0.04f), 0.28f, 0.06f, white);
         ring.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        Renderer hole = Cylinder("Lifebuoy Hole", t, new Vector3(0.8f, 1.2f, hutFront - 0.08f), 0.13f, 0.02f, red);
+        Renderer hole = PrimitiveKit.Cylinder("Lifebuoy Hole", t, new Vector3(0.8f, 1.2f, hutFront - 0.08f), 0.13f, 0.02f, red);
         hole.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        Rod("Flag Pole", t, new Vector3(1.1f, 2.55f, 1.3f), new Vector3(1.1f, 3.8f, 1.3f), 0.03f, white);
+        PrimitiveKit.Rod("Flag Pole", t, new Vector3(1.1f, 2.55f, 1.3f), new Vector3(1.1f, 3.8f, 1.3f), 0.03f, white);
         PrimitiveKit.Box("Flag", t, new Vector3(1.42f, 3.6f, 1.3f), new Vector3(0.6f, 0.36f, 0.02f), yellow);
 
         // Leiter am +X-Ende, knapp hinter der Laufbahn
         foreach (float z in new[] { 0.7f, 1.1f })
         {
-            Rod("Ladder Rail", t, new Vector3(1.75f, path, z), new Vector3(1.75f, 0.5f, z), 0.03f, white);
+            PrimitiveKit.Rod("Ladder Rail", t, new Vector3(1.75f, path, z), new Vector3(1.75f, 0.5f, z), 0.03f, white);
         }
         for (float y = path + 0.3f; y < 0.4f; y += 0.35f)
         {
-            Rod("Ladder Rung", t, new Vector3(1.75f, y, 0.7f), new Vector3(1.75f, y, 1.1f), 0.025f, white);
+            PrimitiveKit.Rod("Ladder Rung", t, new Vector3(1.75f, y, 0.7f), new Vector3(1.75f, y, 1.1f), 0.025f, white);
         }
 
         PrimitiveKit.SavePrefab(root, $"{CityPropsSetup.PrefabFolder}/Lifeguard Tower.prefab");
@@ -121,8 +107,8 @@ public static class BeachPropsSetup
 
         // Das Dach hat einen eigenen Pivot, damit BounceAwning es beim Abfedern stauchen kann
         Transform canvas = PrimitiveKit.Pivot("Canvas", t, canopyCenter);
-        Cylinder("Canopy", canvas, Vector3.zero, 1.4f, 0.2f, red);
-        Cylinder("Canopy Top", canvas, new Vector3(0f, 0.12f, 0f), 0.75f, 0.16f, red);
+        PrimitiveKit.Cylinder("Canopy", canvas, Vector3.zero, 1.4f, 0.2f, red);
+        PrimitiveKit.Cylinder("Canopy Top", canvas, new Vector3(0f, 0.12f, 0f), 0.75f, 0.16f, red);
         for (int i = 0; i < 4; i++)
         {
             Renderer stripe = PrimitiveKit.Box("Stripe", canvas, new Vector3(0f, 0.11f, 0f), new Vector3(2.76f, 0.03f, 0.22f), white);
@@ -141,7 +127,7 @@ public static class BeachPropsSetup
 
         // Schräg im Sand steckende Stange, unten ein kleiner Sandhügel
         var foot = new Vector3(0f, sand, -3f);
-        Rod("Pole", t, foot, canopyCenter + Vector3.down * 0.1f, 0.05f, white);
+        PrimitiveKit.Rod("Pole", t, foot, canopyCenter + Vector3.down * 0.1f, 0.05f, white);
         PrimitiveKit.Part("Sand Mound", PrimitiveType.Sphere, t, foot, new Vector3(0.6f, 0.2f, 0.6f), sandMaterial);
 
         var bounce = root.AddComponent<BounceAwning>();

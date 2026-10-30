@@ -32,6 +32,44 @@ public static class LevelBuildKit
         return scene;
     }
 
+    // Neue Level-Szene als Kopie der Vorlage (bringt die festen Objekte mit), in den Build Settings direkt hinter afterPath.
+    // owner = Name des Generators für die Fehlermeldung
+    public static void EnsureScene(string scenePath, string templatePath, string afterPath, string owner)
+    {
+        if (!System.IO.File.Exists(scenePath))
+        {
+            if (!AssetDatabase.CopyAsset(templatePath, scenePath))
+            {
+                throw new System.Exception($"{owner}: Konnte {templatePath} nicht nach {scenePath} kopieren");
+            }
+        }
+        var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+        if (scenes.Exists(entry => entry.path == scenePath))
+        {
+            return;
+        }
+        int after = scenes.FindIndex(entry => entry.path == afterPath);
+        scenes.Insert(after + 1, new EditorBuildSettingsScene(scenePath, true));
+        EditorBuildSettings.scenes = scenes.ToArray();
+    }
+
+    // Ziel ohne Kundenhaus: das Goal-Prefab (aus der kopierten Szene) gegen ein anderes Ziel-Prefab tauschen. Es heißt weiter
+    // "Goal", damit OpenAndClear und SetupEssentials es finden. Ist es schon das richtige, bleibt es stehen
+    public static void UseGoal(string prefabPath)
+    {
+        GameObject old = GameObject.Find("Goal");
+        if (old != null && PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(old) == prefabPath)
+        {
+            return;
+        }
+        if (old != null)
+        {
+            Object.DestroyImmediate(old);
+        }
+        var goal = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath));
+        goal.name = "Goal";
+    }
+
     public static LanePath BuildLane(Vector3 start, float heading, float startU, List<LanePath.Piece> pieces)
     {
         var laneObject = new GameObject("Lane Path");
@@ -116,6 +154,24 @@ public static class LevelBuildKit
         }
     }
 
+    // Erhöhter Überweg über eine 12 m breite Avenue mit zwei Spuren (Prefab "Avenue Crossing"). spawnZ/despawnZ: wo die Autos
+    // auftauchen und verschwinden, lokal Z im Lane-Rahmen (+ = hinter der Bahn, - = Kameraseite); ohne despawnZ gilt der Wert im Prefab
+    public static GameObject AvenueCrossing(float u, float spawnZ, Transform parent, float? despawnZ = null)
+    {
+        GameObject crossing = PlaceAsset("Assets/Prefabs/Avenue Crossing.prefab", u, 0, parent);
+        foreach (TrafficLane trafficLane in crossing.GetComponentsInChildren<TrafficLane>(true))
+        {
+            var serialized = new SerializedObject(trafficLane);
+            serialized.FindProperty("spawnZ").floatValue = spawnZ;
+            if (despawnZ.HasValue)
+            {
+                serialized.FindProperty("despawnZ").floatValue = despawnZ.Value;
+            }
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+        return crossing;
+    }
+
     // Baugrube auf der Margherita Avenue (Ringstraße, u = Welt-X), Lücke von/bis in Welt-X (Level 2 und 4). Das Prefab ist
     // 1 m länger und steckt unter den Gehwegkanten; der Cutout schneidet Gehweg, Straße und alles darunter in der Lücke aus,
     // nur bis zur Strandkante (z -12, davor liegt der Strand). Seitenwände 0.1 m in der Lücke (genau auf der Schnittkante
@@ -133,6 +189,50 @@ public static class LevelBuildKit
             PrimitiveKit.Box("Pit Wall Walk", parent, new Vector3(x, (-4f + 0.49f) / 2f, 0.5f), new Vector3(0.2f, 4.49f, 5f), foundation);
             PrimitiveKit.Box("Pit Wall Road", parent, new Vector3(x, (-4f + 0.29f) / 2f, -7f), new Vector3(0.2f, 4.29f, 10f), foundation);
         }
+    }
+
+    // 0.2 m dicke Wand quer zur Bahn an der Stelle u, von lokal z0 bis z1, von der Grubensohle (-4) bis top (Level 3 und 4)
+    public static void LaneBox(string name, float u, float z0, float z1, float top, Material material, Transform parent)
+    {
+        Renderer box = PrimitiveKit.Box(name, parent, Vector3.zero, new Vector3(0.2f, top + 4f, z1 - z0), material);
+        Quaternion frame = Frame(u);
+        box.transform.SetPositionAndRotation(Lane.PointAt(u) + frame * new Vector3(0f, (top - 4f) / 2f, (z0 + z1) / 2f), frame);
+    }
+
+    // Straßensperre quer über eine Avenue an der Stelle u (nur Optik, vor der Laufbahn, Level 3 und 4): rot-weiße Baken und ein
+    // Schild. curbLocalZ = Bordstein vor der Laufbahn, roadEndLocalZ = gegenüberliegender Bordstein (Lane-Rahmen)
+    public static void RoadClosure(string name, float u, float curbLocalZ, float roadEndLocalZ, Transform parent)
+    {
+        Quaternion frame = Frame(u);
+        Transform closure = new GameObject(name).transform;
+        closure.SetParent(parent, false);
+        closure.SetPositionAndRotation(Lane.PointAt(u), frame);
+
+        Material orange = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Barrier Orange.mat");
+        Material white = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Awning White.mat");
+        Material iron = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Iron.mat");
+        const float road = CityLayout.RoadTop;
+        // Absperrgitter in einer Reihe quer über die Fahrbahn, schräg gestellt: Gerade quer zur Straße sähe die Kamera
+        // von der Seite nur ihre Kanten. Dazwischen Pylonen
+        for (float localZ = curbLocalZ - 1.5f; localZ > roadEndLocalZ; localZ -= 2.5f)
+        {
+            Transform panel = PrimitiveKit.Pivot("Barrier Panel", closure, new Vector3(0f, road, localZ));
+            panel.localRotation = Quaternion.Euler(0f, 40f, 0f);
+            foreach (float x in new[] { -0.6f, 0.6f })
+            {
+                PrimitiveKit.Box("Post", panel, new Vector3(x, 0.5f, 0f), new Vector3(0.08f, 1f, 0.08f), iron);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                PrimitiveKit.Box("Stripe", panel, new Vector3(-0.45f + i * 0.3f, 0.85f, 0f), new Vector3(0.3f, 0.25f, 0.04f), i % 2 == 0 ? orange : white);
+            }
+            PrimitiveKit.Part("Cone", PrimitiveType.Cylinder, closure, new Vector3(0f, road + 0.25f, localZ - 1.25f), new Vector3(0.3f, 0.25f, 0.3f), orange);
+        }
+        // Schild an der Bordsteinkante, Schrift zur Kamera
+        PrimitiveKit.Box("Sign Post", closure, new Vector3(0f, road + 0.9f, curbLocalZ - 0.4f), new Vector3(0.08f, 1.8f, 0.08f), iron);
+        PrimitiveKit.Box("Sign", closure, new Vector3(0f, road + 1.9f, curbLocalZ - 0.45f), new Vector3(1.6f, 0.6f, 0.04f), white);
+        var text = PrimitiveKit.Text("Sign Text", closure, new Vector3(0f, road + 1.9f, curbLocalZ - 0.48f), new Vector2(1.5f, 0.5f), "ROAD CLOSED", new Color(0.8f, 0.13f, 0.1f));
+        text.fontSizeMax = 4f;
     }
 
     // Bach auf der Strandpromenade (Level 2 und 4): kommt unter der Häuserreihe hervor und fließt über den Strand ins Meer.

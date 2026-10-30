@@ -50,8 +50,8 @@ public static partial class CityBuilder
     private static void Crater(Transform parent, Vector2 at, float radius)
     {
         Material scorched = Mat("Scorched", new Color(0.2f, 0.18f, 0.16f));
-        Cylinder("Crater", parent, new Vector3(at.x, RoadTop + 0.02f, at.y), radius, 0.44f, scorched);
-        Cylinder("Crater Rim", parent, new Vector3(at.x, RoadTop + 0.1f, at.y), radius + 1.2f, 0.3f, Mat("Rubble"));
+        PrimitiveKit.Cylinder("Crater", parent, new Vector3(at.x, RoadTop + 0.02f, at.y), radius, 0.44f, scorched);
+        PrimitiveKit.Cylinder("Crater Rim", parent, new Vector3(at.x, RoadTop + 0.1f, at.y), radius + 1.2f, 0.3f, Mat("Rubble"));
     }
 
     // ---------- Für Level 5 ----------
@@ -257,12 +257,12 @@ public static partial class CityBuilder
         Transform armRight = RobotArm(upper, 1, steel, dark, accent);
 
         Transform head = PrimitiveKit.Pivot("Head", upper, new Vector3(0f, 24f, 1f));
-        Cylinder("Neck", head, new Vector3(0f, 1f, 0f), 3f, 3f, dark);
+        PrimitiveKit.Cylinder("Neck", head, new Vector3(0f, 1f, 0f), 3f, 3f, dark);
         PrimitiveKit.Box("Helmet", head, new Vector3(0f, 6f, 0f), new Vector3(11f, 9f, 11f), steel);
         Renderer visor = PrimitiveKit.Box("Visor", head, new Vector3(0f, 7f, 5.6f), new Vector3(9f, 2f, 0.6f), visorGlow);
         for (int side = -1; side <= 1; side += 2)
         {
-            Cylinder("Antenna", head, new Vector3(side * 4f, 12.5f, -1f), 0.35f, 4f, dark);
+            PrimitiveKit.Cylinder("Antenna", head, new Vector3(side * 4f, 12.5f, -1f), 0.35f, 4f, dark);
             PrimitiveKit.Box("Ear", head, new Vector3(side * 6f, 6f, 0f), new Vector3(1.5f, 4f, 4f), accent);
         }
 
@@ -275,7 +275,7 @@ public static partial class CityBuilder
         arm.localRotation = Quaternion.Euler(-50f, 0f, side * 8f);
         PrimitiveKit.Box("Shoulder", arm, Vector3.zero, new Vector3(11f, 10f, 11f), accent);
         PrimitiveKit.Box("Upper Arm", arm, new Vector3(0f, -9f, 0f), new Vector3(6f, 12f, 6f), steel);
-        Cylinder("Elbow", arm, new Vector3(0f, -15.5f, 0f), 3.5f, 3f, dark);
+        PrimitiveKit.Cylinder("Elbow", arm, new Vector3(0f, -15.5f, 0f), 3.5f, 3f, dark);
         PrimitiveKit.Box("Forearm", arm, new Vector3(0f, -22f, 0f), new Vector3(7.5f, 12f, 7.5f), steel);
         PrimitiveKit.Box("Fist", arm, new Vector3(0f, -30f, 0f), new Vector3(9f, 8f, 9f), dark);
         return arm;

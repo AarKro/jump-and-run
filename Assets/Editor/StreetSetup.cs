@@ -51,12 +51,12 @@ public static class StreetSetup
     [MenuItem("Tools/Jump and Run/Build Street Crossing Prefab")]
     public static void BuildStreet()
     {
-        Material asphalt = GetOrCreateMaterial(AsphaltMaterialPath, "Universal Render Pipeline/Lit", new Color(0.18f, 0.18f, 0.2f));
-        Material marking = GetOrCreateMaterial(MarkingMaterialPath, "Universal Render Pipeline/Lit", new Color(0.95f, 0.95f, 0.95f));
-        Material paint = GetOrCreateMaterial(CarMaterialPath, "Universal Render Pipeline/Lit", Color.white);
-        Material wheel = GetOrCreateMaterial(WheelMaterialPath, "Universal Render Pipeline/Lit", new Color(0.08f, 0.08f, 0.08f));
+        Material asphalt = PrimitiveKit.Material(AsphaltMaterialPath, PrimitiveKit.LitShader, new Color(0.18f, 0.18f, 0.2f), smoothness: null);
+        Material marking = PrimitiveKit.Material(MarkingMaterialPath, PrimitiveKit.LitShader, new Color(0.95f, 0.95f, 0.95f), smoothness: null);
+        Material paint = PrimitiveKit.Material(CarMaterialPath, PrimitiveKit.LitShader, Color.white, smoothness: null);
+        Material wheel = PrimitiveKit.Material(WheelMaterialPath, PrimitiveKit.LitShader, new Color(0.08f, 0.08f, 0.08f), smoothness: null);
         // Unlit: Scheinwerfer leuchten unabhängig vom Licht, so fallen entgegenkommende Autos früh auf
-        Material headlight = GetOrCreateMaterial(HeadlightMaterialPath, "Universal Render Pipeline/Unlit", new Color(1f, 0.95f, 0.6f));
+        Material headlight = PrimitiveKit.Material(HeadlightMaterialPath, PrimitiveKit.UnlitShader, new Color(1f, 0.95f, 0.6f), smoothness: null);
 
         // Dieselben Materialien wie Hauptstraße und Gehweg, damit die Kreuzung nahtlos aussieht
         Material road = LoadCityMaterial("Road");
@@ -95,11 +95,11 @@ public static class StreetSetup
     [MenuItem("Tools/Jump and Run/Build Avenue Crossing Prefab")]
     public static void BuildAvenue()
     {
-        Material asphalt = GetOrCreateMaterial(AsphaltMaterialPath, "Universal Render Pipeline/Lit", new Color(0.18f, 0.18f, 0.2f));
-        Material marking = GetOrCreateMaterial(MarkingMaterialPath, "Universal Render Pipeline/Lit", new Color(0.95f, 0.95f, 0.95f));
-        Material paint = GetOrCreateMaterial(CarMaterialPath, "Universal Render Pipeline/Lit", Color.white);
-        Material wheel = GetOrCreateMaterial(WheelMaterialPath, "Universal Render Pipeline/Lit", new Color(0.08f, 0.08f, 0.08f));
-        Material headlight = GetOrCreateMaterial(HeadlightMaterialPath, "Universal Render Pipeline/Unlit", new Color(1f, 0.95f, 0.6f));
+        Material asphalt = PrimitiveKit.Material(AsphaltMaterialPath, PrimitiveKit.LitShader, new Color(0.18f, 0.18f, 0.2f), smoothness: null);
+        Material marking = PrimitiveKit.Material(MarkingMaterialPath, PrimitiveKit.LitShader, new Color(0.95f, 0.95f, 0.95f), smoothness: null);
+        Material paint = PrimitiveKit.Material(CarMaterialPath, PrimitiveKit.LitShader, Color.white, smoothness: null);
+        Material wheel = PrimitiveKit.Material(WheelMaterialPath, PrimitiveKit.LitShader, new Color(0.08f, 0.08f, 0.08f), smoothness: null);
+        Material headlight = PrimitiveKit.Material(HeadlightMaterialPath, PrimitiveKit.UnlitShader, new Color(1f, 0.95f, 0.6f), smoothness: null);
 
         var root = new GameObject("Avenue Crossing");
         try
@@ -264,21 +264,21 @@ public static class StreetSetup
         var carObject = new GameObject("Car");
         carObject.transform.SetParent(parent, false);
 
-        Renderer body = CreatePart("Body", PrimitiveType.Cube, carObject.transform, new Vector3(0f, 0.6f, 0f), new Vector3(1.8f, 0.7f, 4f), paint);
-        Renderer cabin = CreatePart("Cabin", PrimitiveType.Cube, carObject.transform, new Vector3(0f, 1.2f, 0.3f), new Vector3(1.6f, 0.55f, 2f), paint);
+        Renderer body = PrimitiveKit.Part("Body", PrimitiveType.Cube, carObject.transform, new Vector3(0f, 0.6f, 0f), new Vector3(1.8f, 0.7f, 4f), paint);
+        Renderer cabin = PrimitiveKit.Part("Cabin", PrimitiveType.Cube, carObject.transform, new Vector3(0f, 1.2f, 0.3f), new Vector3(1.6f, 0.55f, 2f), paint);
 
         foreach (float wheelX in new[] { -0.9f, 0.9f })
         {
             foreach (float wheelZ in new[] { -1.3f, 1.3f })
             {
                 // Zylinder steht hochkant (Achse Y), um Z gekippt zeigt die Achse nach X wie bei einem Rad
-                CreatePart("Wheel", PrimitiveType.Cylinder, carObject.transform, new Vector3(wheelX, 0.3f, wheelZ), new Vector3(0.6f, 0.12f, 0.6f), wheel)
+                PrimitiveKit.Part("Wheel", PrimitiveType.Cylinder, carObject.transform, new Vector3(wheelX, 0.3f, wheelZ), new Vector3(0.6f, 0.12f, 0.6f), wheel)
                     .transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
             }
         }
 
-        CreatePart("Headlight L", PrimitiveType.Cube, carObject.transform, new Vector3(-0.6f, 0.65f, -2.01f), new Vector3(0.35f, 0.2f, 0.04f), headlight);
-        CreatePart("Headlight R", PrimitiveType.Cube, carObject.transform, new Vector3(0.6f, 0.65f, -2.01f), new Vector3(0.35f, 0.2f, 0.04f), headlight);
+        PrimitiveKit.Part("Headlight L", PrimitiveType.Cube, carObject.transform, new Vector3(-0.6f, 0.65f, -2.01f), new Vector3(0.35f, 0.2f, 0.04f), headlight);
+        PrimitiveKit.Part("Headlight R", PrimitiveType.Cube, carObject.transform, new Vector3(0.6f, 0.65f, -2.01f), new Vector3(0.35f, 0.2f, 0.04f), headlight);
 
         // Ein Trigger für das ganze Auto. Bewegte Collider brauchen einen (kinematischen) Rigidbody,
         // sonst behandelt die Physik sie als statisch und muss bei jeder Bewegung neu rechnen
@@ -300,34 +300,5 @@ public static class StreetSetup
         renderers.GetArrayElementAtIndex(1).objectReferenceValue = cabin;
         serialized.ApplyModifiedPropertiesWithoutUndo();
         return car;
-    }
-
-    private static Renderer CreatePart(string name, PrimitiveType type, Transform parent, Vector3 localPosition, Vector3 localScale, Material material)
-    {
-        GameObject part = GameObject.CreatePrimitive(type);
-        part.name = name;
-        // Nur Optik: Die Plattform ist der Boden, und am Auto zählt nur der eine Trigger
-        Object.DestroyImmediate(part.GetComponent<Collider>());
-        part.transform.SetParent(parent, false);
-        part.transform.localPosition = localPosition;
-        part.transform.localScale = localScale;
-
-        var renderer = part.GetComponent<Renderer>();
-        renderer.sharedMaterial = material;
-        return renderer;
-    }
-
-    private static Material GetOrCreateMaterial(string path, string shaderName, Color color)
-    {
-        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (material != null)
-        {
-            return material;
-        }
-
-        material = new Material(Shader.Find(shaderName));
-        material.SetColor("_BaseColor", color);
-        AssetDatabase.CreateAsset(material, path);
-        return material;
     }
 }

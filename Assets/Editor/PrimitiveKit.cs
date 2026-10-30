@@ -8,6 +8,8 @@ public static class PrimitiveKit
 {
     public const string LitShader = "Universal Render Pipeline/Lit";
     public const string UnlitShader = "Universal Render Pipeline/Unlit";
+    // Standard-Partikelmaterial von URP (Rauch, Funken, Dampf)
+    public const string ParticleMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat";
 
     public static Transform Pivot(string name, Transform parent, Vector3 localPosition)
     {
@@ -34,6 +36,20 @@ public static class PrimitiveKit
     public static Renderer Box(string name, Transform parent, Vector3 center, Vector3 size, Material material)
     {
         return Part(name, PrimitiveType.Cube, parent, center, size, material);
+    }
+
+    // Stehender Zylinder mit Mitte localPosition. Der Unity-Zylinder ist 2 m hoch und 1 m breit
+    public static Renderer Cylinder(string name, Transform parent, Vector3 localPosition, float radius, float height, Material material)
+    {
+        return Part(name, PrimitiveType.Cylinder, parent, localPosition, new Vector3(radius * 2f, height / 2f, radius * 2f), material);
+    }
+
+    // Stange von a nach b (lokal): Zylinder in die Mitte, Länge = Abstand, gedreht von "oben" auf die Richtung a→b
+    public static Renderer Rod(string name, Transform parent, Vector3 a, Vector3 b, float radius, Material material)
+    {
+        Renderer rod = Cylinder(name, parent, (a + b) / 2f, radius, Vector3.Distance(a, b), material);
+        rod.transform.localRotation = Quaternion.FromToRotation(Vector3.up, b - a);
+        return rod;
     }
 
     // Quad zeigt mit der sichtbaren Seite nach -Z, also zur Kamera. Gut für Fenster und Schilder
@@ -69,7 +85,8 @@ public static class PrimitiveKit
         return text;
     }
 
-    public static Material Material(string path, string shaderName, Color color, float smoothness = 0.2f)
+    // Vorhandenes Material laden, sonst neu anlegen. smoothness null = die Glätte bleibt beim Standardwert des Shaders
+    public static Material Material(string path, string shaderName, Color color, float? smoothness = 0.2f)
     {
         var material = AssetDatabase.LoadAssetAtPath<Material>(path);
         if (material != null)
@@ -79,10 +96,38 @@ public static class PrimitiveKit
 
         material = new Material(Shader.Find(shaderName));
         material.SetColor("_BaseColor", color);
-        if (material.HasProperty("_Smoothness"))
+        if (smoothness.HasValue && material.HasProperty("_Smoothness"))
         {
-            material.SetFloat("_Smoothness", smoothness);
+            material.SetFloat("_Smoothness", smoothness.Value);
         }
+        AssetDatabase.CreateAsset(material, path);
+        return material;
+    }
+
+    // Halbdurchsichtiges URP-Lit-Material (Transparent-Modus, Alpha aus color.a), z. B. Bauzaun-Gitter oder nasser Boden.
+    // Im Code muss man alles setzen, was der Inspector beim Umschalten auf "Transparent" sonst selbst erledigt.
+    // smoothness null = Standardwert des Shaders
+    public static Material TransparentMaterial(string path, Color color, float? smoothness = null)
+    {
+        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (material != null)
+        {
+            return material;
+        }
+        material = new Material(Shader.Find(LitShader));
+        material.SetColor("_BaseColor", color);
+        if (smoothness.HasValue)
+        {
+            material.SetFloat("_Smoothness", smoothness.Value);
+        }
+        material.SetFloat("_Surface", 1f);   // Transparent
+        material.SetFloat("_Blend", 0f);     // Alpha
+        material.SetFloat("_ZWrite", 0f);
+        material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        material.SetOverrideTag("RenderType", "Transparent");
+        material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
         AssetDatabase.CreateAsset(material, path);
         return material;
     }

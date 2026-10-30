@@ -41,7 +41,7 @@ public static partial class CityBuilder
         {
             if (!Open(z))
             {
-                Cylinder("Post", railing, new Vector3(x, Surface + 0.55f, z), 0.05f, 1.1f, iron);
+                PrimitiveKit.Cylinder("Post", railing, new Vector3(x, Surface + 0.55f, z), 0.05f, 1.1f, iron);
             }
             float next = z + 2f;
             // Holme bis zum nächsten Pfosten, außer über einer Stegöffnung
@@ -64,8 +64,8 @@ public static partial class CityBuilder
         const float x = CityLayout.MarketBlockEdgeX + 0.6f;
         for (float z = 215f - 5.5f; z <= 215f + 5.5f; z += 1.25f)
         {
-            Cylinder("Bollard", bollards, new Vector3(x, RoadTop + 0.45f, z), 0.11f, 0.9f, white);
-            Cylinder("Band", bollards, new Vector3(x, RoadTop + 0.7f, z), 0.115f, 0.12f, red);
+            PrimitiveKit.Cylinder("Bollard", bollards, new Vector3(x, RoadTop + 0.45f, z), 0.11f, 0.9f, white);
+            PrimitiveKit.Cylinder("Band", bollards, new Vector3(x, RoadTop + 0.7f, z), 0.115f, 0.12f, red);
         }
     }
 }

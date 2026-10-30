@@ -162,10 +162,10 @@ public static partial class CityBuilder
         lighthouse.position = new Vector3(quayX + 6f, 0.6f, N + 64f);
         for (int ring = 0; ring < 7; ring++)
         {
-            Cylinder($"Ring {ring + 1}", lighthouse, new Vector3(0f, ring * 3f + 1.5f, 0f), 2.6f - ring * 0.12f, 3f, ring % 2 == 0 ? Mat("Crane Red") : Mat("Awning White"));
+            PrimitiveKit.Cylinder($"Ring {ring + 1}", lighthouse, new Vector3(0f, ring * 3f + 1.5f, 0f), 2.6f - ring * 0.12f, 3f, ring % 2 == 0 ? Mat("Crane Red") : Mat("Awning White"));
         }
-        Cylinder("Lamp", lighthouse, new Vector3(0f, 22.5f, 0f), 1.5f, 3f, Mat("Lamp Glow"));
-        Cylinder("Cap", lighthouse, new Vector3(0f, 24.6f, 0f), 2f, 1.2f, Mat("Crane Red"));
+        PrimitiveKit.Cylinder("Lamp", lighthouse, new Vector3(0f, 22.5f, 0f), 1.5f, 3f, Mat("Lamp Glow"));
+        PrimitiveKit.Cylinder("Cap", lighthouse, new Vector3(0f, 24.6f, 0f), 2f, 1.2f, Mat("Crane Red"));
     }
 
     private static readonly Color[] ContainerColors =
@@ -394,7 +394,7 @@ public static partial class CityBuilder
         turbine.rotation = Quaternion.LookRotation(new Vector3(toCity.x, 0f, toCity.z));
 
         const float height = 60f;
-        Cylinder("Tower", turbine, new Vector3(0f, height / 2f, 0f), 1.6f, height, white);
+        PrimitiveKit.Cylinder("Tower", turbine, new Vector3(0f, height / 2f, 0f), 1.6f, height, white);
         PrimitiveKit.Box("Nacelle", turbine, new Vector3(0f, height + 1.5f, -1f), new Vector3(3f, 3f, 8f), white);
 
         // Rotor dreht sich um seine lokale Z-Achse (zeigt zur Stadt)

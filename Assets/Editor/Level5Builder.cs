@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
 using UnityEditor;
 using UnityEngine;
 
@@ -156,7 +155,7 @@ public static class Level5Builder
     // Ohne Dialog, für den Aufruf über Skripte (MCP)
     public static void Build()
     {
-        EnsureScene();
+        LevelBuildKit.EnsureScene(ScenePath, TemplateScenePath, PreviousScenePath, "Level5Builder");
         var scene = LevelBuildKit.OpenAndClear(ScenePath);
         BuildLane();
         groundParent = LevelBuildKit.Group("Level Ground");
@@ -183,25 +182,6 @@ public static class Level5Builder
         SetupIntroExpose();
         LevelBuildKit.Save(scene);
         Debug.Log($"Level5Builder: Level 5 (Kaiju) gebaut. Bahn u {LevelBuildKit.Lane.StartU:F2} bis {LevelBuildKit.Lane.EndU:F2}, Basil u(z) = {BasilU(0f):F2} - z");
-    }
-
-    private static void EnsureScene()
-    {
-        if (!File.Exists(ScenePath))
-        {
-            if (!AssetDatabase.CopyAsset(TemplateScenePath, ScenePath))
-            {
-                throw new System.Exception($"Level5Builder: Konnte {TemplateScenePath} nicht nach {ScenePath} kopieren");
-            }
-        }
-        var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
-        if (scenes.Exists(entry => entry.path == ScenePath))
-        {
-            return;
-        }
-        int after = scenes.FindIndex(entry => entry.path == PreviousScenePath);
-        scenes.Insert(after + 1, new EditorBuildSettingsScene(ScenePath, true));
-        EditorBuildSettings.scenes = scenes.ToArray();
     }
 
     // ---------- Bahn ----------
@@ -314,9 +294,9 @@ public static class Level5Builder
         circle.SetParent(propParent, false);
         circle.position = new Vector3(at.x, 0f, at.y);
         const float roadTop = CityLayout.RoadTop;
-        Cylinder("Paving", circle, new Vector3(0f, (roadTop - 0.1f + CityLayout.Surface + 0.01f) / 2f, 0f), 15f, CityLayout.Surface + 0.01f - (roadTop - 0.1f), paving);
+        PrimitiveKit.Cylinder("Paving", circle, new Vector3(0f, (roadTop - 0.1f + CityLayout.Surface + 0.01f) / 2f, 0f), 15f, CityLayout.Surface + 0.01f - (roadTop - 0.1f), paving);
         // Rasen nur knapp über dem Laufboden: Die Bahn biegt 2 m nördlich der Mitte über den Platz in den Park
-        Cylinder("Lawn", circle, new Vector3(0f, 0.4f, 0f), 7.5f, 0.3f, grass);
+        PrimitiveKit.Cylinder("Lawn", circle, new Vector3(0f, 0.4f, 0f), 7.5f, 0.3f, grass);
         // Sockel abgebrochen, schief, vom Sturz nach Südwesten verschoben
         Renderer pedestal = PrimitiveKit.Box("Broken Pedestal", circle, new Vector3(-1.5f, 0.6f, -2f), new Vector3(3.2f, 0.4f, 3.2f), marble);
         pedestal.transform.localRotation = Quaternion.Euler(4f, 20f, -6f);
@@ -368,7 +348,7 @@ public static class Level5Builder
         }
         PrimitiveKit.Part("Body", PrimitiveType.Capsule, statue, new Vector3(-0.6f, 0.8f, 0f), new Vector3(1.55f, 1.3f, 1.4f), bronze).transform.localRotation = lying;
         PrimitiveKit.Part("Head", PrimitiveType.Sphere, statue, new Vector3(-half + 0.35f, 0.75f, -0.1f), Vector3.one * 1.05f, bronze);
-        Cylinder("Chef Hat", statue, new Vector3(-half - 0.25f, 0.75f, -0.1f), 0.45f, 0.7f, bronze).transform.localRotation = lying;
+        PrimitiveKit.Cylinder("Chef Hat", statue, new Vector3(-half - 0.25f, 0.75f, -0.1f), 0.45f, 0.7f, bronze).transform.localRotation = lying;
         PrimitiveKit.Part("Arm Down", PrimitiveType.Capsule, statue, new Vector3(-0.4f, 0.55f, -0.85f), new Vector3(0.38f, 0.75f, 0.38f), bronze).transform.localRotation = lying;
 
         // Rechter Arm senkrecht aus der Schulter (hinter der Bahn), oben die Pizza: Sie reicht über die Bahn
@@ -381,12 +361,12 @@ public static class Level5Builder
         pizza.transform.SetParent(statue, false);
         pizza.transform.localPosition = new Vector3(pizzaX, StatuePizzaTop - 0.125f, pizzaZ);
         PrimitiveKit.AddBoxCollider(pizza, Vector3.zero, new Vector3(StatuePizzaRadius * 2f, 0.25f, StatuePizzaRadius * 2f));
-        Cylinder("Pizza", pizza.transform, Vector3.zero, StatuePizzaRadius, 0.25f, bronze);
+        PrimitiveKit.Cylinder("Pizza", pizza.transform, Vector3.zero, StatuePizzaRadius, 0.25f, bronze);
         // Pepperoni-Scheiben aus Bronze, damit man die Pizza von unten schräg erkennt
         for (int i = 0; i < 5; i++)
         {
             float angle = i * 72f * Mathf.Deg2Rad;
-            Cylinder("Pepperoni", pizza.transform, new Vector3(Mathf.Cos(angle) * 0.6f, 0.13f, Mathf.Sin(angle) * 0.6f), 0.17f, 0.04f, bronze);
+            PrimitiveKit.Cylinder("Pepperoni", pizza.transform, new Vector3(Mathf.Cos(angle) * 0.6f, 0.13f, Mathf.Sin(angle) * 0.6f), 0.17f, 0.04f, bronze);
         }
         LevelBuildKit.HeatPickup(pizzaU, StatueChiliY, gameplayParent);
     }
@@ -405,8 +385,8 @@ public static class Level5Builder
         Material scorched = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/City/Scorched.mat");
         var random = new System.Random(150);
         float craterZ = lowerTopZ + 10f;
-        Cylinder("Crater", blockade, new Vector3(-36f, CityLayout.Surface + 0.02f, craterZ), 5f, 0.1f, scorched);
-        Cylinder("Crater Rim", blockade, new Vector3(-36f, CityLayout.Surface + 0.1f, craterZ), 6.2f, 0.25f, rubble);
+        PrimitiveKit.Cylinder("Crater", blockade, new Vector3(-36f, CityLayout.Surface + 0.02f, craterZ), 5f, 0.1f, scorched);
+        PrimitiveKit.Cylinder("Crater Rim", blockade, new Vector3(-36f, CityLayout.Surface + 0.1f, craterZ), 6.2f, 0.25f, rubble);
         RubblePile(blockade, new Vector3(-33f, CityLayout.Surface, craterZ - 3f), 3f, rubble, facade, random);
         RubblePile(blockade, new Vector3(-38f, CityLayout.RoadTop, craterZ + 4f), 4f, rubble, facade, random);
         RubblePile(blockade, new Vector3(-31f, CityLayout.Surface, craterZ + 6f), 3f, rubble, facade, random);
@@ -470,8 +450,8 @@ public static class Level5Builder
         // Krater, wo es eingeschlagen ist (am vergrabenen Ende), aufgeworfene Erde und Schutt ringsum
         Vector3 crater = hit - axis * ParkTowerBuried * Mathf.Cos(ParkTowerTilt * Mathf.Deg2Rad) * 0.6f;
         crater.y = lawn;
-        Cylinder("Crater", root, crater + Vector3.up * 0.02f, 6f, 0.1f, scorched);
-        Cylinder("Crater Rim", root, crater + Vector3.up * 0.05f, 7.2f, 0.2f, rubble);
+        PrimitiveKit.Cylinder("Crater", root, crater + Vector3.up * 0.02f, 6f, 0.1f, scorched);
+        PrimitiveKit.Cylinder("Crater Rim", root, crater + Vector3.up * 0.05f, 7.2f, 0.2f, rubble);
         RubblePile(root, crater + toNE * 4f + along * 3f, 2.5f, rubble, facade, random);
         RubblePile(root, crater + toNE * 3f - along * 4f, 2.5f, rubble, facade, random);
         RubblePile(root, hit - toNE * 6f + along * 4f, 2f, rubble, facade, random);
@@ -483,7 +463,7 @@ public static class Level5Builder
         Smoke(root, tower.transform.TransformPoint(new Vector3(0f, 0.5f, 0f)));
 
         // Brennender Schutt auf dem Weg hinter der Abzweigung, mit Brandfleck
-        Cylinder("Path Scorch", root, OnPath(26.5f, 0f) + Vector3.up * 0.03f, 4f, 0.05f, scorched);
+        PrimitiveKit.Cylinder("Path Scorch", root, OnPath(26.5f, 0f) + Vector3.up * 0.03f, 4f, 0.05f, scorched);
         foreach (var (s, side, radius) in PathRubble)
         {
             RubblePile(root, OnPath(s, side), radius, rubble, facade, random);
@@ -498,7 +478,7 @@ public static class Level5Builder
         foreach (var (x, z, radius, fire) in ParkDamage)
         {
             var at = new Vector3(x, lawn, z);
-            Cylinder("Scorch", root, at + Vector3.up * 0.03f, radius, 0.05f, scorched);
+            PrimitiveKit.Cylinder("Scorch", root, at + Vector3.up * 0.03f, radius, 0.05f, scorched);
             RubblePile(root, at, radius * 0.6f, rubble, facade, random);
             if (fire)
             {
@@ -659,8 +639,8 @@ public static class Level5Builder
         // Spuren auf der Straße: Krater, Schutt, ein paar brennende Stellen (nicht auf dem Ostgehweg, dort läuft die Bahn)
         foreach (float z in new[] { 270f, 302f })
         {
-            Cylinder("Crater", ruins, new Vector3(-41f, CityLayout.RoadTop + 0.02f, z), 4.5f, 0.44f, scorched);
-            Cylinder("Crater Rim", ruins, new Vector3(-41f, CityLayout.RoadTop + 0.1f, z), 5.7f, 0.3f, rubble);
+            PrimitiveKit.Cylinder("Crater", ruins, new Vector3(-41f, CityLayout.RoadTop + 0.02f, z), 4.5f, 0.44f, scorched);
+            PrimitiveKit.Cylinder("Crater Rim", ruins, new Vector3(-41f, CityLayout.RoadTop + 0.1f, z), 5.7f, 0.3f, rubble);
         }
         for (int i = 0; i < 8; i++)
         {
@@ -1033,7 +1013,7 @@ public static class Level5Builder
         for (int i = 0; i < 9; i++)
         {
             float x = Mathf.Lerp(from, to, (i + (float)random.NextDouble()) / 9f);
-            Cylinder("Scorch", parent, new Vector3(x, CityLayout.RoadTop + 0.014f, SalamiZ + ((float)random.NextDouble() - 0.5f) * 3f), 1.6f + (float)random.NextDouble() * 1.4f, 0.02f, scorched);
+            PrimitiveKit.Cylinder("Scorch", parent, new Vector3(x, CityLayout.RoadTop + 0.014f, SalamiZ + ((float)random.NextDouble() - 0.5f) * 3f), 1.6f + (float)random.NextDouble() * 1.4f, 0.02f, scorched);
         }
 
         // Zahn: lag im Maul, liegt jetzt schräg auf der Straße neben der Brandspur
@@ -1980,10 +1960,5 @@ public static class Level5Builder
                 runner.ApplyModifiedPropertiesWithoutUndo();
             }
         }
-    }
-
-    private static Renderer Cylinder(string name, Transform parent, Vector3 localPosition, float radius, float height, Material material)
-    {
-        return PrimitiveKit.Part(name, PrimitiveType.Cylinder, parent, localPosition, new Vector3(radius * 2f, height / 2f, radius * 2f), material);
     }
 }

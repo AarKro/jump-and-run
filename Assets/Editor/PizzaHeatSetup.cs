@@ -15,7 +15,6 @@ public static class PizzaHeatSetup
 {
     private const string HudPrefabPath = "Assets/Prefabs/HUD.prefab";
     private const string PlayerPrefabPath = "Assets/Prefabs/Player.prefab";
-    private const string ParticleMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat";
     private const string IrisMaterialPath = "Assets/Materials/Iris.mat";
     // Fredoka (Google Fonts, SIL Open Font License, Lizenz liegt daneben): rund und kräftig, passt zum Comic-Look
     private const string FontFolder = "Assets/Fonts";
@@ -727,10 +726,10 @@ public static class PizzaHeatSetup
 
         var particleRenderer = go.GetComponent<ParticleSystemRenderer>();
         particleRenderer.renderMode = ParticleSystemRenderMode.Billboard;
-        particleRenderer.sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(ParticleMaterialPath);
+        particleRenderer.sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(PrimitiveKit.ParticleMaterialPath);
         if (particleRenderer.sharedMaterial == null)
         {
-            Debug.LogWarning($"PizzaHeatSetup: Partikel-Material nicht gefunden ({ParticleMaterialPath}), Dampf wird pink.");
+            Debug.LogWarning($"PizzaHeatSetup: Partikel-Material nicht gefunden ({PrimitiveKit.ParticleMaterialPath}), Dampf wird pink.");
         }
 
         return steam;

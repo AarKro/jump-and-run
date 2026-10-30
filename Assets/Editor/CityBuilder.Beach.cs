@@ -96,8 +96,8 @@ public static partial class CityBuilder
         bollards.SetParent(parent, false);
         for (float x = -115f; x <= -105f; x += 1.25f)
         {
-            Cylinder("Bollard", bollards, new Vector3(x, RoadTop + 0.45f, CityLayout.PromenadeBackZ + 0.6f), 0.11f, 0.9f, white);
-            Cylinder("Band", bollards, new Vector3(x, RoadTop + 0.7f, CityLayout.PromenadeBackZ + 0.6f), 0.115f, 0.12f, red);
+            PrimitiveKit.Cylinder("Bollard", bollards, new Vector3(x, RoadTop + 0.45f, CityLayout.PromenadeBackZ + 0.6f), 0.11f, 0.9f, white);
+            PrimitiveKit.Cylinder("Band", bollards, new Vector3(x, RoadTop + 0.7f, CityLayout.PromenadeBackZ + 0.6f), 0.115f, 0.12f, red);
         }
     }
 
@@ -159,9 +159,9 @@ public static partial class CityBuilder
     {
         Material cloth = BeachColor(random);
         Material white = Mat("Awning White");
-        Cylinder("Umbrella Pole", spot, at + new Vector3(0f, 1.1f, 0f), 0.04f, 2.2f, white);
-        Cylinder("Umbrella Canopy", spot, at + new Vector3(0f, 2.15f, 0f), 1.1f, 0.1f, cloth);
-        Cylinder("Umbrella Top", spot, at + new Vector3(0f, 2.24f, 0f), 0.55f, 0.1f, cloth);
+        PrimitiveKit.Cylinder("Umbrella Pole", spot, at + new Vector3(0f, 1.1f, 0f), 0.04f, 2.2f, white);
+        PrimitiveKit.Cylinder("Umbrella Canopy", spot, at + new Vector3(0f, 2.15f, 0f), 1.1f, 0.1f, cloth);
+        PrimitiveKit.Cylinder("Umbrella Top", spot, at + new Vector3(0f, 2.24f, 0f), 0.55f, 0.1f, cloth);
         for (int i = 0; i < 2; i++)
         {
             Renderer stripe = PrimitiveKit.Box("Umbrella Stripe", spot, at + new Vector3(0f, 2.21f, 0f), new Vector3(2.15f, 0.02f, 0.16f), white);
@@ -214,10 +214,10 @@ public static partial class CityBuilder
         {
             foreach (float z in new[] { -0.35f, 0.35f })
             {
-                Cylinder("Castle Tower", spot, at + new Vector3(x, 0.3f, z), 0.13f, 0.6f, sand);
+                PrimitiveKit.Cylinder("Castle Tower", spot, at + new Vector3(x, 0.3f, z), 0.13f, 0.6f, sand);
             }
         }
-        Cylinder("Castle Keep", spot, at + new Vector3(0f, 0.45f, 0f), 0.22f, 0.9f, sand);
+        PrimitiveKit.Cylinder("Castle Keep", spot, at + new Vector3(0f, 0.45f, 0f), 0.22f, 0.9f, sand);
         PrimitiveKit.Box("Castle Flag", spot, at + new Vector3(0.12f, 1.0f, 0f), new Vector3(0.22f, 0.14f, 0.02f), Mat("Beach Color 1", BeachColors[0], 0.3f));
     }
 

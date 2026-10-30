@@ -12,7 +12,6 @@ public static class RoadblockSetup
 {
     private const float Surface = CityPropsSetup.Surface;
     private const float RoadTop = 0.3f;
-    private const string ParticleMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/ParticlesUnlit.mat";
 
     private static Material wheel, glass, headlight, cone, white, red, tapeRed, crate, iron;
 
@@ -179,7 +178,7 @@ public static class RoadblockSetup
         fade.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
             new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
         color.color = fade;
-        smokeObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(ParticleMaterialPath);
+        smokeObject.GetComponent<ParticleSystemRenderer>().sharedMaterial = AssetDatabase.LoadAssetAtPath<Material>(PrimitiveKit.ParticleMaterialPath);
     }
 
     private static void TrafficCone(Transform parent, Vector3 position)

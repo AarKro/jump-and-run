@@ -36,7 +36,7 @@ public static partial class CityBuilder
                 Transform sign = new GameObject($"Sign {along.Name} / {across.Name}").transform;
                 sign.SetParent(signs, false);
                 sign.position = corner;
-                Cylinder("Pole", sign, new Vector3(0f, 1.8f, 0f), 0.07f, 3.6f, pole);
+                PrimitiveKit.Cylinder("Pole", sign, new Vector3(0f, 1.8f, 0f), 0.07f, 3.6f, pole);
                 // Schild der Ost-West-Straße zeigt entlang X, das der Nord-Süd-Straße entlang Z, jeweils zur Kreuzung hin
                 Blade(sign, along.Name, new Vector3(-sx * 1.3f, 3.1f, 0f), 0f, plate);
                 Blade(sign, across.Name, new Vector3(0f, 3.6f, -sz * 1.3f), 90f, plate);
