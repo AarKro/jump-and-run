@@ -97,6 +97,18 @@ public class KaijuFight : MonoBehaviour
         }
     }
 
+    // Alle bewegten Teile zurück in ihre Ruhehaltung (Level 5 nach einem Respawn, der Kampf fängt dann von vorne an)
+    public void RestorePose()
+    {
+        foreach (KeyValuePair<Transform, Quaternion> part in rest)
+        {
+            if (part.Key != null)
+            {
+                part.Key.localRotation = part.Value;
+            }
+        }
+    }
+
     private void Remember(params Transform[] parts)
     {
         foreach (Transform part in parts)

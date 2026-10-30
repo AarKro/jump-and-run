@@ -75,6 +75,7 @@ public class FirePatch : MonoBehaviour
     private float fireRate, coreRate, smokeRate, glowIntensity;
     private ParticleSystem.MinMaxCurve fireSize, coreSize;
     private float wetAlpha;
+    private MaterialPropertyBlock wetBlock;
     private PizzaCarton carton;
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
@@ -239,12 +240,14 @@ public class FirePatch : MonoBehaviour
         }
         if (wet != null)
         {
-            var block = new MaterialPropertyBlock();
-            wet.GetPropertyBlock(block);
+            // Einmal anlegen statt jedes Bild ein neuer Block (sonst Müll für den Garbage Collector). Erst hier: Nach einem
+            // Neukompilieren mitten im Play Mode sind nicht gespeicherte Felder leer
+            wetBlock ??= new MaterialPropertyBlock();
+            wet.GetPropertyBlock(wetBlock);
             Color color = wet.sharedMaterial.GetColor(BaseColorId);
             color.a = wetAlpha * wetness;
-            block.SetColor(BaseColorId, color);
-            wet.SetPropertyBlock(block);
+            wetBlock.SetColor(BaseColorId, color);
+            wet.SetPropertyBlock(wetBlock);
         }
 
         if (firefighter != null)

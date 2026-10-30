@@ -57,6 +57,7 @@ public class KaijuHiccups : MonoBehaviour
     private float clock;
     private bool down;
     private int lastFizzled = -1;
+    private int lastPuffed = -1;
     private Quaternion jawRest, headDown;
     private Vector3 hinge;
     private Vector3 glowScale;
@@ -95,6 +96,7 @@ public class KaijuHiccups : MonoBehaviour
         clock = 0f;
         down = false;
         lastFizzled = -1;
+        lastPuffed = -1;
         foreach (Transform ball in balls)
         {
             ball.gameObject.SetActive(false);
@@ -212,21 +214,23 @@ public class KaijuHiccups : MonoBehaviour
         }
         for (int n = first; n <= last; n++)
         {
-            Transform ball = balls[n % balls.Length];
             if (BallAt(time - LaunchTime(n), out Vector3 center))
             {
+                Transform ball = balls[n % balls.Length];
                 ball.position = center;
                 ball.Rotate(Vector3.forward, speed / radius * Mathf.Rad2Deg * Time.deltaTime, Space.World);
             }
-            else if (n > lastFizzled && time - LaunchTime(n) > 0f)
+        }
+        // Gerade an den Häusern angekommen: verpuffen. Das ist der Ball direkt vor dem ersten, der noch unterwegs ist (die
+        // Schleife oben sieht ihn nicht mehr: FirstLiveBall zählt nur Bälle, die noch rollen)
+        int arrived = FirstLiveBall(time) - 1;
+        if (arrived >= 0 && arrived > lastFizzled)
+        {
+            lastFizzled = arrived;
+            if (fizzle != null)
             {
-                // Gerade an den Häusern angekommen: verpuffen
-                lastFizzled = n;
-                if (fizzle != null)
-                {
-                    fizzle.transform.position = new Vector3(endX, ground + radius, streetZ);
-                    fizzle.Emit(40);
-                }
+                fizzle.transform.position = new Vector3(endX, ground + radius, streetZ);
+                fizzle.Emit(40);
             }
         }
 
@@ -235,9 +239,14 @@ public class KaijuHiccups : MonoBehaviour
         float warn = 1f - Mathf.Clamp01(untilNext / warnTime);
         float sinceLaunch = last >= 0 ? time - LaunchTime(last) : 99f;
         float kick = Mathf.Clamp01(1f - sinceLaunch / 0.35f);
-        if (sinceLaunch < Time.deltaTime * 1.5f && puff != null)
+        // Einmal pro Ball (ein Zeitfenster von 1.5 Bildern traf manchmal zwei Bilder, dann kam der Rauch doppelt)
+        if (last >= 0 && last > lastPuffed)
         {
-            puff.Emit(25);
+            lastPuffed = last;
+            if (puff != null)
+            {
+                puff.Emit(25);
+            }
         }
         if (glow != null)
         {

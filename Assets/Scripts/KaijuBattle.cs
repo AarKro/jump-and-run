@@ -164,19 +164,11 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
             sequence = null;
         }
         stage = Stage.Rampage;
-        breathActive = false;
+        StopBreathEvent();
         breathDone = false;
-        phase = Phase.Charge;
-        phaseTime = 0f;
-        if (vendor != null)
-        {
-            vendor.Relax();
-        }
-        if (breathCamera != null)
-        {
-            breathCamera.Strength = 0f;
-        }
         fight.enabled = false;
+        // Arme und Roboterkopf bewegt nur KaijuFight: Ohne das blieben sie nach einem Respawn mitten im Kampf-Ausschlag stehen
+        fight.RestorePose();
         lizardRoot.localRotation = lizardRootRest;
         lizardUpper.localRotation = upperRest;
         lizardHead.localRotation = headRest;
@@ -191,6 +183,22 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         robotUpper.localRotation = robotUpperRest;
         robotArmLeft.localRotation = robotArmLeftRest;
         robotArmRight.localRotation = robotArmRightRest;
+    }
+
+    // Feueratem-Ereignis sofort beenden: Feuer aus, Kamera-Zone weg, Verkäufer kauert wieder
+    private void StopBreathEvent()
+    {
+        breathActive = false;
+        phase = Phase.Charge;
+        phaseTime = 0f;
+        if (vendor != null)
+        {
+            vendor.Relax();
+        }
+        if (breathCamera != null)
+        {
+            breathCamera.Strength = 0f;
+        }
         if (breath != null)
         {
             breath.StopBreath();
@@ -200,11 +208,18 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
 
     private void Update()
     {
+        GameManager game = GameManager.Instance;
+        // Während einer Zwischensequenz läuft die Wärme im GameManager weiter: Bild für Bild gutschreiben, so kostet die Szene
+        // nichts und die Pizza kann nicht kalt werden, während der Spieler eingefroren ist (vorher gab es die Zeit erst am
+        // Ende zurück, mit wenig Wärme ging die Pizza mitten in der Szene kalt, und EndCutscene taute den Spieler danach auf)
+        if (game != null && (stage == Stage.Arrival || stage == Stage.Finale) && !game.LevelFinished)
+        {
+            game.AddTime(Time.deltaTime);
+        }
         if (player == null)
         {
             return;
         }
-        GameManager game = GameManager.Instance;
         bool canStart = game != null && !game.IsRespawning && !game.InCutscene && !game.LevelFinished;
         float u = Lane.Project(player.position);
         switch (stage)
@@ -419,9 +434,9 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     private IEnumerator Arrival()
     {
         stage = Stage.Arrival;
-        breath.StopBreath();
-        breath.SetCharge(0f);
-        float started = Time.time;
+        // Falls der Atem (oder das Ausblenden seiner Kamera-Zone) noch läuft: Rampage wird ab jetzt nicht mehr aufgerufen,
+        // die Zone bliebe sonst halb eingeblendet und der Verkäufer winkend stehen
+        StopBreathEvent();
         ThirdPersonCamera follow = BeginCutscene();
         Transform cam = Camera.main.transform;
         Vector3 landing = robotRoot.parent.TransformPoint(robotLanding);
@@ -475,7 +490,7 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         fight.RememberTail();
         fight.enabled = true;
         stage = Stage.Fight;
-        EndCutscene(follow, Time.time - started);
+        EndCutscene(follow);
         sequence = null;
     }
 
@@ -484,7 +499,6 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
     {
         stage = Stage.Finale;
         fight.enabled = false;
-        float started = Time.time;
         ThirdPersonCamera follow = BeginCutscene();
         Transform cam = Camera.main.transform;
         Vector3 camPos = (lizardRoot.position + robotRoot.position) / 2f + finaleCameraOffset;
@@ -545,7 +559,7 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
             yield return null;
         }
         stage = Stage.Done;
-        EndCutscene(follow, Time.time - started);
+        EndCutscene(follow);
         sequence = null;
     }
 
@@ -587,20 +601,23 @@ public class KaijuBattle : MonoBehaviour, IIntroExpose
         return follow;
     }
 
-    // Kamera zurück zum Spieler (springt hin), Steuerung frei, die Dauer der Szene kostet keine Wärme
-    private void EndCutscene(ThirdPersonCamera follow, float duration)
+    // Kamera zurück zum Spieler (springt hin), Steuerung frei (die Dauer der Szene hat Update schon gutgeschrieben)
+    private void EndCutscene(ThirdPersonCamera follow)
     {
         if (follow != null)
         {
             follow.enabled = true;
             follow.SnapToTarget();
         }
-        controller.Unfreeze();
         GameManager game = GameManager.Instance;
         if (game != null)
         {
             game.InCutscene = false;
-            game.AddTime(duration);
+        }
+        // Ist das Level schon vorbei, hat der GameManager den Spieler eingefroren: nicht wieder auftauen
+        if (game == null || !game.LevelFinished)
+        {
+            controller.Unfreeze();
         }
     }
 }
