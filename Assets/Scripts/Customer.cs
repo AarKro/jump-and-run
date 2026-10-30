@@ -206,13 +206,9 @@ public class Customer : MonoBehaviour
     // Baumelnde Beine (nur auf dem Träger): hängen nach unten, schwingen gegengleich nach vorn und hinten (Grad)
     private void SetLegs(bool visible, float swing)
     {
-        foreach (Transform leg in new[] { leftLeg, rightLeg })
-        {
-            if (leg != null && leg.gameObject.activeSelf != visible)
-            {
-                leg.gameObject.SetActive(visible);
-            }
-        }
+        // Ohne "new[] { ... }": Das liefe jeden Frame und legte jedes Mal ein neues Array an (Arbeit für den Garbage Collector)
+        ShowLeg(leftLeg, visible);
+        ShowLeg(rightLeg, visible);
         if (leftLeg != null)
         {
             leftLeg.localRotation = Quaternion.Euler(20f + swing, 0f, 0f);
@@ -220,6 +216,14 @@ public class Customer : MonoBehaviour
         if (rightLeg != null)
         {
             rightLeg.localRotation = Quaternion.Euler(20f - swing, 0f, 0f);
+        }
+    }
+
+    private static void ShowLeg(Transform leg, bool visible)
+    {
+        if (leg != null && leg.gameObject.activeSelf != visible)
+        {
+            leg.gameObject.SetActive(visible);
         }
     }
 

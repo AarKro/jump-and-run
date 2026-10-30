@@ -220,7 +220,9 @@ public class IntroFlyover : MonoBehaviour
         }
         if (iris != null)
         {
-            yield return iris.Close(view, focus, irisCloseDuration);
+            // Im Vorspann übersprungen: Die Kamera schaut noch auf den Vorspann, der Kunde ist meist gar nicht im Bild.
+            // Ein Kreis um einen Punkt außerhalb des Bildes wäre nur eine schwarze Wand, die von der Seite hereinwischt
+            yield return iris.Close(view, skipped ? exposeLook : focus, irisCloseDuration);
         }
         // Im Dunkeln wieder rein, damit er herauskommt, wenn der Bote wirklich ankommt
         if (customer != null)

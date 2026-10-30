@@ -42,16 +42,19 @@ public class ScreenIris : MonoBehaviour
         Apply(new Vector2(0.5f, 0.5f), -1f);
     }
 
-    // Kreis schrumpft auf den Punkt zu, danach ist alles schwarz
+    // Kreis schrumpft auf den Punkt zu, danach ist alles schwarz.
+    // Open/Close geben die Animation direkt zurück (kein "yield return" in einer eigenen Coroutine): Ein verschachteltes
+    // "yield return" startet in Unity eine eigene Kind-Coroutine, die StopCoroutine auf der äußeren nicht sicher mit anhält.
+    // So ist die Coroutine, die IntroFlyover beim Überspringen anhält, wirklich die Animation selbst
     public IEnumerator Close(Camera view, Vector3 worldPoint, float duration)
     {
-        yield return Animate(view, worldPoint, duration, closing: true);
+        return Animate(view, worldPoint, duration, closing: true);
     }
 
     // Kreis wächst vom Punkt aus, bis der ganze Bildschirm frei ist
     public IEnumerator Open(Camera view, Vector3 worldPoint, float duration)
     {
-        yield return Animate(view, worldPoint, duration, closing: false);
+        return Animate(view, worldPoint, duration, closing: false);
     }
 
     private IEnumerator Animate(Camera view, Vector3 worldPoint, float duration, bool closing)
