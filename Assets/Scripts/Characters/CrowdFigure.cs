@@ -37,6 +37,17 @@ public class CrowdFigure : MonoBehaviour
     [Tooltip("In Panik (Level 5): rennt vorgebeugt mit hochgerissenen, fuchtelnden Armen")]
     [SerializeField] private bool panic;
 
+    [Header("Feste Haltung (z.B. Touristen an der Piazza Pisa: Turm stützen, fotografieren, Selfie)")]
+    [Tooltip("Linker Arm bleibt in armPoseLeft, statt zu schwingen")]
+    [SerializeField] private bool holdLeftArm;
+    [Tooltip("Drehung des Arms in Grad: X = nach vorn/oben (90 = waagerecht nach vorn), Z = zur Seite (links negativ = nach außen)")]
+    [SerializeField] private Vector3 armPoseLeft;
+    [SerializeField] private bool holdRightArm;
+    [Tooltip("Wie links, nur Z positiv = nach außen")]
+    [SerializeField] private Vector3 armPoseRight;
+    [Tooltip("Oberkörper dauerhaft so weit nach vorn geneigt (Grad), z.B. beim Anschieben des Turms")]
+    [SerializeField] private float lean;
+
     // 0 = steht normal, 1 = ganz weggeduckt
     public float Duck { get; set; }
 
@@ -109,7 +120,7 @@ public class CrowdFigure : MonoBehaviour
         // beugen (Figur schaut bei Drehung 0 nach -Z, nach vorn = negative X-Drehung). Nicht absenken, sonst steckt sie im Boden
         rig.localPosition = rigStart + Vector3.up * bob;
         rig.localScale = new Vector3(1f + 0.08f * duckAmount, 1f - 0.3f * duckAmount, 1f + 0.08f * duckAmount);
-        rig.localRotation = Quaternion.Euler(-20f * duckAmount, 0f, sway);
+        rig.localRotation = Quaternion.Euler(-20f * duckAmount - lean, 0f, sway);
 
         float swing = Mathf.Sin(phase) * armSwing * walking;
         // Arme: Drehung um X, positiv = nach vorn (die Hand geht zur Kamera). Ducken: Arme schützend über den Kopf
@@ -132,6 +143,17 @@ public class CrowdFigure : MonoBehaviour
         }
         leftArm.localRotation = Quaternion.Euler(armsForward + swing + cover, 0f, -6f);
         rightArm.localRotation = Quaternion.Euler(armsForward - swing + cover + 40f * talk + wave, 0f, 6f + 20f * talk);
+
+        // Feste Haltung: nur ein leichtes Zittern, damit die Figur nicht wie eingefroren wirkt
+        float tremble = Mathf.Sin(time * 2.1f) * 2f;
+        if (holdLeftArm)
+        {
+            leftArm.localRotation = Quaternion.Euler(armPoseLeft + new Vector3(tremble, 0f, 0f));
+        }
+        if (holdRightArm)
+        {
+            rightArm.localRotation = Quaternion.Euler(armPoseRight - new Vector3(tremble, 0f, 0f));
+        }
     }
 
     // Farben aus der Position: gleiche Stelle = gleiche Person

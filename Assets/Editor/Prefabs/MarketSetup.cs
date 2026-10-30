@@ -31,6 +31,7 @@ public static class MarketSetup
         BuildStall("Market Stall Fish", Lit("Market Blue", new Color(0.2f, 0.4f, 0.72f)), FishGoods);
         BuildStall("Market Stall Flowers", Lit("Market Green", new Color(0.22f, 0.55f, 0.3f)), FlowerGoods);
         BuildStall("Market Stall Flea", Lit("Market Brown", new Color(0.5f, 0.32f, 0.18f)), FleaGoods);
+        BuildSouvenirStall();
         BuildBouncyStall();
         BuildPedestrian();
         BuildGroup();
@@ -922,6 +923,57 @@ public static class MarketSetup
         PrimitiveKit.Box("Radio", t, new Vector3(1.15f, top + 0.12f, z), new Vector3(0.36f, 0.24f, 0.18f), darkWood);
         PrimitiveKit.Part("Speaker", PrimitiveType.Cylinder, t, new Vector3(1.1f, top + 0.12f, z - 0.095f), new Vector3(0.14f, 0.005f, 0.14f), cloth)
             .transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+    }
+
+    // Souvenirstand für die Piazza Pisa (steht in der Stadt, nicht auf dem Markt): Mini-Pizzatürme, Postkarten, Kappen.
+    // Eigener Menüpunkt, damit man ihn bauen kann, ohne die übrigen Markt-Prefabs neu zu erzeugen
+    [MenuItem("Tools/Jump and Run/City/Build Souvenir Stall Prefab")]
+    public static void BuildSouvenirStall()
+    {
+        PrimitiveKit.EnsureFolder("Assets/Prefabs", "Market");
+        CreateMaterials();
+        BuildStall("Market Stall Souvenir", Lit("Market Yellow", new Color(0.95f, 0.75f, 0.15f)), SouvenirGoods);
+        AssetDatabase.SaveAssets();
+    }
+
+    private static void SouvenirGoods(Transform t, float top, float z)
+    {
+        Material dough = Lit("Pizza Crust", new Color(0.85f, 0.62f, 0.33f));
+        Material cheese = Lit("Pizza Cheese", new Color(0.98f, 0.82f, 0.36f), 0.3f);
+        Material marble = Lit("Marble", new Color(0.93f, 0.91f, 0.86f), 0.3f);
+        // Drei Mini-Türme: Teig-Säule mit Käse-Scheiben, schief wie das Original
+        for (int i = 0; i < 3; i++)
+        {
+            Transform tower = PrimitiveKit.Pivot("Mini Tower", t, new Vector3(-1.05f + i * 0.35f, top, z));
+            tower.localRotation = Quaternion.Euler(0f, 0f, -6f);
+            PrimitiveKit.Cylinder("Base", tower, new Vector3(0f, 0.02f, 0f), 0.09f, 0.04f, marble);
+            PrimitiveKit.Cylinder("Core", tower, new Vector3(0f, 0.22f, 0f), 0.05f, 0.4f, dough);
+            for (int tier = 0; tier < 4; tier++)
+            {
+                PrimitiveKit.Cylinder("Tier", tower, new Vector3(0f, 0.1f + tier * 0.1f, 0f), 0.08f, 0.025f, cheese);
+            }
+        }
+        // Postkartenständer: drei Reihen bunter Karten auf einer schrägen Tafel
+        Color[] cards = { new Color(0.3f, 0.6f, 0.9f), new Color(0.95f, 0.7f, 0.3f), new Color(0.9f, 0.4f, 0.4f), new Color(0.4f, 0.75f, 0.5f) };
+        Transform rack = PrimitiveKit.Pivot("Postcard Rack", t, new Vector3(0.1f, top + 0.3f, z + 0.15f));
+        rack.localRotation = Quaternion.Euler(-15f, 0f, 0f);
+        PrimitiveKit.Box("Board", rack, Vector3.zero, new Vector3(0.7f, 0.55f, 0.03f), darkWood);
+        for (int row = 0; row < 3; row++)
+        {
+            for (int col = 0; col < 3; col++)
+            {
+                PrimitiveKit.Box("Postcard", rack, new Vector3(-0.22f + col * 0.22f, 0.17f - row * 0.17f, -0.02f), new Vector3(0.18f, 0.13f, 0.01f),
+                    Lit("Postcard " + ((row + col) % 4 + 1), cards[(row + col) % 4]));
+            }
+        }
+        // Kappen in den Pizzeria-Farben
+        Material red = Lit("Market Red", new Color(0.82f, 0.16f, 0.12f));
+        for (int i = 0; i < 3; i++)
+        {
+            Vector3 at = new Vector3(0.7f + i * 0.25f, top + 0.06f, z - (i % 2) * 0.15f);
+            PrimitiveKit.Part("Cap", PrimitiveType.Sphere, t, at, new Vector3(0.2f, 0.12f, 0.2f), i == 1 ? white : red);
+            PrimitiveKit.Box("Brim", t, at + new Vector3(0f, -0.04f, -0.12f), new Vector3(0.16f, 0.02f, 0.1f), i == 1 ? red : white);
+        }
     }
 
     // Stand, dessen Markise weit über die Bahn ragt: ein Trampolin (BounceAwning). Unter der Markise fährt man durch

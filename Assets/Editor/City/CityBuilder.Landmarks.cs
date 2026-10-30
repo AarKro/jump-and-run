@@ -28,6 +28,7 @@ public static partial class CityBuilder
         Slab("Piazza Paving", parent, area.xMin + 8f, area.yMin + 8f, walk.xMax, area.yMax - 8f, Surface - 0.1f, Surface + 0.02f, Paving);
         Slab("Piazza Paving South", parent, CityLayout.PiazzaSouthOpeningFrom, area.yMin, walk.xMax, area.yMin + 8f, Surface - 0.1f, Surface + 0.02f, Paving);
         BuildLeaningTower(parent, CityLayout.LeaningTower, random);
+        BuildPiazzaLife(parent);
     }
 
     // Turm aus gestapelten Pizzen: pro Etage ein Kern aus Teig, ein Säulenkranz und obendrauf eine Pizza (Rand, Soße, Käse,
